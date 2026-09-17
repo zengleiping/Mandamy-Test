@@ -4383,32 +4383,14 @@
       clearTraceBtn.innerHTML = '<span class="tool-btn-v-icon">🗑️</span><span class="tool-btn-v-label">清示範</span>';
       vToolbar.appendChild(clearTraceBtn);
     }
-    // 「顯示範本」：淡灰色虛線的靜態描紅範本，只要這一題有錄好的示範就預設一直顯示在畫布上（可以關掉）。
-    // 「播放筆順」：另外按了才照老師錄製時的節奏播放一次筆順動畫，播完/按停止後恢復成顯示靜態範本。
-    // 兩者都改成固定的淡灰色虛線樣式，不會跟學生自己的墨色搞混（這是這次修正的重點）。
-    var showTraceBtn = document.createElement("button");
-    showTraceBtn.type = "button"; showTraceBtn.className = "tool-btn-v"; showTraceBtn.id = "btn-toggle-trace";
-    showTraceBtn.style.display = masterTrace ? "flex" : "none";
-    showTraceBtn.title = "顯示／隱藏老師示範的淡色描紅範本 Show or hide the light-gray demo guide";
-    showTraceBtn.innerHTML = '<span class="tool-btn-v-icon">👁️</span><span class="tool-btn-v-label">顯示範本</span>';
-    showTraceBtn.classList.add("active"); // 預設一開始就顯示範本（guideVisible 預設 true），跟按鈕的高亮狀態對齊
-    vToolbar.appendChild(showTraceBtn);
-
-    var playTraceBtn = document.createElement("button");
-    playTraceBtn.type = "button"; playTraceBtn.className = "tool-btn-v"; playTraceBtn.id = "btn-play-trace";
-    playTraceBtn.style.display = masterTrace ? "flex" : "none";
-    playTraceBtn.title = "照老師錄製時的節奏，播放一次筆順動畫 Play back the stroke order animation once";
-    playTraceBtn.innerHTML = '<span class="tool-btn-v-icon">▶️</span><span class="tool-btn-v-label">播放筆順</span>';
-    vToolbar.appendChild(playTraceBtn);
-
-    // 「個人描紅練習」：另外開一塊只有自己看得到、不跟任何人共用的畫布，疊在範本上描著寫，
-    // 每畫完一筆就即時比對筆順跟位置——跟上面「顯示範本」用的是同一塊共用畫布完全分開，
-    // 不會把自己的練習筆跡跟全班共用的那張畫布混在一起。
+    // 「跟隨大師」相關功能（顯示範本／播放筆順動畫／個人描紅逐筆比對）原本拆成三顆按鈕，
+    // 工具列太長、太雜，改成只留一顆入口按鈕：點下去才打開「示範／個人描紅」面板，
+    // 面板一打開範本就自動顯示，播放動畫跟逐筆比對的功能全部收在面板裡面，不用另外佔工具列的位置。
     var personalTraceBtn = document.createElement("button");
     personalTraceBtn.type = "button"; personalTraceBtn.className = "tool-btn-v"; personalTraceBtn.id = "btn-personal-trace";
     personalTraceBtn.style.display = masterTrace ? "flex" : "none";
-    personalTraceBtn.title = "打開只有自己看得到的描紅練習畫布，逐筆比對筆順跟位置 Open your own private tracing practice canvas";
-    personalTraceBtn.innerHTML = '<span class="tool-btn-v-icon">👤</span><span class="tool-btn-v-label">個人描紅</span>';
+    personalTraceBtn.title = "打開示範／個人描紅練習面板：可以看老師示範、播放筆順動畫，也可以自己逐筆描紅練習 Open the demo & personal tracing panel";
+    personalTraceBtn.innerHTML = '<span class="tool-btn-v-icon">🖋️</span><span class="tool-btn-v-label">看示範</span>';
     vToolbar.appendChild(personalTraceBtn);
 
     layout.appendChild(vToolbar);
@@ -4455,6 +4437,7 @@
       <div class="personal-trace-topbar">
         <span class="personal-trace-title">👤 個人描紅練習（只有自己看得到）</span>
         <span class="personal-trace-badge" id="personal-trace-badge">📝 0 / 0</span>
+        <button type="button" class="personal-trace-mini-btn" id="btn-personal-trace-play">▶️ 播放筆順</button>
         <button type="button" class="personal-trace-mini-btn" id="btn-personal-trace-clear">🗑️ 清除重寫</button>
         <button type="button" class="personal-trace-mini-btn" id="btn-personal-trace-close">✕ 關閉，回到共用畫布</button>
       </div>
@@ -4514,7 +4497,7 @@
     var activeSelectedTextId = null;
     // 這幾個按鈕不是「畫筆／打字／橡皮擦」之類的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-toggle-trace", "btn-play-trace", "btn-personal-trace"];
+    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace"];
 
     vToolbar.querySelectorAll(".tool-btn-v").forEach(function(b){
       b.onclick = function(){
@@ -4573,75 +4556,17 @@
     }
 
     /* ================== 跟隨大師：老師示範錄製與播放 ================== */
-    // 「顯示範本」(showTraceBtn) 控制的是「靜態、一直疊在畫布上」的淡色描紅範本；
-    // 「播放筆順」(playTraceBtn) 是另外按了才照老師錄製時的節奏播放一次的動畫。兩者共用同一塊 traceCanvas，
-    // 但只會有一種畫面在上面：播放動畫時暫時蓋掉範本，播完/停止後自動恢復顯示範本（如果範本開關還是開著的話）。
-    var traceTimers = [];
-    var traceIsPlaying = false;
-    var guideVisible = true; // 只要這一題有錄好的示範，預設就先把淡色範本疊圖顯示出來，不用特地按按鈕才看得到
+    // 共用畫布上的淡色描紅範本現在是「常駐、不用按按鈕」的：只要這一題有錄好的示範、目前不是正在錄製、
+    // 也沒有人正在即時廣播示範，就自動疊在畫布上顯示；「播放筆順」動畫跟「個人描紅」逐筆練習
+    // 都收進同一個面板（見下方「個人描紅」區塊），不再各自佔用工具列的按鈕位置。
     function renderStaticGuide(){
-      if(isRecordingDemo || traceIsPlaying) return; // 正在錄製／播放動畫時，畫面交給各自的邏輯處理，這裡不要插手
+      if(isRecordingDemo) return; // 正在錄製時，畫面交給錄製邏輯處理，這裡不要插手
       if(liveCommittedStrokes.length || liveCurrentPoints.length) return; // 正在接收老師的即時廣播疊圖，畫面交給 redrawLiveTrace
-      if(!guideVisible || !masterTrace || !masterTrace.strokes || !masterTrace.strokes.length){
+      if(!masterTrace || !masterTrace.strokes || !masterTrace.strokes.length){
         traceCtx.clearRect(0, 0, traceCanvas.width, traceCanvas.height);
         return;
       }
       drawGuideStrokeSet(traceCtx, traceCanvas, masterTrace.strokes, getScaleRatio());
-    }
-    function stopTracePlayback(){
-      traceTimers.forEach(function(tid){ clearTimeout(tid); });
-      traceTimers = [];
-      traceIsPlaying = false;
-      if(playTraceBtn){ playTraceBtn.classList.remove("active"); playTraceBtn.querySelector(".tool-btn-v-label").textContent = "播放筆順"; }
-      renderStaticGuide(); // 播放動畫停止了，如果範本開關還是開著的，讓淡色範本恢復顯示，不要留白
-    }
-    function playTraceOnce(){
-      if(!masterTrace || !masterTrace.strokes || !masterTrace.strokes.length) return;
-      stopTracePlayback();
-      traceIsPlaying = true;
-      playTraceBtn.classList.add("active");
-      playTraceBtn.querySelector(".tool-btn-v-label").textContent = "播放中";
-      traceCtx.clearRect(0, 0, traceCanvas.width, traceCanvas.height);
-      var scale = getScaleRatio();
-      // 動畫播放也改成統一的淡灰色虛線範本樣式（不用老師錄製時真正用的筆色），跟靜態範本視覺一致，
-      // 一看就知道這是參考動畫、不是有人正在寫的墨跡。
-      masterTrace.strokes.forEach(function(st){
-        if(!st.points || st.points.length < 2) return;
-        for(var i = 1; i < st.points.length; i++){
-          (function(prevPt, curPt, delay){
-            var tid = setTimeout(function(){
-              traceCtx.save();
-              traceCtx.globalAlpha = 0.55;
-              traceCtx.strokeStyle = "#9AA0A6";
-              traceCtx.setLineDash([Math.max(4, 5 * scale), Math.max(3, 4 * scale)]);
-              traceCtx.lineWidth = Math.max(2, st.size * scale);
-              traceCtx.lineCap = "round"; traceCtx.lineJoin = "round";
-              traceCtx.beginPath();
-              traceCtx.moveTo(prevPt.x * traceCanvas.width / 100, prevPt.y * traceCanvas.height / 100);
-              traceCtx.lineTo(curPt.x * traceCanvas.width / 100, curPt.y * traceCanvas.height / 100);
-              traceCtx.stroke();
-              traceCtx.restore();
-            }, delay);
-            traceTimers.push(tid);
-          })(st.points[i - 1], st.points[i], st.points[i].t);
-        }
-      });
-      var endTid = setTimeout(function(){
-        traceIsPlaying = false;
-        if(playTraceBtn){ playTraceBtn.classList.remove("active"); playTraceBtn.querySelector(".tool-btn-v-label").textContent = "播放筆順"; }
-        renderStaticGuide();
-      }, (masterTrace.duration || 0) + 300);
-      traceTimers.push(endTid);
-    }
-    showTraceBtn.onclick = function(){
-      guideVisible = !guideVisible;
-      showTraceBtn.classList.toggle("active", guideVisible);
-      renderStaticGuide();
-    };
-    if(playTraceBtn){
-      playTraceBtn.onclick = function(){
-        if(traceIsPlaying) stopTracePlayback(); else playTraceOnce();
-      };
     }
 
     /* ---- 邊錄邊即時廣播：老師錄製時把目前畫到哪裡送出去，其他人即時疊圖跟著看 ---- */
@@ -4700,7 +4625,6 @@
         if(liveCommittedStrokes.length || liveCurrentPoints.length) clearLiveTraceState();
         return;
       }
-      if(traceIsPlaying) stopTracePlayback(); // 老師開始即時示範了，先讓看舊示範播放的人切過來看現在這個
       if(lastSeenLiveStrokeSeq !== null && data.strokeSeq !== lastSeenLiveStrokeSeq && liveCurrentPoints.length >= 2){
         liveCommittedStrokes.push({ points: liveCurrentPoints, size: liveCurrentSize });
       }
@@ -4714,13 +4638,14 @@
       recordTraceBtn.onclick = function(){
         if(!isRecordingDemo){
           if(masterTrace && !confirm("這一題已經有錄好的示範，重新錄製會覆蓋掉舊的，確定要開始嗎？\nThis question already has a saved demo — recording again will overwrite it. Continue?")) return;
-          stopTracePlayback();
           isRecordingDemo = true;
           recordingBuffer = { strokes: [], startedAt: Date.now() };
           liveStrokeSeq = 0;
           recordTraceBtn.classList.add("active");
           recordTraceBtn.querySelector(".tool-btn-v-label").textContent = "⏹停止";
           traceCtx.clearRect(0, 0, traceCanvas.width, traceCanvas.height); // 開始錄新的示範，先清掉畫面上舊的範本/疊圖
+          personalOverlay.style.display = "none"; // 重新錄製示範時，順手把個人描紅面板關掉，避免舊範本的練習狀態卡在畫面上
+          if(personalAnimPlaying) stopPersonalGuideAnim();
           // 老師這台裝置如果斷線（關掉分頁、網路中斷），廣播狀態要自動變成「非錄製中」，
           // 不然其他人畫面上的即時疊圖會卡住、永遠停在斷線前最後一筆
           if(inRoom()){ try{ onDisconnect(ref(db, "roomMasterTraceLive/" + activeRoomId)).set({ active: false }); }catch(e){} }
@@ -4732,15 +4657,11 @@
           if(recordingBuffer && recordingBuffer.strokes.length){
             masterTrace = { strokes: recordingBuffer.strokes, duration: Date.now() - recordingBuffer.startedAt, savedAt: Date.now() };
             writeProgress(q.id, { masterTrace: masterTrace });
-            showTraceBtn.style.display = "flex";
             if(clearTraceBtn) clearTraceBtn.style.display = "flex";
-            if(playTraceBtn) playTraceBtn.style.display = "flex";
             if(personalTraceBtn) personalTraceBtn.style.display = "flex";
-            guideVisible = true;
-            showTraceBtn.classList.add("active");
             renderStaticGuide();
             resetStrokeCheckState();
-            alert("✅ 示範已儲存！所有人都可以看到淡色描紅範本疊在畫布上跟著寫，也可以打開「個人描紅」逐筆比對筆順跟位置。\nDemo saved! Everyone now sees the light tracing guide on the board, and can open \"Personal Tracing\" for stroke-by-stroke checking.");
+            alert("✅ 示範已儲存！所有人都可以看到淡色描紅範本疊在畫布上跟著寫，也可以按「看示範」打開面板、播放筆順動畫或逐筆比對練習。\nDemo saved! Everyone now sees the light tracing guide on the board, and can open the demo panel to play the animation or practice stroke-by-stroke.");
           } else {
             alert("沒有錄到任何筆畫，示範未儲存。\nNo strokes were recorded, nothing was saved.");
           }
@@ -4754,11 +4675,9 @@
         masterTrace = null;
         writeProgress(q.id, { masterTrace: null });
         clearTraceBtn.style.display = "none";
-        showTraceBtn.style.display = "none";
-        if(playTraceBtn) playTraceBtn.style.display = "none";
         if(personalTraceBtn) personalTraceBtn.style.display = "none";
         personalOverlay.style.display = "none";
-        stopTracePlayback();
+        if(personalAnimPlaying) stopPersonalGuideAnim();
         renderStaticGuide(); // masterTrace 已經是 null 了，這裡會把 traceCanvas 清空
       };
     }
@@ -4812,11 +4731,64 @@
       if(personalOverlay.style.display === "none") return;
       var pr = personalCanvasWrapEl.getBoundingClientRect();
       if(pr.width > 0 && pr.height > 0){
+        if(personalAnimPlaying) stopPersonalGuideAnim(); // 尺寸變了，動畫的座標換算會跟著跑掉，直接停止比較安全
         personalGuideCanvas.width = pr.width; personalGuideCanvas.height = pr.height;
         personalPaintCanvas.width = pr.width; personalPaintCanvas.height = pr.height;
         renderPersonalGuide();
         redrawPersonalStrokes();
       }
+    }
+    // 「播放筆順」動畫現在收在個人描紅面板裡：只在自己的範本畫布（personalGuideCanvas）上播放，
+    // 不影響共用畫布，也不影響自己已經寫好的練習墨跡（personalPaintCanvas 是完全獨立的另一塊畫布）。
+    var personalAnimTimers = [];
+    var personalAnimPlaying = false;
+    var personalPlayBtn = personalOverlay.querySelector("#btn-personal-trace-play");
+    function stopPersonalGuideAnim(){
+      personalAnimTimers.forEach(function(tid){ clearTimeout(tid); });
+      personalAnimTimers = [];
+      personalAnimPlaying = false;
+      if(personalPlayBtn) personalPlayBtn.textContent = "▶️ 播放筆順";
+      renderPersonalGuide(); // 動畫停止了，恢復顯示完整的靜態範本，不要留白
+    }
+    function playPersonalGuideAnim(){
+      if(!masterTrace || !masterTrace.strokes || !masterTrace.strokes.length) return;
+      stopPersonalGuideAnim();
+      personalAnimPlaying = true;
+      if(personalPlayBtn) personalPlayBtn.textContent = "⏸ 播放中…";
+      personalGuideCtx.clearRect(0, 0, personalGuideCanvas.width, personalGuideCanvas.height);
+      var scale = getPersonalScaleRatio();
+      masterTrace.strokes.forEach(function(st){
+        if(!st.points || st.points.length < 2) return;
+        for(var i = 1; i < st.points.length; i++){
+          (function(prevPt, curPt, delay){
+            var tid = setTimeout(function(){
+              personalGuideCtx.save();
+              personalGuideCtx.globalAlpha = 0.55;
+              personalGuideCtx.strokeStyle = "#9AA0A6";
+              personalGuideCtx.setLineDash([Math.max(4, 5 * scale), Math.max(3, 4 * scale)]);
+              personalGuideCtx.lineWidth = Math.max(2, st.size * scale);
+              personalGuideCtx.lineCap = "round"; personalGuideCtx.lineJoin = "round";
+              personalGuideCtx.beginPath();
+              personalGuideCtx.moveTo(prevPt.x * personalGuideCanvas.width / 100, prevPt.y * personalGuideCanvas.height / 100);
+              personalGuideCtx.lineTo(curPt.x * personalGuideCanvas.width / 100, curPt.y * personalGuideCanvas.height / 100);
+              personalGuideCtx.stroke();
+              personalGuideCtx.restore();
+            }, delay);
+            personalAnimTimers.push(tid);
+          })(st.points[i - 1], st.points[i], st.points[i].t);
+        }
+      });
+      var endTid = setTimeout(function(){
+        personalAnimPlaying = false;
+        if(personalPlayBtn) personalPlayBtn.textContent = "▶️ 播放筆順";
+        renderPersonalGuide();
+      }, (masterTrace.duration || 0) + 300);
+      personalAnimTimers.push(endTid);
+    }
+    if(personalPlayBtn){
+      personalPlayBtn.onclick = function(){
+        if(personalAnimPlaying) stopPersonalGuideAnim(); else playPersonalGuideAnim();
+      };
     }
     function updateStrokeCheckBadge(){
       var total = (masterTrace && masterTrace.strokes) ? masterTrace.strokes.length : 0;
@@ -4908,7 +4880,6 @@
     if(personalTraceBtn){
       personalTraceBtn.onclick = function(){
         personalOverlay.style.display = "flex";
-        if(traceIsPlaying) stopTracePlayback();
         resizePersonalCanvases();
       };
     }
@@ -4945,7 +4916,6 @@
         canvas.height = r.height;
         traceCanvas.width = r.width;
         traceCanvas.height = r.height;
-        if(traceIsPlaying) stopTracePlayback(); // 畫布尺寸變了，示範疊圖的座標換算會跟著跑掉，直接停止播放比較安全
         redrawStrokes();
         renderTexts();
         renderStaticGuide();
@@ -5286,13 +5256,11 @@
       if(!isRecordingDemo){
         var prevTraceSavedAt = masterTrace ? masterTrace.savedAt : null;
         masterTrace = freshProgress.masterTrace || null;
-        if(showTraceBtn) showTraceBtn.style.display = masterTrace ? "flex" : "none";
         if(clearTraceBtn) clearTraceBtn.style.display = masterTrace ? "flex" : "none";
-        if(playTraceBtn) playTraceBtn.style.display = masterTrace ? "flex" : "none";
         if(personalTraceBtn) personalTraceBtn.style.display = masterTrace ? "flex" : "none";
         if(!masterTrace){
-          stopTracePlayback();
           personalOverlay.style.display = "none";
+          if(personalAnimPlaying) stopPersonalGuideAnim();
         }
         // 示範被重新錄製過（存檔時間戳不一樣了）或整個被清除，個人描紅的比對進度才需要跟著重新對齊；
         // 單純因為共用畫布其他地方畫了一筆而觸發的局部刷新，不能連帶洗掉學生自己還在練習的進度。
