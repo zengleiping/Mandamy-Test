@@ -10,6 +10,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
 <!-- SheetJS: 支援 Excel 匯入與匯出 -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- HanziWriter：生字練習教室用來畫筆順動畫，預設就會自己去 CDN 抓任何漢字的筆順資料，不用自己維護字庫 -->
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3/dist/hanzi-writer.min.js"></script>
 <style>
   :root{
     --paper:#FAF7F2;
@@ -677,6 +679,52 @@
   .reaction-btn:hover{ background:var(--surface-2); transform:scale(1.12); }
   .reaction-btn:active{ transform:scale(0.92); }
 
+  /* ================== 生字練習教室 (Live Writing Practice) ================== */
+  /* 老師選字面板：上面是輸入/切換字，下面是全班即時縮圖牆 */
+  .wp-char-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .wp-char-row input[type="text"]{ width:110px; flex:none; font-size:20px; text-align:center; font-family:"LXGW WenKai TC",serif; }
+  .wp-current-char-badge{
+    display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:700; color:var(--ink-soft);
+  }
+  .wp-current-char-badge b{ font-size:26px; color:var(--seal); font-family:"LXGW WenKai TC",serif; }
+  .wp-empty-hint{ color:var(--ink-soft); font-size:13px; text-align:center; padding:24px 8px; }
+  .wp-thumb-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(112px, 1fr)); gap:10px; margin-top:14px;
+  }
+  .wp-thumb-tile{
+    border:1.5px solid var(--grid-line); border-radius:12px; overflow:hidden; cursor:pointer; background:var(--surface-2);
+    transition:border-color .12s ease, transform .12s ease;
+  }
+  .wp-thumb-tile:hover{ border-color:var(--seal); transform:translateY(-2px); }
+  .wp-thumb-canvas-wrap{ position:relative; width:100%; aspect-ratio:1/1; background:var(--surface); }
+  .wp-thumb-canvas-wrap canvas{ position:absolute; inset:0; width:100%; height:100%; }
+  .wp-thumb-name{
+    font-size:11.5px; font-weight:700; text-align:center; padding:4px 4px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* 學生練習面板：左邊筆順動畫，右邊自己描寫的九宮格畫布 */
+  .wp-student-layout{ display:flex; flex-wrap:wrap; gap:20px; justify-content:center; }
+  .wp-student-col{ display:flex; flex-direction:column; align-items:center; gap:10px; flex:1; min-width:220px; }
+  .wp-hanzi-target{ width:200px; height:200px; }
+  .wp-hanzi-error{ display:none; font-size:12.5px; color:var(--ink-soft); text-align:center; max-width:220px; }
+  .wp-canvas-wrap{ position:relative; width:260px; height:260px; flex:none; }
+  .wp-canvas-guide{ position:absolute; inset:0; width:100%; height:100%; border-radius:8px; }
+  .wp-canvas-guide .wp-gbg{ fill:var(--surface-2); }
+  .wp-canvas-guide line{ stroke:var(--seal-ring); stroke-width:2; }
+  .wp-canvas-guide .wp-ghost{ fill:var(--ink); opacity:0.16; font-family:"LXGW WenKai TC",serif; }
+  canvas.wp-draw-canvas{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; border-radius:8px; }
+
+  /* 老師縮圖放大檢視 */
+  .wp-zoom-canvas-wrap{ position:relative; width:100%; max-width:360px; aspect-ratio:1/1; margin:0 auto; }
+  .wp-zoom-canvas-wrap canvas{ position:absolute; inset:0; width:100%; height:100%; background:var(--surface-2); border-radius:12px; }
+
+  /* 學生端：練習進行中但面板被收合時，畫面角落留一顆可以點回去打開的小徽章 */
+  .wp-floating-badge{
+    position:fixed; right:18px; bottom:18px; z-index:99996; display:none; align-items:center; gap:8px;
+    background:var(--seal); color:#fff; font-size:13px; font-weight:700; padding:10px 16px; border-radius:999px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.2); cursor:pointer; border:none;
+  }
+
   /* 成績結算彈窗專用樣式 */
   .score-header-box{
     display:flex; align-items:center; justify-content:space-between;
@@ -1132,8 +1180,8 @@
       <div id="reorder-fields" style="display:none;">
         <label>題目提示／說明</label>
         <textarea id="f-reorder-prompt" rows="2" placeholder="例如：請將下列詞語重組為正確句子"></textarea>
-        <label>正確句子語序（用逗號或空格隔開）</label>
-        <input type="text" id="f-reorder-answer" placeholder="例如：我, 喜歡, 喝, 咖啡">
+        <label>正確句子語序（請用空格隔開每個詞語；如果句子裡有逗號、句號等標點，也要用空格把它獨立隔開，當作一個詞語）</label>
+        <input type="text" id="f-reorder-answer" placeholder="例如：早飯 有 麵包 ， 還有 牛奶 。">
       </div>
 
       <div id="board-fields" style="display:none;">
@@ -1205,6 +1253,77 @@
   </div>
   <div class="dialog-foot">
     <button type="button" class="btn btn-primary" id="btn-close-weight-table">完成 Done</button>
+  </div>
+</dialog>
+
+<!-- 老師端：生字練習教室控制面板（選字、開始/結束、全班即時縮圖牆） -->
+<dialog class="dialog-modal" id="writing-practice-teacher-dialog" style="width:min(720px,94vw);">
+  <div class="dialog-head">
+    <h2>🖋️ 生字練習教室 Live Writing Practice</h2>
+  </div>
+  <div class="dialog-body">
+    <div class="wp-char-row">
+      <input type="text" id="wp-char-input" maxlength="4" placeholder="輸入一個漢字">
+      <button type="button" class="btn btn-sm btn-primary" id="btn-wp-start">▶️ 開始／切換這個字</button>
+      <span class="wp-current-char-badge" id="wp-current-char-badge" style="display:none;">目前練習：<b id="wp-current-char-text"></b></span>
+      <button type="button" class="btn btn-sm btn-ghost" id="btn-wp-end" style="display:none;">🛑 結束生字練習</button>
+    </div>
+    <div id="wp-thumb-area">
+      <p class="wp-empty-hint">還沒開始生字練習。輸入一個漢字並按「開始」，學生畫面就會自動出現筆順動畫跟練習畫布。</p>
+    </div>
+  </div>
+  <div class="dialog-foot">
+    <button type="button" class="btn btn-ghost" id="btn-wp-close-panel">關閉面板（練習繼續進行）Close (keeps running)</button>
+  </div>
+</dialog>
+
+<!-- 老師端：點縮圖放大看某一位學生的即時畫面 -->
+<dialog class="dialog-modal" id="writing-practice-zoom-dialog" style="width:min(440px,92vw);">
+  <div class="dialog-head">
+    <h2 id="wp-zoom-title">👤 學生畫面</h2>
+  </div>
+  <div class="dialog-body">
+    <div class="wp-zoom-canvas-wrap">
+      <canvas id="wp-zoom-canvas" width="360" height="360"></canvas>
+    </div>
+  </div>
+  <div class="dialog-foot">
+    <button type="button" class="btn btn-primary" id="btn-wp-zoom-close">關閉 Close</button>
+  </div>
+</dialog>
+
+<!-- 學生端：老師開始生字練習時自動彈出，左邊筆順動畫、右邊自己描寫的九宮格畫布 -->
+<dialog class="dialog-modal" id="writing-practice-student-dialog" style="width:min(640px,94vw);">
+  <div class="dialog-head">
+    <h2>✍️ 生字練習：<span id="wp-student-char-title"></span></h2>
+  </div>
+  <div class="dialog-body">
+    <div class="wp-student-layout">
+      <div class="wp-student-col">
+        <span style="font-size:12.5px;font-weight:700;color:var(--ink-soft);">筆順參考 Stroke Order</span>
+        <div class="wp-hanzi-target" id="wp-hanzi-target"></div>
+        <p class="wp-hanzi-error" id="wp-hanzi-error"></p>
+        <button type="button" class="btn btn-sm btn-ghost" id="btn-wp-animate">▶️ 播放筆順動畫</button>
+      </div>
+      <div class="wp-student-col">
+        <span style="font-size:12.5px;font-weight:700;color:var(--ink-soft);">跟著寫寫看 Your Turn</span>
+        <div class="wp-canvas-wrap">
+          <svg class="wp-canvas-guide" viewBox="0 0 300 300">
+            <rect class="wp-gbg" x="0" y="0" width="300" height="300"></rect>
+            <line x1="150" y1="0" x2="150" y2="300"></line>
+            <line x1="0" y1="150" x2="300" y2="150"></line>
+            <line x1="0" y1="0" x2="300" y2="300"></line>
+            <line x1="300" y1="0" x2="0" y2="300"></line>
+            <text class="wp-ghost" x="150" y="213" text-anchor="middle" font-size="230" id="wp-ghost-text"></text>
+          </svg>
+          <canvas class="wp-draw-canvas" id="wp-draw-canvas" width="300" height="300"></canvas>
+        </div>
+        <button type="button" class="btn btn-sm btn-ghost" id="btn-wp-clear">🗑️ 清除重寫</button>
+      </div>
+    </div>
+  </div>
+  <div class="dialog-foot">
+    <button type="button" class="btn btn-ghost" id="btn-wp-minimize">－ 暫時收合 Minimize</button>
   </div>
 </dialog>
 
@@ -2547,6 +2666,9 @@
           navigator.clipboard.writeText(link).then(function(){ alert("✅ 學生連結已複製！傳給學生點開即可加入這課。\nStudent link copied! Send it to students to join."); });
         };
         topbarActions.appendChild(shareBtn);
+        var wpOpenBtn = document.createElement("button"); wpOpenBtn.className = "btn btn-sm btn-ghost"; wpOpenBtn.textContent = "🖋️ 生字練習 Writing Practice";
+        wpOpenBtn.onclick = openWritingPracticeTeacherDialog;
+        topbarActions.appendChild(wpOpenBtn);
         var leaveBtn = document.createElement("button"); leaveBtn.className = "btn btn-sm btn-ghost"; leaveBtn.textContent = "結束連線 End Session"; leaveBtn.onclick = leaveRoom; topbarActions.appendChild(leaveBtn);
       }
     } else if(activeProjectId){
@@ -2575,6 +2697,7 @@
     if(activeRoomId) set(ref(db, "rooms/" + activeRoomId + "/presence/" + myId), { online: false });
     activeRoomId = null; roomData = null; history.replaceState(null, "", location.pathname);
     if(reactionBarEl) reactionBarEl.style.display = "none"; // 反應泡泡按鈕只在房間裡才有意義，離開房間就先藏起來
+    wpResetOnLeaveRoom();
     renderTopbar(); if(activeProjectId){ renderSidebar(); renderStage(); renderTimerWidget(); } else { showLobby(); }
   }
 
@@ -2611,6 +2734,13 @@
     onValue(ref(db, "roomMasterTraceLive/" + rId), function(snap){ if(liveTraceHandler) liveTraceHandler(snap.val()); });
     ensureReactionUI();
     startReactionsListener(rId);
+
+    // 生字練習教室：兩邊都要知道目前是不是在練習、練習哪個字；學生端額外把自己的筆畫存進
+    // roomWritingStrokes，只有老師需要訂閱讀取全班的資料來畫縮圖牆，學生不用訂閱別人的。
+    onValue(ref(db, "roomWritingPractice/" + rId), function(snap){ wpState = snap.val() || null; wpHandleStateChange(); });
+    if(!isStudent){
+      onValue(ref(db, "roomWritingStrokes/" + rId), function(snap){ wpStrokesData = snap.val() || {}; wpRenderTeacherThumbnails(); if(wpZoomPeerId) wpRenderZoomCanvas(); });
+    }
   }
 
   /* ================== 匿名反應泡泡（同溫層泡泡） ================== */
@@ -2767,6 +2897,310 @@
     var y = (e.clientY - rect.top) / rect.height * 100;
     set(ref(db, "roomCursors/" + activeRoomId + "/" + myId), { x: x, y: y, name: myName, role: roomRole, qId: qInfo.question.id });
   });
+
+  /* ================== 生字練習教室 (Live Writing Practice) ==================
+     跟一般的題庫/寫字板題目完全獨立：老師可以在上課當下臨時挑一個字（任何漢字都可以，
+     筆順資料即時向 HanziWriter 的公開 CDN 抓，不用自己維護字庫），全班學生畫面會自動彈出
+     筆順動畫＋自己的練習畫布；學生寫字的過程（不只是寫完）會即時同步給老師，老師可以縮圖牆
+     同時看全班，也可以點開放大看單一個學生。刻意不做自動筆順/位置對錯判斷——這裡單純是讓
+     老師巡堂用肉眼看，跟既有「個人描紅」那種逐筆自動比對是兩回事。 */
+  var wpState = null;               // 目前這個房間的練習狀態：{active, char, charSeq, startedAt}
+  var wpLastSeenSeq = null;         // 學生端：目前畫布對應的 charSeq，換字時用來判斷要不要清空重畫
+  var wpMyStrokes = [];             // 學生端：自己目前這個字寫的筆畫（完成的＋正在畫的最後一筆）
+  var wpDrawing = false;
+  var wpMinimized = false;          // 學生自己按過「暫時收合」，練習還在進行中也不要自動再彈出來
+  var wpLastSendAt = 0;
+  var wpHanziWriterInstance = null;
+  var wpStrokesData = {};           // 老師端：Firebase 讀回來的全部學生筆畫資料
+  var wpFloatingBadgeEl = null;
+  var wpZoomPeerId = null;          // 老師目前放大檢視中的學生 id（用來讓放大視窗也能跟著即時更新）
+
+  function wpRoomRef(suffix){ return ref(db, "roomWritingPractice/" + activeRoomId + (suffix || "")); }
+  function wpStrokesRef(suffix){ return ref(db, "roomWritingStrokes/" + activeRoomId + (suffix || "")); }
+
+  // 把一組筆畫（百分比座標）畫到任意大小的 canvas 上，老師縮圖牆／放大檢視／學生自己的畫布共用同一份邏輯
+  function wpRenderStrokes(canvasEl, strokes){
+    if(!canvasEl) return;
+    var ctx = canvasEl.getContext("2d");
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    if(!strokes || !strokes.length) return;
+    strokes.forEach(function(st){
+      var pts = st && st.points;
+      if(!pts || !pts.length) return;
+      ctx.save();
+      ctx.strokeStyle = "#2B2320";
+      ctx.lineWidth = Math.max(2, st.size || 7);
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      if(pts.length === 1){
+        // 只點一下沒有拖曳，畫一個小圓點，至少看得到有落筆
+        ctx.beginPath();
+        ctx.arc(pts[0].x * canvasEl.width / 100, pts[0].y * canvasEl.height / 100, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fillStyle = ctx.strokeStyle; ctx.fill();
+        ctx.restore();
+        return;
+      }
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x * canvasEl.width / 100, pts[0].y * canvasEl.height / 100);
+      for(var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * canvasEl.width / 100, pts[i].y * canvasEl.height / 100);
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  /* -------- 老師端：控制面板 -------- */
+  function openWritingPracticeTeacherDialog(){
+    if(!inRoom() || isStudent) return;
+    wpRenderTeacherPanel();
+    safeShowModal(document.getElementById("writing-practice-teacher-dialog"));
+  }
+
+  function wpStartOrSwitch(){
+    if(!inRoom() || isStudent) return;
+    var input = document.getElementById("wp-char-input");
+    var raw = (input && input.value || "").trim();
+    var chars = Array.from(raw).filter(function(c){ return c.trim().length > 0; });
+    if(!chars.length){ alert("請輸入一個漢字！Please enter a character."); return; }
+    var char = chars[0];
+    var newSeq = ((wpState && wpState.charSeq) || 0) + 1;
+    // 換字的時候把舊的學生筆畫資料一起清掉，資料庫不會一直堆積用過的練習紀錄
+    remove(wpStrokesRef()).catch(function(){});
+    set(wpRoomRef(), { active: true, char: char, charSeq: newSeq, startedAt: Date.now() });
+    if(input) input.value = "";
+  }
+
+  function wpEndPractice(){
+    if(!inRoom() || isStudent) return;
+    update(wpRoomRef(), { active: false });
+    remove(wpStrokesRef()).catch(function(){});
+  }
+
+  function wpRenderTeacherPanel(){
+    if(isStudent) return;
+    var badge = document.getElementById("wp-current-char-badge");
+    var badgeText = document.getElementById("wp-current-char-text");
+    var endBtn = document.getElementById("btn-wp-end");
+    var active = !!(wpState && wpState.active);
+    if(badge) badge.style.display = active ? "inline-flex" : "none";
+    if(badgeText) badgeText.textContent = active ? wpState.char : "";
+    if(endBtn) endBtn.style.display = active ? "inline-flex" : "none";
+    wpRenderTeacherThumbnails();
+  }
+
+  function wpRenderTeacherThumbnails(){
+    if(isStudent) return;
+    var area = document.getElementById("wp-thumb-area");
+    if(!area) return;
+    var active = !!(wpState && wpState.active);
+    if(!active){
+      area.innerHTML = '<p class="wp-empty-hint">還沒開始生字練習。輸入一個漢字並按「開始」，學生畫面就會自動出現筆順動畫跟練習畫布。</p>';
+      return;
+    }
+    var curSeq = wpState.charSeq;
+    var entries = [];
+    Object.keys(wpStrokesData || {}).forEach(function(pid){
+      var d = wpStrokesData[pid];
+      if(!d || d.charSeq !== curSeq) return; // 只顯示這一輪（目前這個字）的資料，上一個字的舊資料不要混進來
+      entries.push({ id: pid, name: (d.name || "學生"), strokes: d.strokes || [] });
+    });
+    if(!entries.length){
+      area.innerHTML = '<p class="wp-empty-hint">目前練習：「' + escapeHtml(wpState.char) + '」——還沒有學生開始寫，畫面會即時出現。</p>';
+      return;
+    }
+    entries.sort(function(a, b){ return a.name.localeCompare(b.name, "zh-Hant"); });
+    var grid = area.querySelector(".wp-thumb-grid");
+    if(!grid){
+      area.innerHTML = '<div class="wp-thumb-grid"></div>';
+      grid = area.querySelector(".wp-thumb-grid");
+    }
+    // 直接整批重建：這個房間的學生數通常不多（課堂規模），重建成本很低，邏輯也最簡單不會漏更新
+    grid.innerHTML = "";
+    entries.forEach(function(en){
+      var tile = document.createElement("div");
+      tile.className = "wp-thumb-tile";
+      tile.innerHTML = '<div class="wp-thumb-canvas-wrap"><canvas width="160" height="160"></canvas></div>' +
+        '<div class="wp-thumb-name">' + escapeHtml(en.name) + '</div>';
+      var canvasEl = tile.querySelector("canvas");
+      wpRenderStrokes(canvasEl, en.strokes);
+      tile.onclick = function(){ wpOpenZoom(en.id, en.name); };
+      grid.appendChild(tile);
+    });
+  }
+
+  function wpOpenZoom(peerId, name){
+    wpZoomPeerId = peerId;
+    var title = document.getElementById("wp-zoom-title");
+    if(title) title.textContent = "👤 " + name;
+    wpRenderZoomCanvas();
+    safeShowModal(document.getElementById("writing-practice-zoom-dialog"));
+  }
+
+  function wpRenderZoomCanvas(){
+    if(!wpZoomPeerId) return;
+    var canvasEl = document.getElementById("wp-zoom-canvas");
+    var d = wpStrokesData && wpStrokesData[wpZoomPeerId];
+    wpRenderStrokes(canvasEl, d ? d.strokes : []);
+  }
+
+  /* -------- 學生端：練習畫布＋筆順動畫 -------- */
+  function wpUpdateFloatingBadge(show, char){
+    if(!wpFloatingBadgeEl){
+      wpFloatingBadgeEl = document.createElement("button");
+      wpFloatingBadgeEl.type = "button"; wpFloatingBadgeEl.className = "wp-floating-badge";
+      wpFloatingBadgeEl.onclick = function(){
+        wpMinimized = false;
+        wpHandleStateChange();
+      };
+      document.body.appendChild(wpFloatingBadgeEl);
+    }
+    if(show){
+      wpFloatingBadgeEl.textContent = "✍️ 生字練習進行中：" + char + "（點我打開）";
+      wpFloatingBadgeEl.style.display = "flex";
+    } else {
+      wpFloatingBadgeEl.style.display = "none";
+    }
+  }
+
+  function wpInitHanziWriter(char){
+    var target = document.getElementById("wp-hanzi-target");
+    var errEl = document.getElementById("wp-hanzi-error");
+    if(target) target.innerHTML = "";
+    if(errEl){ errEl.style.display = "none"; errEl.textContent = ""; }
+    wpHanziWriterInstance = null;
+    if(!target || typeof HanziWriter === "undefined") return;
+    if(typeof HanziWriter.loadCharacterData !== "function"){
+      // 太舊的版本沒有這個靜態方法就直接用預設 charDataLoader（一樣會自己去抓 CDN）
+      wpHanziWriterInstance = HanziWriter.create(target, char, { width: 200, height: 200, padding: 8, strokeAnimationSpeed: 1, delayBetweenStrokes: 250, showOutline: true });
+      return;
+    }
+    HanziWriter.loadCharacterData(char).then(function(charData){
+      wpHanziWriterInstance = HanziWriter.create(target, char, {
+        width: 200, height: 200, padding: 8, strokeAnimationSpeed: 1, delayBetweenStrokes: 250, showOutline: true,
+        charDataLoader: function(c, onLoad){ onLoad(charData); }
+      });
+    }).catch(function(){
+      if(errEl){ errEl.style.display = "block"; errEl.textContent = "⚠️ 目前找不到「" + char + "」的筆順資料（可能是罕見字或連線問題），還是可以直接跟著老師示範練習寫。"; }
+    });
+  }
+
+  var wpCanvasHandlersBound = false;
+  function wpSetupStudentCanvas(){
+    var canvas = document.getElementById("wp-draw-canvas");
+    if(!canvas || wpCanvasHandlersBound) return;
+    wpCanvasHandlersBound = true;
+    var ctx = canvas.getContext("2d");
+
+    function getPct(e){
+      var rect = canvas.getBoundingClientRect();
+      var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: (clientX - rect.left) / rect.width * 100, y: (clientY - rect.top) / rect.height * 100 };
+    }
+    function redrawLocal(){ wpRenderStrokes(canvas, wpMyStrokes); }
+    function sendUpdate(immediate){
+      if(!inRoom() || !isStudent) return;
+      var now = Date.now();
+      if(!immediate && now - wpLastSendAt < 120) return;
+      wpLastSendAt = now;
+      set(wpStrokesRef("/" + myId), { name: myName, charSeq: wpLastSeenSeq, strokes: wpMyStrokes, updatedAt: now });
+    }
+    function start(e){
+      if(!wpState || !wpState.active) return;
+      wpDrawing = true;
+      var p = getPct(e);
+      wpMyStrokes.push({ points: [p], size: 7 });
+      redrawLocal();
+      e.preventDefault();
+    }
+    function move(e){
+      if(!wpDrawing) return;
+      var p = getPct(e);
+      var cur = wpMyStrokes[wpMyStrokes.length - 1];
+      if(cur) cur.points.push(p);
+      redrawLocal();
+      sendUpdate(false);
+      e.preventDefault();
+    }
+    function end(e){
+      if(!wpDrawing) return;
+      wpDrawing = false;
+      sendUpdate(true);
+      if(e) e.preventDefault();
+    }
+    canvas.addEventListener("mousedown", start);
+    canvas.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", end);
+    canvas.addEventListener("touchstart", start, { passive: false });
+    canvas.addEventListener("touchmove", move, { passive: false });
+    canvas.addEventListener("touchend", end, { passive: false });
+
+    var clearBtn = document.getElementById("btn-wp-clear");
+    if(clearBtn) clearBtn.onclick = function(){ wpMyStrokes = []; redrawLocal(); sendUpdate(true); };
+  }
+
+  function wpRenderStudentDialogContent(){
+    var char = wpState.char;
+    var titleEl = document.getElementById("wp-student-char-title");
+    if(titleEl) titleEl.textContent = char;
+    var ghostEl = document.getElementById("wp-ghost-text");
+    if(ghostEl) ghostEl.textContent = char;
+    wpInitHanziWriter(char);
+    wpSetupStudentCanvas();
+    var canvas = document.getElementById("wp-draw-canvas");
+    wpRenderStrokes(canvas, wpMyStrokes);
+    sendWpInitialState();
+  }
+  function sendWpInitialState(){
+    if(!inRoom() || !isStudent) return;
+    set(wpStrokesRef("/" + myId), { name: myName, charSeq: wpLastSeenSeq, strokes: wpMyStrokes, updatedAt: Date.now() });
+  }
+
+  /* -------- 兩邊共用：練習狀態改變時的入口 -------- */
+  function wpHandleStateChange(){
+    if(!isStudent){
+      wpRenderTeacherPanel();
+      if(wpZoomPeerId) wpRenderZoomCanvas();
+      return;
+    }
+    if(wpState && wpState.active){
+      if(wpLastSeenSeq !== wpState.charSeq){
+        wpLastSeenSeq = wpState.charSeq;
+        wpMyStrokes = [];
+        wpMinimized = false; // 換了新字，強制重新彈出來，不要沿用「上一個字」時使用者按過的收合狀態
+      }
+      wpUpdateFloatingBadge(true, wpState.char);
+      if(!wpMinimized){
+        wpRenderStudentDialogContent();
+        safeShowModal(document.getElementById("writing-practice-student-dialog"));
+      }
+    } else {
+      wpLastSeenSeq = null; wpMyStrokes = [];
+      closeModalDialog(document.getElementById("writing-practice-student-dialog"));
+      wpUpdateFloatingBadge(false);
+    }
+  }
+
+  function wpResetOnLeaveRoom(){
+    wpState = null; wpStrokesData = {}; wpMyStrokes = []; wpLastSeenSeq = null; wpMinimized = false; wpZoomPeerId = null;
+    closeModalDialog(document.getElementById("writing-practice-teacher-dialog"));
+    closeModalDialog(document.getElementById("writing-practice-zoom-dialog"));
+    closeModalDialog(document.getElementById("writing-practice-student-dialog"));
+    wpUpdateFloatingBadge(false);
+  }
+
+  (function bindWpButtons(){
+    var startBtn = document.getElementById("btn-wp-start");
+    if(startBtn) startBtn.onclick = wpStartOrSwitch;
+    var endBtn = document.getElementById("btn-wp-end");
+    if(endBtn) endBtn.onclick = wpEndPractice;
+    var closePanelBtn = document.getElementById("btn-wp-close-panel");
+    if(closePanelBtn) closePanelBtn.onclick = function(){ closeModalDialog(document.getElementById("writing-practice-teacher-dialog")); };
+    var zoomCloseBtn = document.getElementById("btn-wp-zoom-close");
+    if(zoomCloseBtn) zoomCloseBtn.onclick = function(){ wpZoomPeerId = null; closeModalDialog(document.getElementById("writing-practice-zoom-dialog")); };
+    var animateBtn = document.getElementById("btn-wp-animate");
+    if(animateBtn) animateBtn.onclick = function(){ if(wpHanziWriterInstance) wpHanziWriterInstance.animateCharacter(); };
+    var minimizeBtn = document.getElementById("btn-wp-minimize");
+    if(minimizeBtn) minimizeBtn.onclick = function(){ wpMinimized = true; closeModalDialog(document.getElementById("writing-practice-student-dialog")); wpUpdateFloatingBadge(true, wpState ? wpState.char : ""); };
+  })();
 
   /* ================== 側欄渲染 ================== */
   var sectionTreeListEl = document.getElementById("section-tree-list");
@@ -3295,7 +3729,8 @@
     } else if(sec.type === "reorder"){
       var rPrompt = document.getElementById("f-reorder-prompt").value.trim();
       var rawAnswer = document.getElementById("f-reorder-answer").value.trim();
-      var words = rawAnswer.split(/[,，\s]+/).filter(function(w){ return w.length > 0; });
+      // 只用空白隔開詞語，不再把逗號當成分隔符──否則句子裡真的需要「，」當作一個詞語（標點符號）時會被吃掉，沒辦法輸入
+      var words = rawAnswer.split(/\s+/).filter(function(w){ return w.length > 0; });
       if(words.length < 2){ alert("請輸入至少兩個詞語組成句子！Please enter at least two words."); return; }
       qObj.title = titleInput || ("第 " + (order + 1) + " 題");
       qObj.prompt = rPrompt || "請將下列詞語重組為正確句子 Rearrange the words into a correct sentence"; qObj.words = words;
