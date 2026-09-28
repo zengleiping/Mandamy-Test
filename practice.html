@@ -453,6 +453,40 @@
 
   .board-area{ position:relative; width:100%; margin:0 auto; }
 
+  /* 全螢幕作答區（小白板／生字練習共用）：整個瀏覽器視窗都是畫布，工具列改成用「浮」的蓋在
+     畫布角落，不再佔版面寬度。實作方式是把 board-area 整個節點搬到 <body> 最下面＋蓋一層
+     position:fixed 版面在最上層，而不是用瀏覽器原生 Fullscreen API——不用跟使用者額外要授權，
+     也不受 #stage 本身的縮放（見 applyStageZoom 的 transform:scale）影響定位（fixed 元素若在
+     被 transform 的祖先底下，會以那個祖先的框當基準，蓋不滿整個瀏覽器視窗）。搬過去、搬回來
+     都是同一份 DOM 節點，畫筆內容、事件監聽都不會重建或遺失。 */
+  .board-area.canvas-fs-active{
+    position:fixed; inset:0; z-index:9000;
+    background:var(--paper);
+    padding:14px; box-sizing:border-box;
+    display:flex; margin:0;
+  }
+  body.canvas-fs-open{ overflow:hidden; }
+  .board-area.canvas-fs-active .draw-board-layout,
+  .board-area.canvas-fs-active .hanzi-board-layout{ width:100%; height:100%; }
+  .board-area.canvas-fs-active .canvas-stage-area{ width:100%; height:100%; }
+  /* 工具列／側欄浮在畫布角落：半透明底色＋毛玻璃，蓋在畫布上但不擋住太多書寫範圍，
+     且脫離 flex 版面（position:absolute），不會再跟畫布搶版面寬度 */
+  .board-area.canvas-fs-active .draw-toolbar-vertical,
+  .board-area.canvas-fs-active .hanzi-side-panel{
+    position:absolute; top:14px; left:14px; z-index:9001; max-height:calc(100% - 28px); overflow-y:auto;
+    background:rgba(255,255,255,0.92); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  }
+  .canvas-fs-exit-btn{ display:none; }
+  .board-area.canvas-fs-active .canvas-fs-exit-btn{
+    display:flex; align-items:center; justify-content:center;
+    position:absolute; top:14px; right:14px; z-index:9002;
+    width:38px; height:38px; border-radius:50%;
+    border:1.5px solid rgba(28,33,30,0.16);
+    background:rgba(255,255,255,0.92); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    box-shadow:var(--shadow); cursor:pointer; font-size:16px; font-weight:800; color:var(--ink);
+  }
+  .canvas-fs-exit-btn:hover{ border-color:var(--seal); color:var(--seal); }
+
   /* 連連看 */
   .match-board{position:relative; width:100%; max-width:880px; margin:0 auto;}
   .match-cols{
@@ -3942,7 +3976,11 @@
 
   function renderStage(){
     var currentInfo = getCurrentQInfo();
-    if(!currentInfo){ stageEl.innerHTML = ""; liveBoardQId = null; liveBoardRefresh = null; liveTraceHandler = null; lastStageSignature = null; return; }
+    if(!currentInfo){
+      document.querySelectorAll(".canvas-fs-active").forEach(function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
+      document.body.classList.remove("canvas-fs-open");
+      stageEl.innerHTML = ""; liveBoardQId = null; liveBoardRefresh = null; liveTraceHandler = null; lastStageSignature = null; return;
+    }
 
     var sec = currentInfo.section; var q = currentInfo.question;
     var allList = getAllQuestionsList(); var currentIndex = allList.findIndex(function(it){ return it.question.id === q.id; });
@@ -3962,6 +4000,13 @@
       if(openMonitorDlg && openMonitorDlg.open) closeModalDialog(openMonitorDlg);
       if(openZoomDlg && openZoomDlg.open) closeModalDialog(openZoomDlg);
     }
+
+    // 如果之前開著「全螢幕作答區」，那份畫布節點已經被搬到 <body> 底下（不在 #stage 範圍內），
+    // 上面即將做的 stageEl.innerHTML = "" 清不到它——這裡先手動清掉，換題目後才不會殘留一個
+    // 對不上目前題目的舊全螢幕畫面。如果新題目也是小白板／生字練習，且原本就是全螢幕狀態，
+    // 稍後 renderDrawBoard()／renderHanziBoard() 裡的 setupCanvasFullscreen() 會自動幫新題目接著全螢幕。
+    document.querySelectorAll(".canvas-fs-active").forEach(function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
+    document.body.classList.remove("canvas-fs-open");
 
     stageEl.innerHTML = "";
     lastStageSignature = stageSignature;
@@ -4437,6 +4482,56 @@
   var boardState = { tool: "pen", color: "#B23B32", size: 6, fontSize: 36 };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
 
+  // ============ 全螢幕作答區（小白板／生字練習共用） ============
+  // canvasFullscreen 記在這個模組層級的變數：換題目後如果原本開著全螢幕，新題目的畫布會自動
+  // 接著維持全螢幕，不用每換一題都重新點一次。實際「搬到 body 底下蓋滿視窗」的邏輯統一寫在
+  // setupCanvasFullscreen() 這個共用函式，renderDrawBoard／renderHanziBoard 各自呼叫一次。
+  var canvasFullscreen = false;
+  var canvasFsKeyHandler = null; // 記住上一次掛的 Escape 鍵監聽器，換題目前先移除，避免累積重複監聽
+  function setupCanvasFullscreen(container, toggleBtn, refit){
+    var originalParent = container.parentNode; // 一定要在搬動前先記下來，退出時才知道要塞回哪裡
+    function updateBtn(){
+      if(!toggleBtn) return;
+      // 板類（.tool-btn-v）跟生字練習學生端（普通 .btn）用的按鈕視覺不一樣，各自用對應的內容格式
+      if(toggleBtn.classList.contains("tool-btn-v")){
+        toggleBtn.innerHTML = canvasFullscreen
+          ? '<span class="tool-btn-v-icon">⤡</span><span class="tool-btn-v-label">退出全螢幕</span>'
+          : '<span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">全螢幕</span>';
+      } else {
+        toggleBtn.textContent = canvasFullscreen ? "⤡ 退出全螢幕" : "⛶ 全螢幕";
+      }
+      toggleBtn.title = canvasFullscreen
+        ? "退出全螢幕，回到原本版面 Exit fullscreen canvas"
+        : "全螢幕作答區：整個畫面都是畫布，工具列浮在畫布上 Fullscreen canvas — toolbar floats on top";
+      toggleBtn.classList.toggle("active", canvasFullscreen);
+    }
+    function enter(){
+      canvasFullscreen = true;
+      document.body.appendChild(container);
+      container.classList.add("canvas-fs-active");
+      document.body.classList.add("canvas-fs-open");
+      updateBtn();
+      requestAnimationFrame(refit);
+    }
+    function exit(){
+      canvasFullscreen = false;
+      container.classList.remove("canvas-fs-active");
+      document.body.classList.remove("canvas-fs-open");
+      if(container.parentNode === document.body) originalParent.appendChild(container);
+      updateBtn();
+      requestAnimationFrame(refit);
+    }
+    if(toggleBtn) toggleBtn.onclick = function(e){ e.preventDefault(); e.stopPropagation(); if(canvasFullscreen) exit(); else enter(); };
+    var exitBtn = container.querySelector(".canvas-fs-exit-btn");
+    if(exitBtn) exitBtn.onclick = function(e){ e.preventDefault(); e.stopPropagation(); exit(); };
+    if(canvasFsKeyHandler) document.removeEventListener("keydown", canvasFsKeyHandler);
+    canvasFsKeyHandler = function(e){ if(e.key === "Escape" && canvasFullscreen) exit(); };
+    document.addEventListener("keydown", canvasFsKeyHandler);
+    updateBtn();
+    if(canvasFullscreen) enter(); // 之前就開著全螢幕、現在是換題目後重新渲染，新題目的畫布接著維持全螢幕
+    return { exit: exit };
+  }
+
   /* ================== 寫字板功能 (完整恢復) ================== */
   function renderDrawBoard(q, container){
     var progress = getProgress(q.id);
@@ -4466,6 +4561,8 @@
         <div class="color-dot ${boardState.color==='#FB8C00'?'active':''}" data-color="#FB8C00" style="background:#FB8C00;" title="橘色 Orange"></div>`;
 
     vToolbar.innerHTML = `
+      <button type="button" class="tool-btn-v" id="btn-canvas-fs" title="全螢幕作答區：整個畫面都是畫布，工具列浮在畫布上 Fullscreen canvas — toolbar floats on top"><span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">全螢幕</span></button>
+      <div class="tool-v-sep"></div>
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v ${boardState.tool==='pen'?'active':''}" data-tool="pen" title="畫筆 Pen（滑鼠移入可選顏色 hover for colors）"><span class="tool-btn-v-icon">✏️</span><span class="tool-btn-v-label">畫筆</span></button>
         <div class="color-popover"><div class="color-popover-title">筆刷顏色 Brush Color</div><div class="color-dot-grid">${colorDotsHtml}</div></div>
@@ -4632,10 +4729,18 @@
     }
     function fitCanvasToViewport(){
       if(!document.body.contains(cWrap)) return; // 題目已經切換掉了，這份畫布不在畫面上，略過
-      var wrapRect = layout.getBoundingClientRect();
-      var bottomLimit = stageWrapEl ? stageWrapEl.getBoundingClientRect().bottom : window.innerHeight;
-      var availableHeight = Math.max(220, bottomLimit - wrapRect.top - 6);
-      var availableWidth = Math.max(220, layout.clientWidth - vToolbar.offsetWidth - 16);
+      var availableHeight, availableWidth;
+      if(container.classList.contains("canvas-fs-active")){
+        // 全螢幕模式：整個瀏覽器視窗都是作答區，工具列改成浮在畫布上、不佔版面寬度，
+        // 所以這裡不用再扣工具列寬度；也不受側欄/頂欄/舞台卡片版面影響，直接用 layout 撐滿的視窗尺寸。
+        availableWidth = Math.max(220, layout.clientWidth - 4);
+        availableHeight = Math.max(220, layout.clientHeight - 4);
+      } else {
+        var wrapRect = layout.getBoundingClientRect();
+        var bottomLimit = stageWrapEl ? stageWrapEl.getBoundingClientRect().bottom : window.innerHeight;
+        availableHeight = Math.max(220, bottomLimit - wrapRect.top - 6);
+        availableWidth = Math.max(220, layout.clientWidth - vToolbar.offsetWidth - 16);
+      }
       stageArea.style.width = Math.floor(availableWidth) + "px";
       stageArea.style.height = Math.floor(availableHeight) + "px";
 
@@ -4651,6 +4756,14 @@
     requestAnimationFrame(fitCanvasToViewport);
     window.addEventListener("resize", fitCanvasToViewport);
 
+    // 全螢幕作答區右上角的浮動退出鈕（跟工具列裡那顆「全螢幕／退出全螢幕」按鈕互為備援，
+    // 平常畫面上完全看不到，只有 .canvas-fs-active 生效時才會浮現，見前面的 CSS）
+    var fsExitBtn = document.createElement("button");
+    fsExitBtn.type = "button"; fsExitBtn.className = "canvas-fs-exit-btn";
+    fsExitBtn.title = "退出全螢幕 Exit fullscreen（也可以按 Esc）";
+    fsExitBtn.textContent = "✕";
+    container.appendChild(fsExitBtn);
+
     var ctx = canvas.getContext("2d");
     var traceCtx = traceCanvas.getContext("2d");
     var isDrawing = false;
@@ -4658,7 +4771,7 @@
     var activeSelectedTextId = null;
     // 這幾個按鈕不是「畫筆／打字／橡皮擦」之類的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace"];
+    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs"];
 
     vToolbar.querySelectorAll(".tool-btn-v").forEach(function(b){
       b.onclick = function(){
@@ -4671,6 +4784,8 @@
         canvas.style.cursor = (boardState.tool === "text" ? "text" : (boardState.tool.includes("eraser") ? "cell" : "crosshair"));
       };
     });
+
+    setupCanvasFullscreen(container, vToolbar.querySelector("#btn-canvas-fs"), fitCanvasToViewport);
 
     var btnUploadBg = vToolbar.querySelector("#btn-upload-bg");
     var btnRemoveBg = vToolbar.querySelector("#btn-remove-bg");
@@ -5556,6 +5671,19 @@
     clearBtn.type = "button"; clearBtn.className = "btn btn-sm btn-ghost"; clearBtn.textContent = "🗑️ 清除重寫";
     side.appendChild(clearBtn);
 
+    var fsBtn = document.createElement("button");
+    fsBtn.type = "button"; fsBtn.className = "btn btn-sm btn-ghost"; fsBtn.id = "btn-canvas-fs";
+    fsBtn.textContent = "⛶ 全螢幕";
+    fsBtn.title = "全螢幕作答區：整個畫面都是畫布 Fullscreen canvas";
+    side.appendChild(fsBtn);
+
+    // 全螢幕作答區右上角的浮動退出鈕，只有 .canvas-fs-active 生效時才會浮現
+    var fsExitBtn = document.createElement("button");
+    fsExitBtn.type = "button"; fsExitBtn.className = "canvas-fs-exit-btn";
+    fsExitBtn.title = "退出全螢幕 Exit fullscreen（也可以按 Esc）";
+    fsExitBtn.textContent = "✕";
+    container.appendChild(fsExitBtn);
+
     var HANZI_ASPECT_RATIO = 1;
     var cWrap = document.createElement("div"); cWrap.className = "canvas-stage-wrap";
     var gridOverlay = document.createElement("div"); gridOverlay.className = "grid-overlay grid-jiu";
@@ -5576,11 +5704,19 @@
     }
     function fitCanvasToViewport(){
       if(!document.body.contains(cWrap)) return;
-      var wrapRect = layout.getBoundingClientRect();
-      var stageWrapEl = document.querySelector(".stage-wrap");
-      var bottomLimit = stageWrapEl ? stageWrapEl.getBoundingClientRect().bottom : window.innerHeight;
-      var availableHeight = Math.max(220, bottomLimit - wrapRect.top - 6);
-      var availableWidth = Math.max(220, layout.clientWidth - side.offsetWidth - 16);
+      var availableHeight, availableWidth;
+      if(container.classList.contains("canvas-fs-active")){
+        // 全螢幕模式：整個瀏覽器視窗都是作答區，側欄（含筆順參考／全螢幕鈕）改成浮在畫布上、
+        // 不佔版面寬度，這裡不用再扣側欄寬度，直接用 layout 撐滿的視窗尺寸。
+        availableWidth = Math.max(220, layout.clientWidth - 4);
+        availableHeight = Math.max(220, layout.clientHeight - 4);
+      } else {
+        var wrapRect = layout.getBoundingClientRect();
+        var stageWrapEl = document.querySelector(".stage-wrap");
+        var bottomLimit = stageWrapEl ? stageWrapEl.getBoundingClientRect().bottom : window.innerHeight;
+        availableHeight = Math.max(220, bottomLimit - wrapRect.top - 6);
+        availableWidth = Math.max(220, layout.clientWidth - side.offsetWidth - 16);
+      }
       stageArea.style.width = Math.floor(availableWidth) + "px";
       stageArea.style.height = Math.floor(availableHeight) + "px";
       var w = availableWidth, h = Math.floor(w / HANZI_ASPECT_RATIO);
@@ -5592,6 +5728,7 @@
     boardResizeHandler = fitCanvasToViewport;
     requestAnimationFrame(fitCanvasToViewport);
     window.addEventListener("resize", fitCanvasToViewport);
+    setupCanvasFullscreen(container, fsBtn, fitCanvasToViewport);
 
     var ctx = canvas.getContext("2d");
     var isDrawing = false;
