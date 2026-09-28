@@ -334,6 +334,15 @@
   }
   /* 側欄收合後舞台區有更多可用寬度，讓題目（尤其是寫字板）可以放大使用，而不是維持原本固定寬度 */
   .layout.sidebar-collapsed .stage{ max-width:1480px; }
+  /* 小白板／生字練習這種畫布類題型，不管側欄收合與否都不要被固定上限卡住——
+     這兩種題型的可用寬度完全交給 stage-wrap 的留白決定，畫布才能盡量撐到跟螢幕差不多大，
+     不要像其他題型一樣受限在一個偏窄的閱讀寬度裡、兩側留一堆用不到的空白。
+     這裡刻意也寫一份 .layout.sidebar-collapsed .stage.stage-canvas-type 選擇器：
+     CSS 選擇器比的是「class 數量」不是「寫的先後」，上面收合時的 1480px 那條規則
+     有三個 class（.layout.sidebar-collapsed .stage），單寫兩個 class 的
+     .stage.stage-canvas-type 選擇器特異度不夠高，蓋不掉它，兩種情況都要各寫一條才會真的生效。 */
+  .stage.stage-canvas-type,
+  .layout.sidebar-collapsed .stage.stage-canvas-type{ max-width:none; }
 
   /* 句子重組專屬樣式 */
   .reorder-container{display:flex;flex-direction:column;gap:24px;max-width:840px;margin:0 auto;}
@@ -2266,6 +2275,13 @@
     if(layoutEl) layoutEl.classList.toggle("sidebar-collapsed", collapsed);
     if(btnToggleSidebar) btnToggleSidebar.title = collapsed ? "展開左側欄 Expand" : "收合左側欄 Collapse";
     localStorage.setItem("hanyu_sidebar_collapsed", collapsed ? "1" : "0");
+    // 收合/展開側欄只是切換一個 CSS class,不是瀏覽器視窗真的變大小,不會自動觸發 resize 事件——
+    // 但小白板／生字練習的畫布是依「目前量到的可用空間」撐到最大（見 fitCanvasToViewport，只在 resize 時重算），
+    // 如果沒有手動觸發，畫布會一直維持收合前量到的舊尺寸，多出來的空間就會變成沒用到的空白。
+    // 廣播一次 resize 事件讓已經掛在畫面上的畫布立刻重新量測；side 欄收合動畫是 0.2s，
+    // 動畫跑完後的寬度才是最終值，所以動畫結束後再廣播一次，抓到真正安定下來的最終尺寸。
+    window.dispatchEvent(new Event("resize"));
+    setTimeout(function(){ window.dispatchEvent(new Event("resize")); }, 220);
   }
   if(btnToggleSidebar) btnToggleSidebar.onclick = function(){ applySidebarCollapsed(!sidebarCollapsed); };
   applySidebarCollapsed(sidebarCollapsed);
@@ -3950,6 +3966,8 @@
     stageEl.innerHTML = "";
     lastStageSignature = stageSignature;
     liveBoardQId = null; liveBoardRefresh = null; liveTraceHandler = null; // 若這題是小白板／生字練習，稍後 renderDrawBoard()／renderHanziBoard() 會重新指定
+    // 小白板／生字練習這兩種畫布類題型，舞台區不要被一般題型的固定寬度上限卡住（見 CSS .stage-canvas-type）
+    stageEl.classList.toggle("stage-canvas-type", sec.type === "board" || sec.type === "hanzi");
 
     var navBar = document.createElement("div"); navBar.className = "stage-header-nav";
     navBar.innerHTML = `
@@ -4525,7 +4543,16 @@
     // 學生自己的螢幕、側欄收合狀態、視窗大小）量到的 cWrap 長寬比例不一樣，同一筆資料換算回像素時
     // 形狀跟位置就會跟著不一樣，變成「學生圈的跟老師投影的不同」。長寬比例固定以後，
     // 不管誰的螢幕、視窗多大，畫布的「邏輯形狀」永遠一致，換算出來的位置/形狀就會完全一樣。
-    var BOARD_ASPECT_RATIO = 4 / 3; // 寬:高，固定寫死，不隨螢幕量測變動
+    //
+    // 2026-09-22 調整：4:3 在寬螢幕（尤其側欄收合後）會讓畫布被「高度」卡住撐不寬，兩側留一大片沒用到
+    // 的空白，使用者明確反映過。改成兩種情況：(a) 這一題有貼底圖時，長寬比例改成「跟底圖的原始長寬比
+    // 例一模一樣」——底圖本身的像素尺寸是檔案自帶的資料，不是量每個人螢幕算出來的，所以每個人算出來的
+    // 比例還是完全相同、不會破壞跨裝置對齊；而且底圖是最常見「兩側留白」的情況（貼進來的截圖/照片通常
+    // 是寬螢幕比例），配合底圖自己的形狀，留白自然就會變少，不用另外犧牲對齊精準度。
+    // (b) 沒有底圖（單純空白畫布／格線練習）時，把預設值從 4:3 加寬成 3:2，同樣是寫死的常數、每個人
+    // 算出來還是一致，只是沒有 4:3 那麼「偏窄」，減少空白但不會太誇張（格線本身固定是正方形，不受這個
+    // 比例影響，見下面 positionGridOverlay，所以拉寬並不會讓九宮格/田字格變形）。
+    var BOARD_ASPECT_RATIO = 3 / 2; // 寬:高，固定寫死，不隨螢幕量測變動（有底圖時會被下面改成底圖自己的比例）
 
     var stageArea = document.createElement("div");
     stageArea.className = "canvas-stage-area";
@@ -4534,6 +4561,16 @@
     cWrap.className = "canvas-stage-wrap";
     if(currentBg){
       var img = document.createElement("img"); img.className = "bg-img-layer"; img.src = currentBg;
+      img.onload = function(){
+        // 底圖載入完成後才知道它真正的長寬比例（naturalWidth/naturalHeight 是圖片檔案本身的資料，
+        // 每個人載入同一張圖算出來的數字保證完全相同，不是螢幕量出來的，所以不會破壞跨裝置對齊）。
+        // 夾一個合理範圍（0.4~3）避免極端形狀的圖片（例如一條很細長的截圖）把畫布撐成很難書寫的形狀。
+        if(img.naturalWidth > 0 && img.naturalHeight > 0){
+          var ratio = img.naturalWidth / img.naturalHeight;
+          BOARD_ASPECT_RATIO = Math.max(0.4, Math.min(3, ratio));
+          fitCanvasToViewport();
+        }
+      };
       cWrap.appendChild(img);
     }
     // 格線浮層：pointer-events:none，只是畫面正中央一塊參考用的方框，不會擋住下面 canvas 的書寫範圍
