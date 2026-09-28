@@ -12,6 +12,10 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <!-- HanziWriter：生字練習教室用來畫筆順動畫，預設就會自己去 CDN 抓任何漢字的筆順資料，不用自己維護字庫 -->
 <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3/dist/hanzi-writer.min.js"></script>
+<!-- pinyin-pro：小白板「文字」工具打字加註音（拼音）用，載入後掛在 window.pinyinPro 上；
+     注音（Zhuyin/Bopomofo）沒有現成的瀏覽器函式庫，由這個檔案自己的 pinyinSyllableToZhuyin()
+     依教育部標準對照表用拼音轉換，不需要額外的 CDN 函式庫 -->
+<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.29.4/dist/index.js"></script>
 <style>
   :root{
     --paper:#FAF7F2;
@@ -731,6 +735,14 @@
   }
   .movable-text:hover, .movable-text.active{ border:1.5px dashed #1E88E5 !important; background: transparent !important; box-shadow: none !important; cursor:move !important; }
   .movable-text.active{ border-color:var(--seal) !important; cursor:grabbing !important; }
+  /* 打字加註音（拼音／注音）：用瀏覽器原生的 <ruby>/<rt> 把註音字顯示在字的正上方，不用自己算位置。
+     有 ruby 的時候文字方塊要多留一點高度給上面的註音，不然會跟畫布上其他內容擠在一起。 */
+  .movable-text ruby{ ruby-position: over; }
+  .movable-text rt{
+    font-size:0.42em; font-weight:600; font-family:"Plus Jakarta Sans",sans-serif;
+    color:inherit; opacity:0.8; user-select:none; text-align:center; letter-spacing:0;
+  }
+  .movable-text:has(ruby){ line-height:2.15; padding-top:0.3em !important; }
 
   .resize-handle{
     display:none;position:absolute;right:-7px;bottom:-7px;width:13px;height:13px; background:#1E88E5;border:2px solid #FFFFFF;border-radius:50%; cursor:nwse-resize !important;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:10;
@@ -911,9 +923,10 @@
   .upload-box{border:2px dashed var(--grid-line);padding:18px;border-radius:12px;text-align:center;cursor:pointer;background:var(--surface-2); transition:border-color .15s ease;}
   .upload-box:hover{border-color:var(--seal);}
 
-  .btn-theme-bg.active, .btn-theme-accent.active{
+  .btn-theme-bg.active, .btn-theme-accent.active, .btn-phonetic-mode.active{
     outline: 2.5px solid var(--ink) !important; outline-offset: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
+  .btn-phonetic-mode.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
 </style>
 </head>
 <body>
@@ -1018,9 +1031,9 @@
 
       <!-- 線上課畫面縮放調節控制器 -->
       <div class="zoom-floating-widget" id="zoom-widget">
-        <button type="button" class="zoom-floating-btn" id="btn-zoom-out" title="縮小畫面 (Zoom Out)">−</button>
-        <span class="zoom-floating-value" id="zoom-percent-text" title="點擊重置為 100% Reset to 100%">100%</span>
-        <button type="button" class="zoom-floating-btn" id="btn-zoom-in" title="放大畫面 (Zoom In)">+</button>
+        <button type="button" class="zoom-floating-btn" id="btn-zoom-out" title="整頁投影縮放：縮小 Whole-page zoom (for projecting to a screen) — Zoom Out">−</button>
+        <span class="zoom-floating-value" id="zoom-percent-text" title="🖥️ 整頁投影縮放：調整的是整個網頁畫面大小（給投影機／大螢幕用），點擊重置為 100% Whole-page zoom — for projecting to a screen. Click to reset to 100%">🖥️ 100%</span>
+        <button type="button" class="zoom-floating-btn" id="btn-zoom-in" title="整頁投影縮放：放大 Whole-page zoom (for projecting to a screen) — Zoom In">+</button>
       </div>
     </main>
   </div>
@@ -1127,6 +1140,16 @@
 
     <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
 
+    <label>✏️ 小白板打字加註音（文字工具）</label>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+      <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="off">Aa 不加註音 Off</button>
+      <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="pinyin">拼音 Pinyin</button>
+      <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="zhuyin">ㄅㄆㄇ 注音 Zhuyin</button>
+    </div>
+    <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">用「文字」工具在小白板上打字時，字的正上方要不要自動加拼音或注音——第一次用文字工具時會問一次，之後都可以回這裡改。</p>
+
+    <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
+
     <label>🔊 作答音效風格</label>
     <select id="setting-sound-style" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--grid-line);font-size:14px;background:var(--surface-2);color:var(--ink);">
       <option value="magic">🌟 奇幻魔法 (Magic Sparkle / 推薦)</option>
@@ -1140,6 +1163,20 @@
   </div>
   <div class="dialog-foot">
     <button type="button" class="btn btn-primary" id="btn-close-settings">完成 Done</button>
+  </div>
+</dialog>
+
+<!-- 第一次使用「文字」工具時的一次性詢問：要不要在打字時自動加拼音／注音，選完就記住，
+     之後只能到「⚙️ 設定」裡面改，這裡不會再自動跳出來（見 maybeAskPhoneticModeThenRun）。 -->
+<dialog class="dialog-modal" id="phonetic-choice-dialog" style="max-width:400px;">
+  <div class="dialog-head" style="text-align:center;">
+    <h2>✏️ 打字要加註音嗎？</h2>
+    <p style="font-size:13px;color:var(--ink-soft);">用「文字」工具打字時，字的正上方要自動加拼音還是注音？之後可以到「⚙️ 設定」裡隨時改。</p>
+  </div>
+  <div class="dialog-body" style="display:flex; flex-direction:column; gap:8px;">
+    <button type="button" class="btn btn-phonetic-choice" data-phonetic="pinyin" style="justify-content:center; padding:12px;">拼音 Pinyin（例如：jīn tiān）</button>
+    <button type="button" class="btn btn-phonetic-choice" data-phonetic="zhuyin" style="justify-content:center; padding:12px;">注音 Zhuyin（例如：ㄐㄧㄣ ㄊㄧㄢ）</button>
+    <button type="button" class="btn btn-ghost btn-phonetic-choice" data-phonetic="off" style="justify-content:center; padding:12px;">不用了，不加註音 Off</button>
   </div>
 </dialog>
 
@@ -1465,7 +1502,7 @@
     }
     var zoomText = document.getElementById("zoom-percent-text");
     if(zoomText){
-      zoomText.textContent = Math.round(currentZoomRatio * 100) + "%";
+      zoomText.textContent = "🖥️ " + Math.round(currentZoomRatio * 100) + "%";
     }
     localStorage.setItem("hanyu_zoom_ratio", currentZoomRatio);
     window.dispatchEvent(new Event("resize"));
@@ -1475,6 +1512,9 @@
   var currentBgMode = localStorage.getItem("hanyu_theme_bg") || "light";
   var currentAccentColor = localStorage.getItem("hanyu_theme_accent") || "seal";
   var currentClassMode = localStorage.getItem("hanyu_class_mode") || "practice";
+  // 小白板「文字」工具打字加註音：null 表示這台裝置從沒選過（要先跳出一次選擇視窗），
+  // 實際的轉換函式（setPhoneticMode／buildPhoneticHtml…）在下面「打字加註音」那段一起定義。
+  var currentPhoneticMode = localStorage.getItem("hanyu_phonetic_mode");
 
   function applyTheme(bgMode, accentColor, syncToFirebase){
     if(syncToFirebase === undefined) syncToFirebase = true;
@@ -2388,6 +2428,10 @@
   document.querySelectorAll(".btn-theme-accent").forEach(function(b){
     b.onclick = function(){ applyTheme(currentBgMode, b.dataset.accent, true); };
   });
+  document.querySelectorAll(".btn-phonetic-mode").forEach(function(b){
+    b.classList.toggle("active", b.dataset.phonetic === (currentPhoneticMode || "off"));
+    b.onclick = function(){ setPhoneticMode(b.dataset.phonetic); };
+  });
 
   var soundStyleSelect = document.getElementById("setting-sound-style");
   if(soundStyleSelect){
@@ -3266,6 +3310,130 @@
   function escapeHtml(s){
     return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
+
+  /* ================== 小白板「文字」工具：打字加註音（拼音／注音） ==================
+     currentPhoneticMode： null（老師從沒選過，要先跳出選擇視窗）／"off"／"pinyin"／"zhuyin"，
+     存在 localStorage，只問一次，之後就記住；⚙️ 設定彈窗裡另外有地方可以隨時改（見 settings-dialog）。
+     真正的注音字符不是存資料，而是每次要顯示文字的當下，直接拿目前的 currentPhoneticMode 現場把
+     文字轉換成拼音／注音疊上去（用 <ruby>/<rt> 讓瀏覽器原生顯示在字的正上方，不用自己算位置），
+     這樣切換設定會立刻套用到所有已經寫好的文字，不用另外處理舊資料的搬移。
+     currentPhoneticMode 本身宣告在上面「主題與模式引擎」那段，跟 currentBgMode 等設定放一起，
+     這裡開始才是實際的轉換／UI 邏輯。 */
+
+  function setPhoneticMode(mode){
+    currentPhoneticMode = mode;
+    localStorage.setItem("hanyu_phonetic_mode", mode);
+    document.querySelectorAll(".btn-phonetic-mode").forEach(function(b){
+      b.classList.toggle("active", b.dataset.phonetic === mode);
+    });
+    // 設定改變時，如果目前畫面上剛好是小白板（有用到文字工具的地方），要立刻重繪套用新設定
+    if(typeof renderStage === "function") renderStage();
+  }
+
+  // 拼音（含調號，e.g. "jin1"）轉注音符號：依教育部標準的聲母／韻母對照表換算，
+  // 涵蓋 y/w 開頭的獨立拼式（yi/wu/yu…）、j/q/x 後面 u 其實是 ü 的拼寫規則，
+  // 以及 zhi/chi/shi/ri/zi/ci/si 這幾個「純聲母、沒有額外韻符」的特殊案例。
+  function pinyinSyllableToZhuyin(syl){
+    var m = /^([a-zA-Zü]+)([0-5])?$/.exec(syl);
+    if(!m) return syl;
+    var base = m[1], tone = m[2] === undefined ? "1" : m[2];
+
+    var STANDALONE = {
+      yi:"ㄧ", ya:"ㄧㄚ", ye:"ㄧㄝ", yao:"ㄧㄠ", you:"ㄧㄡ",
+      yan:"ㄧㄢ", yin:"ㄧㄣ", yang:"ㄧㄤ", ying:"ㄧㄥ", yong:"ㄩㄥ",
+      wu:"ㄨ", wa:"ㄨㄚ", wo:"ㄨㄛ", wai:"ㄨㄞ", wei:"ㄨㄟ",
+      wan:"ㄨㄢ", wen:"ㄨㄣ", wang:"ㄨㄤ", weng:"ㄨㄥ",
+      yu:"ㄩ", yue:"ㄩㄝ", yuan:"ㄩㄢ", yun:"ㄩㄣ"
+    };
+    var FINALS = {
+      a:"ㄚ", o:"ㄛ", e:"ㄜ", ê:"ㄝ",
+      ai:"ㄞ", ei:"ㄟ", ao:"ㄠ", ou:"ㄡ",
+      an:"ㄢ", en:"ㄣ", ang:"ㄤ", eng:"ㄥ", er:"ㄦ", ong:"ㄨㄥ",
+      i:"ㄧ", ia:"ㄧㄚ", ie:"ㄧㄝ", iao:"ㄧㄠ", iu:"ㄧㄡ",
+      ian:"ㄧㄢ", "in":"ㄧㄣ", iang:"ㄧㄤ", ing:"ㄧㄥ", iong:"ㄩㄥ",
+      u:"ㄨ", ua:"ㄨㄚ", uo:"ㄨㄛ", uai:"ㄨㄞ", ui:"ㄨㄟ",
+      uan:"ㄨㄢ", un:"ㄨㄣ", uang:"ㄨㄤ",
+      ü:"ㄩ", üe:"ㄩㄝ", üan:"ㄩㄢ", ün:"ㄩㄣ"
+    };
+    var INITIALS = {
+      zh:"ㄓ", ch:"ㄔ", sh:"ㄕ",
+      b:"ㄅ", p:"ㄆ", m:"ㄇ", f:"ㄈ", d:"ㄉ", t:"ㄊ", n:"ㄋ", l:"ㄌ",
+      g:"ㄍ", k:"ㄎ", h:"ㄏ", j:"ㄐ", q:"ㄑ", x:"ㄒ",
+      r:"ㄖ", z:"ㄗ", c:"ㄘ", s:"ㄙ"
+    };
+    var EMPTY_RIME = { zh:1, ch:1, sh:1, r:1, z:1, c:1, s:1 };
+
+    var body;
+    if(STANDALONE[base]){
+      body = STANDALONE[base];
+    } else {
+      var initial = "", rest = base;
+      var two = base.slice(0, 2);
+      if(INITIALS[two]){ initial = two; rest = base.slice(2); }
+      else if(INITIALS[base[0]]){ initial = base[0]; rest = base.slice(1); }
+      if((initial === "j" || initial === "q" || initial === "x") && rest[0] === "u"){
+        rest = "ü" + rest.slice(1); // j/q/x 後面的 u 其實是 ü（拼寫上省略兩點）
+      }
+      var finalSym;
+      if(initial && EMPTY_RIME[initial] && rest === "i"){
+        finalSym = ""; // 知/吃/師/日/資/此/思：純聲母，沒有額外的韻符
+      } else {
+        finalSym = FINALS[rest];
+        if(finalSym === undefined) finalSym = rest; // 保底：查不到就原樣輸出，不讓整串消失
+      }
+      body = (initial ? INITIALS[initial] : "") + finalSym;
+    }
+    var TONE_MARK = { "0":"˙", "1":"", "2":"ˊ", "3":"ˇ", "4":"ˋ", "5":"˙" };
+    var mark = TONE_MARK[tone] || "";
+    return (tone === "0" || tone === "5") ? (mark + body) : (body + mark);
+  }
+
+  function isHanChar(ch){
+    return /[㐀-䶿一-鿿豈-﫿]/.test(ch);
+  }
+
+  // 把一段文字轉成帶拼音／注音的 HTML（用 <ruby>/<rt>，瀏覽器原生會把 <rt> 顯示在字的正上方）；
+  // 非中文字元（標點、英文、數字、空白…）原樣輸出，不加註音。currentPhoneticMode 是 "off" 或
+  // pinyin-pro 還沒載入完成時，直接回傳跳脫過的原文字，行為跟以前完全一樣。
+  function buildPhoneticHtml(text){
+    if(!text) return "";
+    if(currentPhoneticMode !== "pinyin" && currentPhoneticMode !== "zhuyin") return escapeHtml(text);
+    if(typeof pinyinPro === "undefined" || typeof pinyinPro.pinyin !== "function") return escapeHtml(text);
+    var chars = Array.from(text);
+    var symbols;
+    try{
+      symbols = currentPhoneticMode === "zhuyin"
+        ? pinyinPro.pinyin(text, { toneType: "num", type: "array" })
+        : pinyinPro.pinyin(text, { type: "array" });
+    } catch(e){ return escapeHtml(text); }
+    if(!symbols || symbols.length !== chars.length) return escapeHtml(text);
+    var html = "";
+    for(var i = 0; i < chars.length; i++){
+      var ch = chars[i];
+      if(!isHanChar(ch)){ html += escapeHtml(ch); continue; }
+      var annotation = currentPhoneticMode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i];
+      html += "<ruby>" + escapeHtml(ch) + "<rt>" + escapeHtml(annotation || "") + "</rt></ruby>";
+    }
+    return html;
+  }
+
+  // 老師第一次點「文字」工具（整台裝置從沒選過注音設定）時，跳出一次選擇視窗；選完才真的
+  // 執行原本要做的動作（callback），之後就不會再跳出來，除非去 ⚙️ 設定裡自己改。
+  var phoneticChoicePendingCallback = null;
+  function maybeAskPhoneticModeThenRun(callback){
+    if(currentPhoneticMode !== null){ callback(); return; }
+    phoneticChoicePendingCallback = callback;
+    safeShowModal(document.getElementById("phonetic-choice-dialog"));
+  }
+  document.querySelectorAll("#phonetic-choice-dialog .btn-phonetic-choice").forEach(function(b){
+    b.onclick = function(){
+      setPhoneticMode(b.dataset.phonetic);
+      closeModalDialog(document.getElementById("phonetic-choice-dialog"));
+      var cb = phoneticChoicePendingCallback;
+      phoneticChoicePendingCallback = null;
+      if(cb) cb();
+    };
+  });
 
   /* ================== 「跟隨大師」描紅範本／筆畫比對共用工具函式 ================== */
   // 把一條筆畫（不管原本有幾個點）依弧長等距重新取樣成固定 N 個點，這樣兩條點數不同、
@@ -4534,6 +4702,8 @@
   var TOOL_ICON_PENCIL = "data:image/png;base64,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";
   var TOOL_ICON_TEXT = "data:image/png;base64,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";
   var TOOL_ICON_REC = "data:image/png;base64,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";
+  var TOOL_ICON_MOVE = "data:image/png;base64,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";
+  var TOOL_ICON_IMAGE = "data:image/png;base64,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";
 
   /* ================== 寫字板工具狀態 ================== */
   // eraserMode：橡皮擦按鈕合併成一顆之後，用這個記住目前選的是「筆畫擦」還是「局部擦」，
@@ -4649,8 +4819,8 @@
         <button type="button" class="tool-btn-v ${(boardState.tool==='stroke-eraser'||boardState.tool==='pixel-eraser')?'active':''}" id="btn-eraser" title="橡皮擦：預設整條擦掉，滑鼠移入可切換成局部擦 Eraser — hover to switch modes"><img class="tool-btn-v-icon tool-btn-v-icon-img" id="btn-eraser-icon" src="${TOOL_ICON_ERASER}" alt=""><span class="tool-btn-v-label">橡皮擦</span></button>
         <div class="color-popover">
           <div class="color-popover-title">擦除方式 Eraser Mode</div>
-          <button type="button" class="eraser-mode-opt ${boardState.eraserMode!=='pixel'?'active':''}" data-eraser-mode="stroke">🪄 筆畫擦（整條擦掉）</button>
-          <button type="button" class="eraser-mode-opt ${boardState.eraserMode==='pixel'?'active':''}" data-eraser-mode="pixel">🧽 局部擦（像橡皮擦）</button>
+          <button type="button" class="eraser-mode-opt ${boardState.eraserMode!=='pixel'?'active':''}" data-eraser-mode="stroke">🪄 Stroke</button>
+          <button type="button" class="eraser-mode-opt ${boardState.eraserMode==='pixel'?'active':''}" data-eraser-mode="pixel">🧽 Pixel</button>
         </div>
       </div>
       <div class="tool-v-sep"></div>
@@ -4726,16 +4896,16 @@
     var bgGroupEl = document.createElement("div"); bgGroupEl.className = "extra-tool-group";
     bgGroupEl.innerHTML = `
       <div class="tool-v-sep"></div>
-      <button type="button" class="tool-btn-v" id="btn-upload-bg" title="上傳底圖 Upload Background"><span class="tool-btn-v-icon">📷</span><span class="tool-btn-v-label">底圖</span></button>
-      <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除底圖 Remove Background"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清底圖</span></button>
+      <button type="button" class="tool-btn-v" id="btn-upload-bg" title="上傳圖片 Upload Image"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_IMAGE}" alt=""><span class="tool-btn-v-label">上傳圖片</span></button>
+      <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除圖片 Remove Image"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清除圖片</span></button>
       <input type="file" id="board-bg-file" accept="image/*" style="display:none;">`;
-    extraToolsPool.bg = { label: "📷 底圖", el: bgGroupEl };
+    extraToolsPool.bg = { label: "🖼️ 上傳圖片", el: bgGroupEl };
 
     var panGroupEl = document.createElement("div"); panGroupEl.className = "extra-tool-group";
     panGroupEl.innerHTML = `
       <div class="tool-v-sep"></div>
-      <button type="button" class="tool-btn-v ${boardState.tool==='pan'?'active':''}" data-tool="pan" title="移動畫面：放大後用這個工具拖曳畫面 Pan the canvas (use after zooming in)"><span class="tool-btn-v-icon">🖐</span><span class="tool-btn-v-label">移動畫面</span></button>`;
-    extraToolsPool.pan = { label: "🖐 移動畫面", el: panGroupEl };
+      <button type="button" class="tool-btn-v ${boardState.tool==='pan'?'active':''}" data-tool="pan" title="移動：放大後用這個工具拖曳畫面 Move (drag the canvas after zooming in)"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_MOVE}" alt=""><span class="tool-btn-v-label">移動</span></button>`;
+    extraToolsPool.pan = { label: "🖐 移動", el: panGroupEl };
 
     // 「跟隨大師」相關按鈕：老師才能錄製／清除示範，跟底圖／格線一樣屬於使用者說要先收合的非核心工具，
     // 放進 extraToolsPool.demo，預設收合、從「➕更多」點了才加進工具列。錄製／清除的點擊事件在下面
@@ -4947,12 +5117,18 @@
     function bindGenericToolBtn(b){
       b.onclick = function(){
         if(NON_TOOL_BTN_IDS.indexOf(b.id) !== -1) return;
-        vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
-          if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
-        });
-        b.classList.add("active");
-        boardState.tool = b.dataset.tool;
-        canvas.style.cursor = (boardState.tool === "text" ? "text" : (boardState.tool === "pan" ? "grab" : (boardState.tool.includes("eraser") ? "cell" : "crosshair")));
+        function activate(){
+          vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
+            if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
+          });
+          b.classList.add("active");
+          boardState.tool = b.dataset.tool;
+          canvas.style.cursor = (boardState.tool === "text" ? "text" : (boardState.tool === "pan" ? "grab" : (boardState.tool.includes("eraser") ? "cell" : "crosshair")));
+        }
+        // 「文字」工具第一次被點的時候，先問一次要不要打字加拼音／注音（只問一次，見
+        // maybeAskPhoneticModeThenRun），問完才真的切換成文字工具；已經問過的話就直接切換。
+        if(b.dataset.tool === "text"){ maybeAskPhoneticModeThenRun(activate); }
+        else { activate(); }
       };
     }
     vToolbar.querySelectorAll(".tool-btn-v").forEach(bindGenericToolBtn);
@@ -5464,7 +5640,7 @@
         div.style.fontSize = Math.round(baseSize * scale) + "px";
 
         div.innerHTML = `
-          <span class="text-content">${t.text}</span>
+          <span class="text-content">${buildPhoneticHtml(t.text)}</span>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
 
@@ -5779,9 +5955,9 @@
     var canvasZoom = 1, canvasPanX = 0, canvasPanY = 0;
     var zoomCtrl = document.createElement("div"); zoomCtrl.className = "canvas-zoom-ctrl";
     zoomCtrl.innerHTML = `
-      <button type="button" id="btn-canvas-zoom-out" title="縮小 Zoom out">－</button>
-      <span id="canvas-zoom-pct" title="點擊回到 100% Click to reset zoom &amp; pan">100%</span>
-      <button type="button" id="btn-canvas-zoom-in" title="放大 Zoom in">＋</button>
+      <button type="button" id="btn-canvas-zoom-out" title="畫布縮放：縮小 Canvas zoom (zoom into the board/image) — Zoom out">－</button>
+      <span id="canvas-zoom-pct" title="🎨 畫布縮放：只放大這塊畫布本身（方便看清底圖細節、搭配移動工具拖曳），點擊回到 100% Canvas zoom — zooms only this board/canvas. Click to reset zoom &amp; pan">🎨 100%</span>
+      <button type="button" id="btn-canvas-zoom-in" title="畫布縮放：放大 Canvas zoom (zoom into the board/image) — Zoom in">＋</button>
     `;
     stageArea.appendChild(zoomCtrl);
     var zoomPctEl = zoomCtrl.querySelector("#canvas-zoom-pct");
@@ -5795,7 +5971,7 @@
       clampPan();
       cWrap.style.transform = (canvasZoom === 1) ? "none" : ("translate(" + canvasPanX + "px," + canvasPanY + "px) scale(" + canvasZoom + ")");
       cWrap.style.transformOrigin = "0 0";
-      if(zoomPctEl) zoomPctEl.textContent = Math.round(canvasZoom * 100) + "%";
+      if(zoomPctEl) zoomPctEl.textContent = "🎨 " + Math.round(canvasZoom * 100) + "%";
     }
     function setCanvasZoom(z){
       canvasZoom = Math.max(1, Math.min(4, Math.round(z * 100) / 100));
