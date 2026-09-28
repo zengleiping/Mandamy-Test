@@ -630,7 +630,11 @@
     border-radius:8px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); cursor:pointer;
     display:flex; align-items:center; gap:8px;
   }
-  .more-tool-opt img.more-tool-opt-icon{ width:17px; height:17px; object-fit:contain; flex:none; }
+  /* 圖示格固定 17px 寬、置中——不管裡面放的是自訂圖示（img）還是沒有自訂圖示時的備用 emoji
+     （.more-tool-opt-icon-emoji），寬度／對齊都一致，後面的文字才會對在同一條線上。 */
+  .more-tool-opt-icon{ width:17px; flex:none; }
+  .more-tool-opt img.more-tool-opt-icon{ height:17px; object-fit:contain; }
+  .more-tool-opt-icon-emoji{ display:inline-flex; align-items:center; justify-content:center; height:17px; font-size:15px; line-height:1; }
   :root:not([data-theme="light"]) .eraser-mode-opt, :root:not([data-theme="light"]) .more-tool-opt{ border-color:rgba(255,255,255,0.14); }
   .eraser-mode-opt:hover, .more-tool-opt:hover{ border-color:var(--seal); background:var(--seal-soft); }
   .eraser-mode-opt.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
@@ -659,19 +663,43 @@
   .canvas-zoom-ctrl button:hover{ border-color:var(--seal); color:var(--seal); }
   .canvas-zoom-ctrl span{ font-size:11.5px; font-weight:700; color:var(--ink-soft); min-width:34px; text-align:center; cursor:pointer; user-select:none; }
 
-  /* 「筆」按鈕的 hover 面板裡，粗細／濃淡改用橫向拉桿（使用者明確要求不要用制式的細/中/粗點選按鈕），
-     兩條拉桿共用同一個 .pen-slider-row 排版；面板本身也要比純色盤寬一點才放得下，見 .pen-popover。 */
-  .pen-popover{ width:190px; }
-  .pen-slider-row{ width:100%; margin-top:12px; }
-  .pen-slider-row:first-of-type{ margin-top:14px; }
-  .pen-slider-row-label{
+  /* 「筆」跟「文字」按鈕的 hover 面板裡，除了色盤還有拉桿／下拉選單這些「一列一個設定項」的內容
+     （筆的粗細／濃淡拉桿、文字的字級選單），共用同一套 .popover-field-row 排版；面板本身也要比
+     純色盤寬一點才放得下，見 .pen-popover／.text-popover。 */
+  .pen-popover, .text-popover{ width:190px; }
+  .popover-field-row{ width:100%; margin-top:12px; }
+  .popover-field-row:first-of-type{ margin-top:14px; }
+  .popover-field-row-label{
     display:flex; justify-content:space-between; align-items:baseline;
     font-size:11px; font-weight:700; color:var(--ink-soft); margin-bottom:5px;
   }
-  .pen-slider-row-label b{ color:var(--seal); font-size:11.5px; }
-  .pen-slider-row input[type="range"]{
+  .popover-field-row-label b{ color:var(--seal); font-size:11.5px; }
+  .popover-field-row input[type="range"]{
     width:100%; accent-color:var(--seal); cursor:pointer; display:block; height:18px;
   }
+  .popover-field-row select{
+    width:100%; padding:6px 0; font-size:12.5px; font-weight:700; text-align:center;
+    background:var(--surface); color:var(--ink); border-radius:8px; border:1.5px solid rgba(28,33,30,0.14);
+  }
+  :root:not([data-theme="light"]) .popover-field-row select{ border-color:rgba(255,255,255,0.14); }
+
+  /* 筆刷顏色：色點之外再加一顆原生色盤（挑任意顏色）跟一顆滴管（從螢幕上任何地方，包括其他
+     圖片，吸取顏色），畫筆／文字兩個顏色面板共用同一份 HTML（colorPickerRowHtml），選色會同步
+     套用到 boardState.color，也會同步回另一份面板的色點／色盤（跟原本的色點同步邏輯一樣）。 */
+  .color-picker-row{ display:flex; align-items:center; gap:8px; margin-top:12px; width:100%; }
+  .native-color-swatch-wrap{
+    width:30px; height:30px; border-radius:8px; overflow:hidden; flex:none; cursor:pointer;
+    display:block; border:1.5px solid rgba(28,33,30,0.18);
+  }
+  :root:not([data-theme="light"]) .native-color-swatch-wrap{ border-color:rgba(255,255,255,0.2); }
+  .native-color-swatch-wrap input[type="color"]{ width:100%; height:100%; border:none; padding:0; cursor:pointer; }
+  .eyedropper-btn{
+    flex:1; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap;
+    padding:0 6px; height:30px; font-size:11.5px; font-weight:700; border-radius:8px;
+    border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); cursor:pointer;
+  }
+  :root:not([data-theme="light"]) .eyedropper-btn{ border-color:rgba(255,255,255,0.14); }
+  .eyedropper-btn:hover{ border-color:var(--seal); background:var(--seal-soft); color:var(--seal); }
 
   .grid-btn-group{ display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; width:100%; flex-shrink:0; }
   .grid-btn-v{
@@ -4754,10 +4782,10 @@
       // 板類（.tool-btn-v）跟生字練習學生端（普通 .btn）用的按鈕視覺不一樣，各自用對應的內容格式
       if(toggleBtn.classList.contains("tool-btn-v")){
         toggleBtn.innerHTML = canvasFullscreen
-          ? '<span class="tool-btn-v-icon">⤡</span><span class="tool-btn-v-label">退出全螢幕</span>'
+          ? '<span class="tool-btn-v-icon">⤡</span><span class="tool-btn-v-label">退出</span>'
           : '<span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">全螢幕</span>';
       } else {
-        toggleBtn.textContent = canvasFullscreen ? "⤡ 退出全螢幕" : "⛶ 全螢幕";
+        toggleBtn.textContent = canvasFullscreen ? "⤡ 退出" : "⛶ 全螢幕";
       }
       toggleBtn.title = canvasFullscreen
         ? "退出全螢幕，回到原本版面 Exit fullscreen canvas"
@@ -4818,6 +4846,17 @@
         <div class="color-dot ${boardState.color==='#1E88E5'?'active':''}" data-color="#1E88E5" style="background:#1E88E5;" title="藍色 Blue"></div>
         <div class="color-dot ${boardState.color==='#4C7A5E'?'active':''}" data-color="#4C7A5E" style="background:#4C7A5E;" title="綠色 Green"></div>
         <div class="color-dot ${boardState.color==='#FB8C00'?'active':''}" data-color="#FB8C00" style="background:#FB8C00;" title="橘色 Orange"></div>`;
+    // 色點是快選常用色，原生色盤讓老師挑任意顏色，滴管則是「從螢幕上任何地方（包括其他視窗/
+    // 圖片）吸取顏色」——用瀏覽器原生 EyeDropper API，不支援的瀏覽器（例如 iPad Safari）點下去
+    // 會友善提示，不會整個功能爆掉。畫筆／文字兩個面板共用同一份 HTML，選色的同步邏輯見下面
+    // .brush-color-native／.eyedropper-btn 的事件綁定。
+    var colorPickerRowHtml = `
+      <div class="color-picker-row">
+        <label class="native-color-swatch-wrap" title="自訂顏色：點了選你要的任何顏色 Custom color">
+          <input type="color" class="brush-color-native" value="${/^#[0-9A-Fa-f]{6}$/.test(boardState.color) ? boardState.color : '#B23B32'}">
+        </label>
+        <button type="button" class="eyedropper-btn" title="滴管：從螢幕上任何地方（包括其他圖片）吸取顏色 Eyedropper — pick a color from anywhere on screen, e.g. a photo">💧 滴管</button>
+      </div>`;
 
     // 2026-09-28 工具列精簡：使用者明確要求「原始的小工具」只留最核心的幾顆（全螢幕／筆／文字／
     // 文字大小／橡皮擦／上一步／下一步／清空），其餘（格線、底圖、錄示範…）先收合起來，
@@ -4833,19 +4872,35 @@
         <div class="color-popover pen-popover">
           <div class="color-popover-title">筆刷顏色 Brush Color</div>
           <div class="color-dot-grid">${colorDotsHtml}</div>
-          <div class="pen-slider-row">
-            <div class="pen-slider-row-label"><span>粗細 Size</span><b id="pen-size-value">${boardState.size}</b></div>
+          ${colorPickerRowHtml}
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>粗細 Size</span><b id="pen-size-value">${boardState.size}</b></div>
             <input type="range" id="pen-size-slider" min="2" max="24" step="1" value="${boardState.size}">
           </div>
-          <div class="pen-slider-row">
-            <div class="pen-slider-row-label"><span>濃淡 Opacity</span><b id="pen-opacity-value">${Math.round((boardState.opacity==null?1:boardState.opacity)*100)}%</b></div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>濃淡 Opacity</span><b id="pen-opacity-value">${Math.round((boardState.opacity==null?1:boardState.opacity)*100)}%</b></div>
             <input type="range" id="pen-opacity-slider" min="15" max="100" step="5" value="${Math.round((boardState.opacity==null?1:boardState.opacity)*100)}">
           </div>
         </div>
       </div>
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v ${boardState.tool==='text'?'active':''}" data-tool="text" title="文字 Text（滑鼠移入可選顏色 hover for colors）"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_TEXT}" alt=""><span class="tool-btn-v-label">文字</span></button>
-        <div class="color-popover"><div class="color-popover-title">文字顏色 Text Color</div><div class="color-dot-grid">${colorDotsHtml}</div></div>
+        <button type="button" class="tool-btn-v ${boardState.tool==='text'?'active':''}" data-tool="text" title="文字 Text（滑鼠移入可選顏色／字級 hover for color &amp; size）"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_TEXT}" alt=""><span class="tool-btn-v-label">文字</span></button>
+        <div class="color-popover text-popover">
+          <div class="color-popover-title">文字顏色 Text Color</div>
+          <div class="color-dot-grid">${colorDotsHtml}</div>
+          ${colorPickerRowHtml}
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>字級 Size</span></div>
+            <select class="board-font-select" title="文字大小 Text size">
+              <option value="24" ${boardState.fontSize===24?'selected':''}>24</option>
+              <option value="32" ${boardState.fontSize===32?'selected':''}>32</option>
+              <option value="40" ${boardState.fontSize===40?'selected':''}>40</option>
+              <option value="52" ${boardState.fontSize===52?'selected':''}>52</option>
+              <option value="68" ${boardState.fontSize===68?'selected':''}>68</option>
+              <option value="84" ${boardState.fontSize===84?'selected':''}>84</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v ${(boardState.tool==='stroke-eraser'||boardState.tool==='pixel-eraser')?'active':''}" id="btn-eraser" title="橡皮擦：預設整條擦掉，滑鼠移入可切換成局部擦 Eraser — hover to switch modes"><img class="tool-btn-v-icon tool-btn-v-icon-img" id="btn-eraser-icon" src="${TOOL_ICON_ERASER}" alt=""><span class="tool-btn-v-label">橡皮擦</span></button>
@@ -4855,15 +4910,6 @@
           <button type="button" class="eraser-mode-opt ${boardState.eraserMode==='pixel'?'active':''}" data-eraser-mode="pixel">🧽 Pixel</button>
         </div>
       </div>
-      <div class="tool-v-sep"></div>
-      <select class="board-font-select" title="文字大小 Text size" style="width:100%; padding:6px 0; font-size:12.5px; font-weight:700; text-align:center; background:var(--surface); border-radius:8px; border:1.5px solid rgba(28,33,30,0.14);">
-        <option value="24" ${boardState.fontSize===24?'selected':''}>24</option>
-        <option value="32" ${boardState.fontSize===32?'selected':''}>32</option>
-        <option value="40" ${boardState.fontSize===40?'selected':''}>40</option>
-        <option value="52" ${boardState.fontSize===52?'selected':''}>52</option>
-        <option value="68" ${boardState.fontSize===68?'selected':''}>68</option>
-        <option value="84" ${boardState.fontSize===84?'selected':''}>84</option>
-      </select>
       <div class="tool-v-sep"></div>
       <button type="button" class="tool-btn-v" id="btn-undo" title="上一步 Undo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_UNDO}" alt=""><span class="tool-btn-v-label">上一步</span></button>
       <button type="button" class="tool-btn-v" id="btn-redo" title="下一步 Redo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_REDO}" alt=""><span class="tool-btn-v-label">下一步</span></button>
@@ -4913,7 +4959,7 @@
         <button type="button" class="grid-btn-v ${currentGrid==='tian'?'active':''}" data-grid="tian" title="田字格 Tian Grid">田</button>
         <button type="button" class="grid-btn-v ${currentGrid==='jiu'?'active':''}" data-grid="jiu" title="九宮格 3x3 Grid">九</button>
       </div>`;
-    extraToolsPool.grid = { label: "▦ 格線", el: gridGroupEl };
+    extraToolsPool.grid = { label: "格線", emoji: "▦", el: gridGroupEl };
 
     // 2026-09-29：筆刷粗細不再是獨立收合工具（使用者要求跟「筆」放在一起），改成「筆」按鈕
     // hover 彈出面板裡的橫向拉桿，見上面 vToolbar.innerHTML 的 .pen-popover；這裡不再需要
@@ -4953,7 +4999,7 @@
       clearTraceBtn.title = "清除已錄製的示範 Clear the recorded demo";
       clearTraceBtn.innerHTML = '<span class="tool-btn-v-icon">🗑️</span><span class="tool-btn-v-label">清示範</span>';
       demoGroupEl.appendChild(clearTraceBtn);
-      extraToolsPool.demo = { label: "🎥 錄影", el: demoGroupEl };
+      extraToolsPool.demo = { label: "錄影", icon: TOOL_ICON_REC, el: demoGroupEl };
     }
 
     // 把「➕更多」清單填好：每個選項點一下，就把對應的工具群組從 pool 搬進工具列（插在「➕更多」
@@ -4966,14 +5012,14 @@
         var opt = document.createElement("button");
         opt.type = "button"; opt.className = "more-tool-opt"; opt.dataset.add = key;
         var poolItem = extraToolsPool[key];
-        if(poolItem.icon){
-          // 有提供實際圖示的工具（目前是「移動」跟「上傳」）：加入工具清單裡也要顯示真正的
-          // 自訂圖示，不能只顯示 emoji，不然老師會覺得圖示沒換成功（即使加進工具列後其實是對的）。
-          opt.innerHTML = '<img class="more-tool-opt-icon" src="' + poolItem.icon + '" alt="">' +
-            '<span>' + escapeHtml(poolItem.label) + '</span>';
-        } else {
-          opt.textContent = poolItem.label;
-        }
+        // 每一列都用同一個固定寬度的「圖示格」開頭（見 .more-tool-opt-icon-slot），裡面放真正的
+        // 自訂圖示（img）或 emoji（沒有自訂圖示的工具，目前只剩「格線」），這樣不管哪一種，
+        // 文字才會對齊在同一個位置——原本 emoji 是直接塞進文字節點，寬度/對齊跟 img 不一致，
+        // 這就是老師反應「格線／錄影沒有跟另外兩個對準」的原因。
+        var iconSlotHtml = poolItem.icon
+          ? '<img class="more-tool-opt-icon" src="' + poolItem.icon + '" alt="">'
+          : '<span class="more-tool-opt-icon more-tool-opt-icon-emoji">' + escapeHtml(poolItem.emoji || "") + '</span>';
+        opt.innerHTML = iconSlotHtml + '<span>' + escapeHtml(poolItem.label) + '</span>';
         opt.onclick = function(){ pinExtraTool(key); };
         moreToolsPopover.appendChild(opt);
       });
@@ -5939,14 +5985,40 @@
       };
     }
 
+    // 選好顏色之後，要同步更新畫筆／文字兩份面板裡的所有 UI：色點的 active 狀態、原生色盤目前
+    // 顯示的顏色——不管顏色是從色點、原生色盤、還是滴管挑出來的，統一都走這個函式。
+    function applyBrushColor(newColor){
+      boardState.color = newColor;
+      vToolbar.querySelectorAll(".color-dot").forEach(function(x){
+        x.classList.toggle("active", x.dataset.color === newColor);
+      });
+      vToolbar.querySelectorAll(".brush-color-native").forEach(function(x){ x.value = newColor; });
+    }
+
     vToolbar.querySelectorAll(".color-dot").forEach(function(d){
-      d.onclick = function(){
-        var newColor = d.dataset.color;
-        boardState.color = newColor;
-        // 畫筆／打字兩個顏色面板各有一份色點，用顏色值同步兩邊的選取狀態，而不是只標記被點的那一顆
-        vToolbar.querySelectorAll(".color-dot").forEach(function(x){
-          x.classList.toggle("active", x.dataset.color === newColor);
-        });
+      d.onclick = function(){ applyBrushColor(d.dataset.color); };
+    });
+
+    // 原生色盤：瀏覽器自己的顏色選擇器（圓盤/滑塊都有），可以選色點之外的任何顏色。
+    vToolbar.querySelectorAll(".brush-color-native").forEach(function(inp){
+      inp.oninput = function(){ applyBrushColor(inp.value.toUpperCase()); };
+    });
+
+    // 滴管：用瀏覽器原生 EyeDropper API 從螢幕上任何地方（包括畫面上的其他圖片、甚至瀏覽器
+    // 視窗外的其他畫面，依瀏覽器實作而定）吸取顏色——目前只有 Chrome／Edge 這類 Chromium
+    // 系瀏覽器支援，iPad／iPhone Safari 還不支援，所以先偵測，不支援就友善提示，不會整個報錯。
+    vToolbar.querySelectorAll(".eyedropper-btn").forEach(function(btn){
+      btn.onclick = function(){
+        if(!("EyeDropper" in window)){
+          alert("這個瀏覽器不支援滴管吸色功能，請改用電腦版 Chrome 或 Edge 瀏覽器。\nEyedropper isn't supported in this browser yet — please try Chrome or Edge on a computer.");
+          return;
+        }
+        try{
+          var eyeDropper = new window.EyeDropper();
+          eyeDropper.open().then(function(result){
+            if(result && result.sRGBHex) applyBrushColor(result.sRGBHex.toUpperCase());
+          }).catch(function(){ /* 使用者按 Esc 取消滴管，不用特別處理 */ });
+        } catch(e){}
       };
     });
 
