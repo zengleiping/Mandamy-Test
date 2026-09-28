@@ -611,6 +611,38 @@
   .tool-v-sep{width:100%; height:1px; background:rgba(28,33,30,0.14); margin:1px 0; flex-shrink:0;}
   :root:not([data-theme="light"]) .tool-v-sep{ background:rgba(255,255,255,0.14); }
 
+  /* 2026-09-29：老師「鎖定作答」時，學生端小白板整排工具列要變成「看起來不能點」——不是只擋畫圖，
+     連切換工具／上一步下一步／清空／翻頁／格線／移動畫面…任何一顆按鈕都不行，只能單純看畫面。
+     這裡故意不用 pointer-events:none 整排擋掉：擋是擋住了，但瀏覽器連事件都不會送過來，JS 就沒辦法
+     知道學生「試圖」點了什麼，也就沒辦法跳出提醒、通知老師是誰在亂點——改成用捕獲階段的事件攔截
+     （見 JS 的 handleLockedAttempt／installLockInterception），這裡的 CSS 只負責讓它「看起來」是鎖住的
+     （變暗、滑鼠變成禁止符號），真正的攔截跟通知邏輯都在 JS。
+     唯獨「全螢幕」這顆例外：那只是學生自己看畫面的個人設定，不是在控制小白板內容，鎖定時仍然要能點，
+     不然學生會被困在全螢幕模式裡出不來（尤其平板/觸控裝置沒有 Esc 鍵可以按）。 */
+  .draw-toolbar-vertical.student-locked{ position:relative; }
+  .draw-toolbar-vertical.student-locked > *{ opacity:.42; filter:grayscale(.3); cursor:not-allowed; }
+  .draw-toolbar-vertical.student-locked > #btn-canvas-fs{ opacity:1; filter:none; cursor:pointer; }
+  #paint-canvas.student-locked-cursor, .text-layer.student-locked-cursor{ cursor:not-allowed !important; }
+  .student-locked-badge{
+    position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5;
+    display:flex; align-items:center; gap:6px; padding:6px 14px; border-radius:999px;
+    background:rgba(28,33,30,0.78); color:#fff; font-size:12.5px; font-weight:700;
+    box-shadow:var(--shadow); pointer-events:none; white-space:nowrap;
+  }
+  /* 學生端：試圖畫圖／按按鈕時跳出的提醒彈窗，蓋在畫布正中央，點一下或幾秒後自動消失 */
+  .lock-attempt-notice{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:20;
+    background:var(--surface); border:1.5px solid var(--seal); border-radius:16px;
+    box-shadow:0 8px 28px rgba(0,0,0,0.28); padding:18px 22px; max-width:min(360px, 84%);
+    text-align:center; cursor:pointer; animation:lockNoticePop .18s ease;
+  }
+  @keyframes lockNoticePop{ from{ transform:translate(-50%,-50%) scale(.9); opacity:0; } to{ transform:translate(-50%,-50%) scale(1); opacity:1; } }
+  .lock-attempt-notice-line{ font-size:14px; font-weight:700; color:var(--ink); margin:3px 0; line-height:1.5; }
+  .lock-attempt-notice-line:first-child{ color:var(--seal); font-size:15px; }
+  /* 老師端「被鎖住還是想畫圖/按按鈕」的提醒，2026-09-29 起改成直接送一則系統訊息進下面的
+     課堂對話（見 postSystemChatMessage／handleLockedAttempt），不再另外用一個右下角小卡片——
+     不然又是額外一塊要跟對話泡泡、縮放小工具搶右下角版位的東西，見下面「課堂對話」區塊。 */
+
   /* 簡報頁面切換：小白板大題如果是用「匯入簡報」一次匯入的多頁投影片，全螢幕時要能直接在工具列
      切換上一頁／下一頁，不用先退出全螢幕再去側欄點——這是老師明確要求的（全螢幕播放簡報＋畫記，
      不要一直跳出去）。只有這一大題底下有兩題以上（也就是真的是一份多頁簡報）才會顯示，單張底圖的
@@ -860,7 +892,8 @@
     transition:opacity .12s linear, left .06s linear, top .06s linear;
   }
 
-  /* 匿名反應泡泡：疊在教學舞台上的浮層，泡泡從按鈕附近往上飄、放大再淡出，完全不帶身份資訊 */
+  /* 表情氣泡飄浮動畫：送出純表情訊息時，畫面上會飄幾顆放大的表情做視覺回饋（見 spawnReactionBubbles），
+     跟下面「課堂對話」是兩回事——這層只是動畫特效，蓋在整個教學舞台上，不接收滑鼠事件。 */
   .reaction-fx-layer{position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:99998;}
   .reaction-bubble{
     position:absolute; bottom:6%; font-size:26px; opacity:0; will-change:transform, opacity;
@@ -871,15 +904,62 @@
     14%{ opacity:1; transform:translate(0,-8%) scale(1); }
     100%{ opacity:0; transform:translate(var(--drift,0px),-92%) scale(1.15); }
   }
-  .reaction-bar{
-    position:absolute; right:14px; bottom:14px; z-index:99997; display:flex; gap:4px;
-    background:var(--surface); padding:6px; border-radius:999px; box-shadow:0 6px 18px rgba(0,0,0,0.16); border:1.5px solid var(--seal-ring);
+
+  /* 2026-09-29：課堂對話——原本右下角一整排隨時攤開的表情反應鈕，收合成一顆浮動泡泡，點開才是
+     完整的文字＋表情對話框，老師學生都可以打字。刻意固定在「整頁投影縮放」（.zoom-floating-widget，
+     bottom:24/right:28）正上方、留一段間距，兩個右下角的浮動元件才不會疊在一起。*/
+  .chat-bubble-btn{
+    position:fixed; right:24px; bottom:76px; z-index:9600; width:50px; height:50px; border-radius:50%;
+    background:var(--seal); color:#fff; border:none; box-shadow:0 6px 18px rgba(0,0,0,0.24);
+    font-size:22px; display:flex; align-items:center; justify-content:center; cursor:pointer;
   }
-  .reaction-btn{
-    border:none; background:transparent; font-size:19px; line-height:1; padding:5px 7px; border-radius:50%; cursor:pointer; transition:background .12s ease, transform .12s ease;
+  .chat-bubble-btn:hover{ filter:brightness(1.08); }
+  .chat-bubble-btn.has-unread{ animation:chatBubblePulse 1.6s ease-in-out 2; }
+  @keyframes chatBubblePulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.12); } }
+  .chat-unread-badge{
+    position:absolute; top:-4px; right:-4px; min-width:19px; height:19px; padding:0 4px; border-radius:999px;
+    background:#E63946; color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 2px var(--surface);
   }
-  .reaction-btn:hover{ background:var(--surface-2); transform:scale(1.12); }
-  .reaction-btn:active{ transform:scale(0.92); }
+  .chat-panel{
+    position:fixed; right:20px; bottom:76px; z-index:9600; width:min(310px, calc(100vw - 40px));
+    height:min(420px, calc(100vh - 120px)); background:var(--surface); border:1.5px solid var(--grid-line);
+    border-radius:16px; box-shadow:0 12px 36px rgba(0,0,0,0.28); display:flex; flex-direction:column; overflow:hidden;
+  }
+  .chat-panel-head{
+    display:flex; align-items:center; justify-content:space-between; padding:10px 12px;
+    background:var(--seal); color:#fff; font-size:13.5px; font-weight:700; flex-shrink:0;
+  }
+  .chat-panel-head button{
+    background:rgba(255,255,255,0.22); border:none; color:#fff; width:24px; height:24px; border-radius:50%;
+    cursor:pointer; font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
+  .chat-panel-messages{ flex:1; overflow-y:auto; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+  .chat-msg{ max-width:86%; font-size:13px; line-height:1.5; }
+  .chat-msg-meta{ font-size:10.5px; font-weight:700; color:var(--ink-soft); margin-bottom:2px; }
+  .chat-msg-bubble{ background:var(--surface-2); border-radius:12px; padding:7px 11px; word-break:break-word; white-space:pre-wrap; }
+  .chat-msg.me{ align-self:flex-end; }
+  .chat-msg.me .chat-msg-bubble{ background:var(--seal-soft); color:var(--seal); }
+  .chat-msg.system{ align-self:center; max-width:96%; }
+  .chat-msg.system .chat-msg-bubble{ background:transparent; border:1.5px dashed rgba(28,33,30,0.2); color:var(--ink-soft); font-size:12px; font-weight:600; text-align:center; }
+  .chat-panel-empty{ margin:auto; text-align:center; font-size:12.5px; color:var(--ink-soft); padding:0 16px; }
+  .chat-panel-compose{ flex-shrink:0; border-top:1px solid var(--grid-line); padding:8px 10px; }
+  .chat-emoji-row{ display:flex; gap:4px; margin-bottom:6px; }
+  .chat-emoji-btn{
+    border:none; background:transparent; font-size:17px; line-height:1; padding:4px 6px; border-radius:50%;
+    cursor:pointer; transition:background .12s ease, transform .12s ease;
+  }
+  .chat-emoji-btn:hover{ background:var(--surface-2); transform:scale(1.12); }
+  .chat-compose-row{ display:flex; gap:6px; }
+  .chat-compose-input{
+    flex:1; min-width:0; padding:8px 11px; border-radius:999px; border:1.5px solid var(--grid-line);
+    font-size:13px; background:var(--surface-2); color:var(--ink);
+  }
+  .chat-compose-send{
+    flex-shrink:0; width:34px; height:34px; border-radius:50%; border:none; background:var(--seal); color:#fff;
+    font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .chat-compose-send:disabled{ opacity:.4; cursor:default; }
 
   /* ================== 生字練習題型 (Character Practice question type) ================== */
   /* 這一題不是共用畫布，每位學生有自己的練習畫布；版面跟小白板一樣是「側邊面板＋舞台畫布」，
@@ -1269,6 +1349,16 @@
       <option value="mute">🔇 靜音模式 (Mute)</option>
     </select>
     <button type="button" class="btn btn-sm btn-primary" id="btn-test-sound" style="margin-top:10px; width:100%; justify-content:center;">🎵 試聽音效 Test Sound</button>
+
+    <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
+
+    <label>🔒 鎖定作答提醒語言 Lock Notice Languages</label>
+    <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 8px;">小白板「鎖定作答」時，學生如果還是試圖畫圖或按按鈕，會跳出提醒彈窗——這裡選要顯示哪些語言（可複選），預設中文＋英文。</p>
+    <div style="display:flex; gap:14px; flex-wrap:wrap;">
+      <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;"><input type="checkbox" class="chk-lock-notice-lang" data-lang="zh"> 中文</label>
+      <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;"><input type="checkbox" class="chk-lock-notice-lang" data-lang="en"> English</label>
+      <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;"><input type="checkbox" class="chk-lock-notice-lang" data-lang="th"> ภาษาไทย</label>
+    </div>
   </div>
   <div class="dialog-foot">
     <button type="button" class="btn btn-primary" id="btn-close-settings">完成 Done</button>
@@ -1658,6 +1748,30 @@
   // 小白板「文字」工具打字加註音：null 表示這台裝置從沒選過（要先跳出一次選擇視窗），
   // 實際的轉換函式（setPhoneticMode／buildPhoneticHtml…）在下面「打字加註音」那段一起定義。
   var currentPhoneticMode = localStorage.getItem("hanyu_phonetic_mode");
+
+  // 2026-09-29：學生在「鎖定作答」時試圖畫圖／按按鈕，跳出來提醒他的彈窗要顯示哪些語言——
+  // 老師在「⚙️ 設定」裡勾選，預設中文＋英文。這個設定要讓同一個房間裡的學生也看得到（老師跟
+  // 學生是不同裝置），所以除了存在老師自己瀏覽器的 localStorage，開房間／老師改動時也要一起
+  // 寫進 rooms/{roomId}（跟 theme／classMode 那些「全房共用」設定同一套做法，見 applyTheme）。
+  var LOCK_NOTICE_LANGS_ALL = ["zh", "en", "th"];
+  var LOCK_NOTICE_TEXT = {
+    zh: "🔒 目前功能已鎖定，請專心上課喔！",
+    en: "🔒 This is locked right now — please focus on the lesson!",
+    th: "🔒 ขณะนี้ฟังก์ชันถูกล็อกอยู่ กรุณาตั้งใจเรียนนะคะ"
+  };
+  var currentLockNoticeLangs = (localStorage.getItem("hanyu_lock_notice_langs") || "zh,en").split(",").filter(function(l){ return LOCK_NOTICE_LANGS_ALL.indexOf(l) !== -1; });
+  if(!currentLockNoticeLangs.length) currentLockNoticeLangs = ["zh", "en"];
+  function applyLockNoticeLangs(langs, syncToFirebase){
+    if(!langs || !langs.length) langs = ["zh", "en"];
+    currentLockNoticeLangs = langs;
+    localStorage.setItem("hanyu_lock_notice_langs", langs.join(","));
+    document.querySelectorAll(".chk-lock-notice-lang").forEach(function(cb){
+      cb.checked = langs.indexOf(cb.dataset.lang) !== -1;
+    });
+    if(syncToFirebase && inRoom() && roomRole === "teacher"){
+      update(ref(db, "rooms/" + activeRoomId), { lockNoticeLangs: langs });
+    }
+  }
 
   function applyTheme(bgMode, accentColor, syncToFirebase){
     if(syncToFirebase === undefined) syncToFirebase = true;
@@ -2685,6 +2799,14 @@
       setTimeout(function(){ playTone(currentSoundStyle, false); }, 700);
     };
   }
+  applyLockNoticeLangs(currentLockNoticeLangs, false); // 先套用一次目前設定，勾選框才會對到 localStorage 存的值
+  document.querySelectorAll(".chk-lock-notice-lang").forEach(function(cb){
+    cb.onchange = function(){
+      var langs = Array.prototype.slice.call(document.querySelectorAll(".chk-lock-notice-lang"))
+        .filter(function(x){ return x.checked; }).map(function(x){ return x.dataset.lang; });
+      applyLockNoticeLangs(langs, true);
+    };
+  });
 
   /* 大廳切換 */
   var lobbyView = document.getElementById("lobby-view");
@@ -3039,7 +3161,7 @@
     var rId = String(Math.floor(1000 + Math.random() * 9000));
     activeRoomId = rId; var currentProj = fsData.projects[activeProjectId];
     await set(ref(db, "rooms/" + rId), {
-      project: currentProj, sharedProgress: {}, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, presence: { teacher: { online:true, name:"老師" } }
+      project: currentProj, sharedProgress: {}, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs, presence: { teacher: { online:true, name:"老師" } }
     });
     attachPresence(rId, "teacher", "老師"); startRoom(rId, "teacher");
     history.replaceState(null, "", "?room=" + rId); renderTopbar();
@@ -3051,7 +3173,10 @@
     if(activeRoomId) set(ref(db, "rooms/" + activeRoomId + "/presence/" + myId), { online: false });
     stopStudentSnapshotLoop();
     activeRoomId = null; roomData = null; history.replaceState(null, "", location.pathname);
-    if(reactionBarEl) reactionBarEl.style.display = "none"; // 反應泡泡按鈕只在房間裡才有意義，離開房間就先藏起來
+    // 課堂對話只在房間裡才有意義，離開房間就先藏起來（收合的泡泡跟展開的面板都要藏）
+    if(chatBubbleBtn) chatBubbleBtn.style.display = "none";
+    if(chatPanelEl) chatPanelEl.style.display = "none";
+    chatOpen = false;
     renderTopbar(); if(activeProjectId){ renderSidebar(); renderStage(); renderTimerWidget(); } else { showLobby(); }
   }
 
@@ -3067,6 +3192,7 @@
       roomData = snap.val() || {};
       if(roomData.theme) applyTheme(roomData.theme.bgMode || "light", roomData.theme.accent || "seal", false);
       if(roomData.classMode){ currentClassMode = roomData.classMode; }
+      if(roomData.lockNoticeLangs && roomData.lockNoticeLangs.length) currentLockNoticeLangs = roomData.lockNoticeLangs;
 
       if(roomData.broadcastScore && roomData.broadcastTime){
         if(window.__lastBroadcastTime !== roomData.broadcastTime){
@@ -3088,18 +3214,28 @@
     // 不然就什麼都不用做（例如老師在錄別的題目，或大家還在別的題型畫面）。
     onValue(ref(db, "roomMasterTraceLive/" + rId), function(snap){ if(liveTraceHandler) liveTraceHandler(snap.val()); });
     ensureReactionUI();
-    startReactionsListener(rId);
+    startChatListener(rId);
   }
 
-  /* ================== 匿名反應泡泡（同溫層泡泡） ================== */
-  // 完全不帶身份資訊（不存 uid／name），大家點的按鈕都長一樣，沒辦法看出是誰按的。
-  var REACTION_EMOJIS = ["👍", "❤️", "😆", "❗", "❓"];
-  var reactionBarEl = null, reactionFxLayerEl = null;
-  var seenReactionKeys = {};
-  var reactionsListenerRoomId = null;
+  /* ================== 課堂對話 Class Chat ================== */
+  // 2026-09-29：原本右下角常駐的「匿名反應表情列」改成可以收合的對話框——老師學生都能打字留言，
+  // 原本那五個表情變成打字時可以加進訊息裡的表情符號（點了插入輸入框，不是直接送出，可以跟文字
+  // 一起送）。純表情訊息送出時，還是會飄幾顆放大表情做視覺回饋（沿用原本 spawnReactionBubbles）。
+  // 資料照舊寫在既有的 roomReactions/{roomId} 路徑底下——Firebase 規則已經開過這個路徑了，不用
+  // 使用者再跑一次「貼新規則到 Firebase 主控台」那個麻煩流程，只是把資料形狀從匿名的
+  // {emoji,count,ts} 換成具名的 {kind,text,from,fromName,fromRole,ts}。
+  // 目前是「全班共用一條對話」（老師＋所有學生都看得到同一串），不是每個學生跟老師的私訊——
+  // 如果之後要改成一對一私訊，資料結構要再拆成每個學生一條，先在這裡留一筆註記。
+  var CHAT_EMOJIS = ["👍", "❤️", "😆", "❗", "❓"];
+  var chatBubbleBtn = null, chatPanelEl = null, chatMessagesEl = null, chatInputEl = null, reactionFxLayerEl = null;
+  var chatMessages = []; // 目前這個房間收到的訊息，依 ts 排序，畫面上的對話紀錄照這個陣列渲染
+  var chatOpen = false;
+  var chatListenerRoomId = null;
+  var chatLastSeenTs = 0;
+  var EMOJI_ONLY_RE = /^(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u;
 
   function ensureReactionUI(){
-    if(reactionBarEl){ reactionBarEl.style.display = "flex"; return; }
+    if(chatBubbleBtn){ chatBubbleBtn.style.display = "flex"; return; }
     var stageWrapEl2 = document.querySelector(".stage-wrap");
     if(!stageWrapEl2) return;
 
@@ -3107,33 +3243,64 @@
     reactionFxLayerEl.className = "reaction-fx-layer"; reactionFxLayerEl.id = "reaction-fx-layer";
     stageWrapEl2.appendChild(reactionFxLayerEl);
 
-    reactionBarEl = document.createElement("div");
-    reactionBarEl.className = "reaction-bar"; reactionBarEl.id = "reaction-bar";
-    REACTION_EMOJIS.forEach(function(emo){
-      var btn = document.createElement("button");
-      btn.type = "button"; btn.className = "reaction-btn"; btn.title = "送出反應 Send a reaction";
-      btn.textContent = emo;
-      btn.onclick = function(){ queueReaction(emo); };
-      reactionBarEl.appendChild(btn);
+    chatBubbleBtn = document.createElement("button");
+    chatBubbleBtn.type = "button"; chatBubbleBtn.className = "chat-bubble-btn"; chatBubbleBtn.id = "chat-bubble-btn";
+    chatBubbleBtn.title = "課堂對話 Class chat";
+    chatBubbleBtn.textContent = "💬";
+    chatBubbleBtn.onclick = function(){ setChatOpen(true); };
+    document.body.appendChild(chatBubbleBtn);
+
+    chatPanelEl = document.createElement("div");
+    chatPanelEl.className = "chat-panel"; chatPanelEl.id = "chat-panel";
+    chatPanelEl.style.display = "none";
+    chatPanelEl.innerHTML = `
+      <div class="chat-panel-head">
+        <span>💬 課堂對話 Class Chat</span>
+        <button type="button" id="btn-chat-collapse" title="收合 Collapse">✕</button>
+      </div>
+      <div class="chat-panel-messages" id="chat-panel-messages"></div>
+      <div class="chat-panel-compose">
+        <div class="chat-emoji-row">
+          ${CHAT_EMOJIS.map(function(e){ return '<button type="button" class="chat-emoji-btn" data-emoji="' + e + '">' + e + '</button>'; }).join("")}
+        </div>
+        <div class="chat-compose-row">
+          <input type="text" class="chat-compose-input" id="chat-compose-input" maxlength="300" placeholder="打字留言…Type a message…">
+          <button type="button" class="chat-compose-send" id="btn-chat-send" title="送出 Send">➤</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(chatPanelEl);
+    chatMessagesEl = chatPanelEl.querySelector("#chat-panel-messages");
+    chatInputEl = chatPanelEl.querySelector("#chat-compose-input");
+    chatPanelEl.querySelector("#btn-chat-collapse").onclick = function(){ setChatOpen(false); };
+    chatPanelEl.querySelectorAll(".chat-emoji-btn").forEach(function(btn){
+      btn.onclick = function(){ chatInputEl.value += btn.dataset.emoji; chatInputEl.focus(); };
     });
-    stageWrapEl2.appendChild(reactionBarEl);
+    function trySend(){
+      var text = chatInputEl.value.trim();
+      if(!text || !inRoom()) return;
+      chatInputEl.value = "";
+      push(ref(db, "roomReactions/" + activeRoomId), {
+        kind: "text", text: text.slice(0, 300), from: myId,
+        fromName: myName || (isStudent ? "學生" : "老師"), fromRole: roomRole, ts: Date.now()
+      });
+      if(EMOJI_ONLY_RE.test(text)) spawnReactionBubbles(text, 1); // 純表情訊息額外飄泡泡，跟以前的反應鈕效果一樣
+    }
+    chatPanelEl.querySelector("#btn-chat-send").onclick = trySend;
+    chatInputEl.onkeydown = function(e){ if(e.key === "Enter"){ e.preventDefault(); trySend(); } };
   }
 
-  // 短時間內連續點同一個表情，聚合成一次帳號請求送出（帶上次數），
-  // 這樣惡意連點也只會多花一次資料庫寫入，不會被拿來洗版或超量。
-  var REACTION_BURST_WINDOW_MS = 500;
-  var pendingReactions = {};
-  function queueReaction(emo){
-    if(!inRoom()) return;
-    var p = pendingReactions[emo];
-    if(p){ p.count++; return; }
-    p = pendingReactions[emo] = { count: 1 };
-    p.timer = setTimeout(function(){
-      var count = pendingReactions[emo] ? pendingReactions[emo].count : 1;
-      delete pendingReactions[emo];
-      if(!inRoom()) return;
-      push(ref(db, "roomReactions/" + activeRoomId), { emoji: emo, count: Math.min(count, 20), ts: Date.now() });
-    }, REACTION_BURST_WINDOW_MS);
+  function setChatOpen(open){
+    chatOpen = open;
+    if(chatPanelEl) chatPanelEl.style.display = open ? "flex" : "none";
+    if(chatBubbleBtn) chatBubbleBtn.style.display = open ? "none" : "flex";
+    if(open){
+      chatLastSeenTs = Date.now();
+      if(activeRoomId) localStorage.setItem("hanyu_chat_seen_" + activeRoomId, String(chatLastSeenTs));
+      renderChatMessages(); // 重畫一次才能捲到最下面
+      if(chatInputEl) chatInputEl.focus();
+    }
+    updateChatUnreadBadge(); // 不管開或關都要重算一次——開的時候要把泡泡上的未讀徽章清掉
   }
 
   function spawnReactionBubbles(emo, count){
@@ -3155,27 +3322,75 @@
     }
   }
 
-  // 用 onValue 讀整包資料而不是 onChildAdded，是為了方便順手清掉超過 8 秒的舊資料——
-  // 不管是誰的用戶端先看到，都可以幫忙清，資料庫裡不會一直累積用過的反應事件。
-  function startReactionsListener(rId){
-    if(reactionsListenerRoomId === rId) return;
-    reactionsListenerRoomId = rId;
-    seenReactionKeys = {};
+  function renderChatMessages(){
+    if(!chatMessagesEl) return;
+    if(!chatMessages.length){
+      chatMessagesEl.innerHTML = '<div class="chat-panel-empty">還沒有訊息，打字跟大家說句話吧！<br>No messages yet — say hello!</div>';
+      return;
+    }
+    chatMessagesEl.innerHTML = chatMessages.map(function(m){
+      if(m.kind === "system"){
+        return '<div class="chat-msg system"><div class="chat-msg-bubble">' + escapeHtml(m.text || "") + '</div></div>';
+      }
+      var mine = m.from === myId;
+      var label = m.fromRole === "teacher" ? "老師" : (m.fromName || "學生");
+      return '<div class="chat-msg' + (mine ? ' me' : '') + '">' +
+        '<div class="chat-msg-meta">' + escapeHtml(label) + '</div>' +
+        '<div class="chat-msg-bubble">' + escapeHtml(m.text || "") + '</div></div>';
+    }).join("");
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  function updateChatUnreadBadge(){
+    if(!chatBubbleBtn) return;
+    var existing = chatBubbleBtn.querySelector(".chat-unread-badge");
+    if(existing) existing.remove();
+    if(chatOpen) return;
+    var unread = chatMessages.filter(function(m){ return m.ts > chatLastSeenTs && m.from !== myId; }).length;
+    if(unread > 0){
+      var badge = document.createElement("span");
+      badge.className = "chat-unread-badge";
+      badge.textContent = unread > 9 ? "9+" : String(unread);
+      chatBubbleBtn.appendChild(badge);
+      chatBubbleBtn.classList.add("has-unread");
+      setTimeout(function(){ if(chatBubbleBtn) chatBubbleBtn.classList.remove("has-unread"); }, 3300);
+    }
+  }
+
+  // 學生在「鎖定作答」時還是試圖畫圖／按按鈕，發一則系統訊息到課堂對話裡，老師端會跳未讀提醒——
+  // 取代原本另外做一個右下角小卡片的做法，不然又多一塊要跟對話泡泡搶右下角版位的東西
+  // （見 renderDrawBoard 裡的 handleLockedAttempt）。
+  function postSystemChatMessage(text){
+    if(!inRoom()) return;
+    push(ref(db, "roomReactions/" + activeRoomId), { kind: "system", text: text, from: myId, fromName: myName, fromRole: roomRole, ts: Date.now() });
+  }
+
+  // 用 onValue 讀整包資料（不用 onChildAdded——目前用來模擬 Firebase 的測試假件沒實作這個 API，
+  // 且第一次訂閱時只想安靜記住歷史訊息、不要把整串舊對話裡的表情通通重播一次動畫，用一個
+  // 「是不是第一次收到資料」的旗標自己處理更直接）。
+  function startChatListener(rId){
+    if(chatListenerRoomId === rId) return;
+    chatListenerRoomId = rId;
+    chatMessages = [];
+    chatLastSeenTs = parseInt(localStorage.getItem("hanyu_chat_seen_" + rId) || "0", 10);
+    var seenKeys = {};
+    var isFirstSnapshot = true;
     onValue(ref(db, "roomReactions/" + rId), function(snap){
       var data = snap.val() || {};
-      var now = Date.now();
-      Object.keys(data).forEach(function(key){
-        var r = data[key];
-        if(!r) return;
-        if(!seenReactionKeys[key]){
-          seenReactionKeys[key] = true;
-          spawnReactionBubbles(r.emoji, r.count || 1);
-        }
-        if(r.ts && now - r.ts > 8000){
-          remove(ref(db, "roomReactions/" + rId + "/" + key));
-          delete seenReactionKeys[key];
-        }
+      var keys = Object.keys(data);
+      chatMessages = keys.map(function(k){ var m = data[k]; m.key = k; return m; })
+        .filter(function(m){ return m && m.ts; })
+        .sort(function(a, b){ return a.ts - b.ts; });
+      keys.forEach(function(k){
+        if(seenKeys[k]) return;
+        seenKeys[k] = true;
+        if(isFirstSnapshot) return; // 剛加入房間收到的歷史訊息，安靜記住就好，不要整批重播表情動畫
+        var m = data[k];
+        if(m && m.kind === "text" && m.from !== myId && EMOJI_ONLY_RE.test(m.text || "")) spawnReactionBubbles(m.text, 1);
       });
+      isFirstSnapshot = false;
+      renderChatMessages();
+      updateChatUnreadBadge();
     });
   }
 
@@ -5054,9 +5269,15 @@
     var slideIndex = slideSiblingIds.indexOf(q.id);
     var isMultiSlideDeck = slideSiblingIds.length > 1;
 
+    // 2026-09-29：老師把「開放作答」關掉（鎖定）的時候，學生端整塊小白板要變成「只能看，不能碰」——
+    // 不能畫圖、不能切工具、不能翻頁、不能清空，什麼按鈕都不能點，只剩下單純看老師畫面（跟自己的
+    // 全螢幕開關）。老師自己永遠不受這個限制（roomRole==="teacher" 這邊 canInteract()／
+    // isOpenForStudent() 都一定回傳 true，見前面定義），沒進房間的單機模式也一樣不受影響。
+    var studentLocked = isStudent && inRoom() && !isOpenForStudent();
+
     var layout = document.createElement("div"); layout.className = "draw-board-layout";
 
-    var vToolbar = document.createElement("div"); vToolbar.className = "draw-toolbar-vertical";
+    var vToolbar = document.createElement("div"); vToolbar.className = "draw-toolbar-vertical" + (studentLocked ? " student-locked" : "");
     // 顏色選項共用內容：畫筆／打字兩個工具各自 hover 才浮現一份，選色會同步套用到 boardState.color
     var colorDotsHtml = `
         <div class="color-dot ${boardState.color==='#B23B32'?'active':''}" data-color="#B23B32" style="background:#B23B32;" title="紅色 Red"></div>
@@ -5191,13 +5412,20 @@
     // hover 彈出面板裡的橫向拉桿，見上面 vToolbar.innerHTML 的 .pen-popover；這裡不再需要
     // sizeGroupEl／extraToolsPool.size。
 
-    var bgGroupEl = document.createElement("div"); bgGroupEl.className = "extra-tool-group";
-    bgGroupEl.innerHTML = `
-      <div class="tool-v-sep"></div>
-      <button type="button" class="tool-btn-v" id="btn-upload-bg" title="上傳圖片 Upload Image"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_IMAGE}" alt=""><span class="tool-btn-v-label">上傳</span></button>
-      <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除圖片 Remove Image"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清除圖片</span></button>
-      <input type="file" id="board-bg-file" accept="image/*" style="display:none;">`;
-    extraToolsPool.bg = { label: "上傳", icon: TOOL_ICON_IMAGE, el: bgGroupEl };
+    // 底圖（老師匯入的簡報／截圖）上傳跟清除，永遠只有老師能做——不管開放作答還是鎖定作答都一樣，
+    // 學生不能換掉或刪掉老師的簡報。做法比照上面「錄影」示範按鈕（extraToolsPool.demo）：學生端
+    // 一開始就不把這個工具放進 extraToolsPool，「➕更多」清單裡自然也不會出現這個選項，
+    // 徹底沒有入口，不是靠鎖定狀態才擋。
+    var bgGroupEl = null;
+    if(!isStudent){
+      bgGroupEl = document.createElement("div"); bgGroupEl.className = "extra-tool-group";
+      bgGroupEl.innerHTML = `
+        <div class="tool-v-sep"></div>
+        <button type="button" class="tool-btn-v" id="btn-upload-bg" title="上傳圖片 Upload Image"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_IMAGE}" alt=""><span class="tool-btn-v-label">上傳</span></button>
+        <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除圖片 Remove Image"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清除圖片</span></button>
+        <input type="file" id="board-bg-file" accept="image/*" style="display:none;">`;
+      extraToolsPool.bg = { label: "上傳", icon: TOOL_ICON_IMAGE, el: bgGroupEl };
+    }
 
     var panGroupEl = document.createElement("div"); panGroupEl.className = "extra-tool-group";
     panGroupEl.innerHTML = `
@@ -5354,6 +5582,73 @@
     stageArea.appendChild(cWrap);
     layout.appendChild(stageArea);
     container.appendChild(layout);
+
+    // 2026-09-29：套用／更新「鎖定作答」的視覺狀態——工具列變暗＋游標變成禁止符號＋畫布正中央
+    // 一個小提示牌。故意不用 pointer-events:none 整個擋掉：擋是擋住了，但事件連送都不會送過來，
+    // 就沒辦法知道學生「試圖」點了什麼，也就沒辦法跳彈窗提醒學生、通知老師是誰在點。真正擋下
+    // 動作＋跳提醒的邏輯在下面 installLockInterception／handleLockedAttempt，這裡只管視覺。
+    // 拆成獨立函式是因為：老師切換「開放/鎖定作答」不會讓這一整塊 DOM 重建（見 renderStage 的
+    // stageSignature 局部刷新機制），只會呼叫 refreshFromProgress()，所以這裡也要讓
+    // refreshFromProgress() 呼叫一次，狀態才能即時反映，不用等學生自己換題目。
+    function applyStudentLockState(){
+      studentLocked = isStudent && inRoom() && !isOpenForStudent();
+      vToolbar.classList.toggle("student-locked", studentLocked);
+      canvas.classList.toggle("student-locked-cursor", studentLocked);
+      textLayer.classList.toggle("student-locked-cursor", studentLocked);
+      var existingBadge = stageArea.querySelector(".student-locked-badge");
+      if(studentLocked && !existingBadge){
+        var lockBadge = document.createElement("div");
+        lockBadge.className = "student-locked-badge";
+        lockBadge.textContent = "🔒 老師鎖定作答中，僅供瀏覽 View only";
+        stageArea.appendChild(lockBadge);
+      } else if(!studentLocked && existingBadge){
+        existingBadge.remove();
+      }
+    }
+    applyStudentLockState();
+
+    // 學生試圖畫圖／按按鈕時：跳出彈窗提醒（中/英/泰，內容跟語言見「⚙️ 設定」的
+    // currentLockNoticeLangs），同時發一則系統訊息到課堂對話，讓老師端跳出未讀提醒
+    // （見 postSystemChatMessage／chat-bubble-btn 的未讀徽章）。用一個簡單的節流旗標，避免學生
+    // 連續亂點/亂畫時彈窗跟 Firebase 寫入一直重複觸發。
+    var lockNoticeShowing = false;
+    function handleLockedAttempt(){
+      if(!studentLocked || lockNoticeShowing) return;
+      lockNoticeShowing = true;
+      var notice = document.createElement("div");
+      notice.className = "lock-attempt-notice";
+      notice.innerHTML = currentLockNoticeLangs.map(function(l){
+        return '<div class="lock-attempt-notice-line">' + escapeHtml(LOCK_NOTICE_TEXT[l] || LOCK_NOTICE_TEXT.zh) + '</div>';
+      }).join("");
+      function dismiss(){
+        if(notice.parentNode) notice.parentNode.removeChild(notice);
+        lockNoticeShowing = false;
+      }
+      notice.onclick = dismiss;
+      stageArea.appendChild(notice);
+      setTimeout(dismiss, 2800);
+      postSystemChatMessage("🔒 「" + (myName || "學生") + "」想畫圖／按按鈕，但目前是鎖定作答中");
+    }
+    // 攔截要放在「捕獲階段」（第三個參數 true）：事件從外往內送的時候先經過這裡，比工具列按鈕
+    // 自己的 onclick、畫布自己的 onpointerdown 都早一步，呼叫 stopPropagation() 之後，事件根本
+    // 不會再往下送到真正的按鈕/畫布，等於從源頭擋掉，不用一個個按鈕另外寫判斷式，也不怕漏掉
+    // 之後新增的按鈕。唯獨「全螢幕」按鈕排除在外（見前面 CSS 的說明，鎖定時仍然可以點）。
+    function installLockInterception(){
+      function guard(e){
+        if(!studentLocked) return;
+        // 全螢幕開關、畫布縮放（＋／－／點擊歸零）都是學生自己看畫面的個人設定，不是在動老師的
+        // 簡報內容，鎖定時還是要放行，不然學生想拉近看清楚黑板上的字都做不到。
+        if(e.target.closest && (e.target.closest("#btn-canvas-fs") || e.target.closest(".canvas-zoom-ctrl"))) return;
+        e.preventDefault(); e.stopPropagation();
+        handleLockedAttempt();
+      }
+      vToolbar.addEventListener("pointerdown", guard, true);
+      vToolbar.addEventListener("click", guard, true);
+      stageArea.addEventListener("pointerdown", guard, true);
+      stageArea.addEventListener("click", guard, true);
+      stageArea.addEventListener("dblclick", guard, true);
+    }
+    if(isStudent) installLockInterception();
 
     // 讓舞台區依「實際剩餘空間」放大到最大，而不是用固定的 vh 猜測比例：
     // 這樣不管螢幕高矮、側欄是否收合，舞台區都會剛好撐滿剩下的高度跟寬度，不會多留空白，也不會把畫面撐到需要捲動。
@@ -6405,6 +6700,9 @@
     // renderStage() 收到 false 會改走原本的完整重繪。
     function refreshFromProgress(){
       if(!document.body.contains(cWrap)) return false;
+      // 老師切換「開放作答／鎖定作答」不會改變 stageSignature（見 renderStage），只會觸發這裡的
+      // 局部刷新，所以鎖定狀態的視覺／攔截要在這裡也重新套用一次，才能即時反映，不用等換題目。
+      applyStudentLockState();
       var freshProgress = getProgress(q.id);
       strokes = freshProgress.strokes || [];
       texts = freshProgress.texts || [];
@@ -6813,7 +7111,12 @@
         out.getContext("2d").drawImage(rawCanvas, 0, 0, out.width, out.height);
         var dataUrl = out.toDataURL("image/jpeg", 0.5);
         if(inRoom() && roomRole === "student"){
-          set(ref(db, "roomStudentSnapshots/" + activeRoomId + "/" + myId), { name: myName, dataUrl: dataUrl, updatedAt: Date.now() });
+          // 特別把「寫入失敗」的錯誤印到 console：這種失敗最常見的原因是 Firebase 規則
+          // （rules.json）還沒開放 roomStudentSnapshots 這個路徑的寫入權限，寫入會被拒絕、
+          // 但畫面本身完全正常，學生完全不會發現——不加這行的話，老師那邊會一直顯示
+          // 「還沒有學生的畫面」，卻永遠不知道原因，只能用猜的。
+          set(ref(db, "roomStudentSnapshots/" + activeRoomId + "/" + myId), { name: myName, dataUrl: dataUrl, updatedAt: Date.now() })
+            .catch(function(err){ console.error("[看全班畫面] 上傳截圖失敗，可能是 Firebase 規則沒開放這個路徑：", err); });
         }
       }
     } catch(e){ /* 擷取失敗（例如畫面正好在切換）不影響其他功能，下一輪再試 */ }
