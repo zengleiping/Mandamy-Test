@@ -2460,6 +2460,16 @@
   if(btnZoomOut) btnZoomOut.onclick = function(){ applyStageZoom(currentZoomRatio - 0.1); };
   if(zoomPercentText) zoomPercentText.onclick = function(){ applyStageZoom(1.0); };
 
+  // 觸控板兩指開合（pinch）手勢，整頁通用：任何小白板自己的畫布縮放（見 renderDrawBoard 裡
+  // stageArea 那個 wheel 監聽，會 stopPropagation）已經處理過就不會傳到這裡；沒有畫布可以縮放
+  // 的地方（例如選擇題、連連看等其他題型），兩指開合就改成縮放整個網頁畫面，等於跟右下角
+  // 「🖥️ 整頁投影縮放」按鈕做同一件事，讓觸控板使用者到哪一頁都能用同一個手勢縮放。
+  document.addEventListener("wheel", function(e){
+    if(!e.ctrlKey) return;
+    e.preventDefault();
+    applyStageZoom(currentZoomRatio * (1 - e.deltaY * 0.01));
+  }, { passive: false });
+
   /* ================== 整份考卷倒數計時器 ================== */
   // 計時器狀態是「整份考卷共用一個」，跟大題／小題無關，所以存在 project 這一層（跟 sections／currentQId 同一層），
   // 不放進 per-question 的 progress 裡。狀態只存「結束時間點 endAt」，畫面上的每秒跳動由本機 setInterval 自己算，
@@ -5407,6 +5417,13 @@
     // 一律排除，各自的點擊行為在下面另外綁定。
     var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next"];
 
+    // 目前選定工具「本來該有」的游標樣式——跟放大縮小/自動拖曳無關，單純工具本身的樣子。
+    // 抽成函式是因為畫布縮放後的「靠近墨跡才恢復成工具游標」也要用到同一份邏輯（見下面
+    // autoPanEligible／canvas.onpointermove），不想在兩個地方各寫一份容易漏改。
+    function toolCursor(){
+      return boardState.tool === "text" ? "text" : (boardState.tool === "pan" ? "grab" : (boardState.tool.indexOf("eraser") !== -1 ? "cell" : "crosshair"));
+    }
+
     // 通用的「工具切換」點擊處理抽成一個函式：初始建置工具列時每顆按鈕都要綁一次，
     // 之後使用者從「➕更多」加入新工具（例如移動畫面）時，新按鈕也要補綁同一套邏輯，
     // 所以拆出來讓兩邊都能呼叫，不要各自重複一份。
@@ -5419,7 +5436,7 @@
           });
           b.classList.add("active");
           boardState.tool = b.dataset.tool;
-          canvas.style.cursor = (boardState.tool === "text" ? "text" : (boardState.tool === "pan" ? "grab" : (boardState.tool.includes("eraser") ? "cell" : "crosshair")));
+          canvas.style.cursor = toolCursor();
         }
         // 「文字」工具第一次被點的時候，先問一次要不要打字加拼音／注音（只問一次，見
         // maybeAskPhoneticModeThenRun），問完才真的切換成文字工具；已經問過的話就直接切換。
@@ -5438,7 +5455,7 @@
         if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
       });
       if(btnEraser) btnEraser.classList.add("active");
-      canvas.style.cursor = "cell";
+      canvas.style.cursor = toolCursor();
     }
     if(btnEraser) btnEraser.onclick = function(){ selectEraserTool(); };
     vToolbar.querySelectorAll(".eraser-mode-opt").forEach(function(opt){
@@ -6049,6 +6066,33 @@
       return false;
     }
 
+    // 跟 checkStrokeHit 用同一個判定距離，但單純「問有沒有墨跡在附近」，不擦掉——放大後滑鼠移到
+    // 已經寫好的字/線附近，用來決定要不要讓目前選的工具（筆/橡皮擦/文字）正常運作，而不是被
+    // 下面的「自動拖曳」搶走。百分比門檻不隨縮放調整：cWrap 的 getBoundingClientRect() 本身已經把
+    // scale 算進去了（見 getPos()），所以放得愈大，同樣 3.5% 換算成螢幕上的距離自然也愈大，
+    // 手感不會因為放大而變得要瞄得更準。
+    function nearExistingInk(p){
+      for(var i = 0; i < strokes.length; i++){
+        var pts = strokes[i].points;
+        for(var j = 0; j < pts.length; j++){
+          if(Math.hypot(pts[j].x - p.x, pts[j].y - p.y) < 3.5) return true;
+        }
+      }
+      return false;
+    }
+
+    // 放大鏡功能（canvasZoom，見下面「放大縮小／移動畫面」）開著的時候，滑鼠移到畫布上「預設」
+    // 要能直接拖曳畫面——不用像以前一樣先去「➕更多」點出「移動」工具才能拖。已經手動選了「移動」
+    // 工具的話一律都是拖曳（維持原本行為）；選其他工具（筆/文字/橡皮擦）時，只有滑鼠位置附近沒有
+    // 已經寫好的文字方塊或墨跡，才當作要拖曳畫面——靠近既有內容時，讓目前選的工具照常編輯/移動它。
+    // 文字方塊（.movable-text）本身是蓋在畫布上面的獨立 DOM 元素、有自己的拖曳/點兩下編輯邏輯，
+    // 滑鼠真的按在文字方塊上時事件根本不會傳到這塊 canvas，所以這裡只需要另外判斷墨跡（nearExistingInk）。
+    function autoPanEligible(p){
+      if(canvasZoom <= 1) return false;
+      if(boardState.tool === "pan") return false; // 已經手動選「移動」了，一律拖曳，不用再判斷
+      return !nearExistingInk(p);
+    }
+
     // 畫布同樣改用 Pointer Events：iPad 上不管是手指觸控還是 Apple Pencil，都會統一走這一套事件，
     // 不再只認滑鼠事件。按下時用 setPointerCapture 鎖定畫筆事件在 canvas 上，移動再快、再貼近邊緣，
     // 都不會被系統手勢（例如捲動／縮放）打斷這一筆的繪製。
@@ -6057,7 +6101,9 @@
       e.preventDefault(); // 避免瀏覽器預設行為把新建立的文字輸入框焦點搶走，觸控時也能避免出現選取/放大鏡等系統手勢
       try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
 
-      if(boardState.tool === "pan"){
+      var p = getPos(e);
+
+      if(boardState.tool === "pan" || autoPanEligible(p)){
         // 移動畫面：拖曳位移直接是螢幕像素（見 applyCanvasZoomPan 的說明），跟目前縮放比例無關，
         // 拖起來的手感才會跟滑鼠移動的距離一致，不會縮放愈大拖愈遲鈍或愈敏感。
         isPanning = true;
@@ -6067,7 +6113,6 @@
         return;
       }
 
-      var p = getPos(e);
       activeSelectedTextId = null;
 
       if(boardState.tool === "stroke-eraser"){
@@ -6112,7 +6157,14 @@
         applyCanvasZoomPan();
         return;
       }
-      if(!isDrawing) return;
+      if(!isDrawing){
+        // 還沒按下、單純滑鼠移過去：放大鏡開著時要即時反應游標，讓老師「按下去之前」就看得出來
+        // 現在移過去會是拖曳畫面還是照常畫圖/打字/擦除，不用真的按一次才知道。
+        if(canvasZoom > 1 && boardState.tool !== "pan"){
+          canvas.style.cursor = autoPanEligible(getPos(e)) ? "grab" : toolCursor();
+        }
+        return;
+      }
       var p = getPos(e);
       currentPath.push(p);
       if(recordingCurrentStrokePoints){
@@ -6324,12 +6376,29 @@
     }
     function setCanvasZoom(z){
       canvasZoom = Math.max(1, Math.min(4, Math.round(z * 100) / 100));
-      if(canvasZoom === 1){ canvasPanX = 0; canvasPanY = 0; }
+      if(canvasZoom === 1){
+        canvasPanX = 0; canvasPanY = 0;
+        // 縮放回 100% 時，「自動拖曳」跟著失效（見 autoPanEligible），游標要立刻恢復成工具本來的
+        // 樣子，不然滑鼠在原地不動的話會一直卡著「拖曳手」的游標，看起來像壞掉。
+        if(boardState.tool !== "pan") canvas.style.cursor = toolCursor();
+      }
       applyCanvasZoomPan();
     }
     zoomCtrl.querySelector("#btn-canvas-zoom-in").onclick = function(){ setCanvasZoom(canvasZoom + 0.25); };
     zoomCtrl.querySelector("#btn-canvas-zoom-out").onclick = function(){ setCanvasZoom(canvasZoom - 0.25); };
     zoomPctEl.onclick = function(){ setCanvasZoom(1); };
+
+    // 觸控板兩指開合（pinch）手勢：瀏覽器一律用 wheel 事件＋ctrlKey:true 表示（不管使用者是不是
+    // 真的按著 Ctrl 鍵，Mac/Windows 的觸控板雙指縮放都是用這個管道回報），跟一般兩指上下捲動
+    // （ctrlKey 是 false）分開判斷，才不會把正常捲動也吃掉。攔截在畫布的舞台區（stageArea）上，
+    // 蓋掉瀏覽器預設的整頁縮放，改成縮放這塊畫布本身；stopPropagation 避免再往外傳到下面
+    // 「整頁投影縮放」（🖥️）那顆的全域監聽，變成兩個縮放同時搶著動。
+    stageArea.addEventListener("wheel", function(e){
+      if(!e.ctrlKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setCanvasZoom(canvasZoom * (1 - e.deltaY * 0.01));
+    }, { passive: false });
 
     // 局部刷新：對方（或自己送出後的回寫）畫了一筆、換了格線、換了底圖時呼叫，只更新畫布內容，
     // 不重建工具列與畫布 DOM，避免整個舞台重繪造成的「抖動」。回傳 false 代表這份畫布已經不在畫面上了，
