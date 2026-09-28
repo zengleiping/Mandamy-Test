@@ -593,6 +593,38 @@
   .color-dot:hover{ transform:scale(1.14); }
   .color-dot.active{ box-shadow:0 0 0 1.5px rgba(28,33,30,0.25), 0 0 0 3px var(--seal); }
 
+  /* 橡皮擦模式選單／「➕更多」加入工具選單：跟顏色選盤共用同一個 hover 彈出機制（.color-popover），
+     裡面放的是直排的文字按鈕，不是色點，另外加寬、改直排 */
+  .more-tools-popover{ min-width:150px; display:flex; flex-direction:column; gap:4px; }
+  .eraser-mode-opt, .more-tool-opt{
+    width:100%; padding:8px 10px; font-size:12px; font-weight:600; text-align:left; white-space:nowrap;
+    border-radius:8px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); cursor:pointer;
+  }
+  :root:not([data-theme="light"]) .eraser-mode-opt, :root:not([data-theme="light"]) .more-tool-opt{ border-color:rgba(255,255,255,0.14); }
+  .eraser-mode-opt:hover, .more-tool-opt:hover{ border-color:var(--seal); background:var(--seal-soft); }
+  .eraser-mode-opt.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
+
+  /* 非核心工具（格線／筆刷粗細／底圖／移動畫面／錄示範）預設收合在 extraToolsPool 裡，
+     從「➕更多」點了才搬進工具列——外面包一層 .extra-tool-group，要跟 vToolbar 一樣撐滿寬度，
+     裡面的 .tool-v-sep／.grid-btn-group 等原本就設計成 width:100%（相對於工具列寬度），
+     這裡沒有的話 100% 會變成相對這層 wrapper 自己（shrink-to-fit）算出來的寬度，版面會跑掉。 */
+  .extra-tool-group{ width:100%; display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; }
+
+  /* 畫布縮放/平移控制：固定浮在舞台區右下角，全螢幕／一般模式都看得到，跟工具列是否收合無關 */
+  .canvas-zoom-ctrl{
+    position:absolute; right:14px; bottom:14px; z-index:40;
+    display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:999px;
+    background:rgba(255,255,255,0.92); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    border:1.5px solid rgba(28,33,30,0.14); box-shadow:var(--shadow);
+  }
+  .canvas-zoom-ctrl button{
+    width:26px; height:26px; border-radius:50%; border:1.5px solid rgba(28,33,30,0.16);
+    background:var(--surface); color:var(--ink); font-size:15px; font-weight:800; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; line-height:1; padding:0;
+  }
+  .canvas-zoom-ctrl button:hover{ border-color:var(--seal); color:var(--seal); }
+  .canvas-zoom-ctrl span{ font-size:11.5px; font-weight:700; color:var(--ink-soft); min-width:34px; text-align:center; cursor:pointer; user-select:none; }
+
   .size-btn-group{ display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; width:100%; flex-shrink:0; }
   .size-btn-v{
     width:100%; padding:7px 0; font-size:11.5px; font-weight:700; border-radius:7px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); cursor:pointer; color:var(--ink);
@@ -4479,8 +4511,14 @@
   }
 
   /* ================== 寫字板工具狀態 ================== */
-  var boardState = { tool: "pen", color: "#B23B32", size: 6, fontSize: 36 };
+  // eraserMode：橡皮擦按鈕合併成一顆之後，用這個記住目前選的是「筆畫擦」還是「局部擦」，
+  // 預設 stroke（筆畫擦），使用者說多數情況優先用這個，局部擦要自己到橡皮擦按鈕裡切換。
+  var boardState = { tool: "pen", color: "#B23B32", size: 6, fontSize: 36, eraserMode: "stroke" };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
+  // pinnedExtraTools：工具列精簡後，格線／筆刷粗細／底圖／移動畫面／錄示範這些非核心工具預設收合，
+  // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
+  // 不用每題都重新加一次。
+  var pinnedExtraTools = {};
 
   // ============ 全螢幕作答區（小白板／生字練習共用） ============
   // canvasFullscreen 記在這個模組層級的變數：換題目後如果原本開著全螢幕，新題目的畫布會自動
@@ -4488,7 +4526,12 @@
   // setupCanvasFullscreen() 這個共用函式，renderDrawBoard／renderHanziBoard 各自呼叫一次。
   var canvasFullscreen = false;
   var canvasFsKeyHandler = null; // 記住上一次掛的 Escape 鍵監聽器，換題目前先移除，避免累積重複監聽
+  // 學生第一次遇到小白板／生字練習畫布時，自動幫他們打開一次全螢幕（怕學生自己不會點），
+  // 之後就尊重他們自己的選擇（包括手動退出），不會每換一題都硬幫他們切回全螢幕。只對學生生效，
+  // 老師端維持原本手動點按鈕的行為。
+  var studentAutoFsTried = false;
   function setupCanvasFullscreen(container, toggleBtn, refit){
+    if(isStudent && !studentAutoFsTried){ studentAutoFsTried = true; canvasFullscreen = true; }
     var originalParent = container.parentNode; // 一定要在搬動前先記下來，退出時才知道要塞回哪裡
     function updateBtn(){
       if(!toggleBtn) return;
@@ -4560,33 +4603,33 @@
         <div class="color-dot ${boardState.color==='#4C7A5E'?'active':''}" data-color="#4C7A5E" style="background:#4C7A5E;" title="綠色 Green"></div>
         <div class="color-dot ${boardState.color==='#FB8C00'?'active':''}" data-color="#FB8C00" style="background:#FB8C00;" title="橘色 Orange"></div>`;
 
+    // 2026-09-28 工具列精簡：使用者明確要求「原始的小工具」只留最核心的幾顆（全螢幕／筆／文字／
+    // 文字大小／橡皮擦／上一步／下一步／清空），其餘（格線、筆刷粗細、底圖、錄示範…）先收合起來，
+    // 需要的話再自己點「➕更多」加進來——主要是為了學生使用時介面不要一開始就太雜。
+    // 橡皮擦原本「筆畫擦」「局部擦」是兩顆分開的按鈕，現在合併成一顆：預設點下去是筆畫擦（使用者
+    // 說多數情況優先用這個），滑鼠移入按鈕可以切換成局部擦，跟畫筆/打字的顏色選盤共用同一套
+    // hover 顯示 popover 的機制（.tool-btn-v-wrap + .color-popover）。
     vToolbar.innerHTML = `
       <button type="button" class="tool-btn-v" id="btn-canvas-fs" title="全螢幕作答區：整個畫面都是畫布，工具列浮在畫布上 Fullscreen canvas — toolbar floats on top"><span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">全螢幕</span></button>
       <div class="tool-v-sep"></div>
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v ${boardState.tool==='pen'?'active':''}" data-tool="pen" title="畫筆 Pen（滑鼠移入可選顏色 hover for colors）"><span class="tool-btn-v-icon">✏️</span><span class="tool-btn-v-label">畫筆</span></button>
+        <button type="button" class="tool-btn-v ${boardState.tool==='pen'?'active':''}" data-tool="pen" title="筆 Pen（滑鼠移入可選顏色 hover for colors）"><span class="tool-btn-v-icon">✏️</span><span class="tool-btn-v-label">筆</span></button>
         <div class="color-popover"><div class="color-popover-title">筆刷顏色 Brush Color</div><div class="color-dot-grid">${colorDotsHtml}</div></div>
       </div>
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v ${boardState.tool==='text'?'active':''}" data-tool="text" title="打字 Text（滑鼠移入可選顏色 hover for colors）"><span class="tool-btn-v-icon">🔤</span><span class="tool-btn-v-label">打字</span></button>
+        <button type="button" class="tool-btn-v ${boardState.tool==='text'?'active':''}" data-tool="text" title="文字 Text（滑鼠移入可選顏色 hover for colors）"><span class="tool-btn-v-icon">🔤</span><span class="tool-btn-v-label">文字</span></button>
         <div class="color-popover"><div class="color-popover-title">文字顏色 Text Color</div><div class="color-dot-grid">${colorDotsHtml}</div></div>
       </div>
-      <button type="button" class="tool-btn-v ${boardState.tool==='stroke-eraser'?'active':''}" data-tool="stroke-eraser" title="筆畫整條擦除 Erase Whole Stroke"><span class="tool-btn-v-icon">🪄</span><span class="tool-btn-v-label">筆畫擦</span></button>
-      <button type="button" class="tool-btn-v ${boardState.tool==='pixel-eraser'?'active':''}" data-tool="pixel-eraser" title="局部橡皮擦 Eraser"><span class="tool-btn-v-icon">🧽</span><span class="tool-btn-v-label">局部擦</span></button>
-      <div class="tool-v-sep"></div>
-      <div class="grid-btn-group">
-        <button type="button" class="grid-btn-v ${currentGrid==='none'?'active':''}" data-grid="none" title="無格 No Grid">無</button>
-        <button type="button" class="grid-btn-v ${currentGrid==='tian'?'active':''}" data-grid="tian" title="田字格 Tian Grid">田</button>
-        <button type="button" class="grid-btn-v ${currentGrid==='jiu'?'active':''}" data-grid="jiu" title="九宮格 3x3 Grid">九</button>
+      <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v ${(boardState.tool==='stroke-eraser'||boardState.tool==='pixel-eraser')?'active':''}" id="btn-eraser" title="橡皮擦：預設整條擦掉，滑鼠移入可切換成局部擦 Eraser — hover to switch modes"><span class="tool-btn-v-icon" id="btn-eraser-icon">${boardState.eraserMode==='pixel'?'🧽':'🪄'}</span><span class="tool-btn-v-label">橡皮擦</span></button>
+        <div class="color-popover">
+          <div class="color-popover-title">擦除方式 Eraser Mode</div>
+          <button type="button" class="eraser-mode-opt ${boardState.eraserMode!=='pixel'?'active':''}" data-eraser-mode="stroke">🪄 筆畫擦（整條擦掉）</button>
+          <button type="button" class="eraser-mode-opt ${boardState.eraserMode==='pixel'?'active':''}" data-eraser-mode="pixel">🧽 局部擦（像橡皮擦）</button>
+        </div>
       </div>
       <div class="tool-v-sep"></div>
-      <div class="size-btn-group">
-        <button type="button" class="size-btn-v ${boardState.size===3?'active':''}" data-size="3" title="細 Thin">細</button>
-        <button type="button" class="size-btn-v ${boardState.size===6?'active':''}" data-size="6" title="中 Medium">中</button>
-        <button type="button" class="size-btn-v ${boardState.size===12?'active':''}" data-size="12" title="粗 Thick">粗</button>
-      </div>
-      <div class="tool-v-sep"></div>
-      <select class="board-font-select" style="width:100%; padding:6px 0; font-size:12.5px; font-weight:700; text-align:center; background:var(--surface); border-radius:8px; border:1.5px solid rgba(28,33,30,0.14);">
+      <select class="board-font-select" title="文字大小 Text size" style="width:100%; padding:6px 0; font-size:12.5px; font-weight:700; text-align:center; background:var(--surface); border-radius:8px; border:1.5px solid rgba(28,33,30,0.14);">
         <option value="24" ${boardState.fontSize===24?'selected':''}>24</option>
         <option value="32" ${boardState.fontSize===32?'selected':''}>32</option>
         <option value="40" ${boardState.fontSize===40?'selected':''}>40</option>
@@ -4595,24 +4638,72 @@
         <option value="84" ${boardState.fontSize===84?'selected':''}>84</option>
       </select>
       <div class="tool-v-sep"></div>
-      <button type="button" class="tool-btn-v" id="btn-upload-bg" title="上傳底圖 Upload Background"><span class="tool-btn-v-icon">📷</span><span class="tool-btn-v-label">底圖</span></button>
-      <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除底圖 Remove Background"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清底圖</span></button>
-      <input type="file" id="board-bg-file" accept="image/*" style="display:none;">
-      <div class="tool-v-sep"></div>
+      <button type="button" class="tool-btn-v" id="btn-undo" title="上一步 Undo"><span class="tool-btn-v-icon">↶</span><span class="tool-btn-v-label">上一步</span></button>
+      <button type="button" class="tool-btn-v" id="btn-redo" title="下一步 Redo"><span class="tool-btn-v-icon">↷</span><span class="tool-btn-v-label">下一步</span></button>
       <button type="button" class="tool-btn-v" id="btn-clear-draw" style="color:var(--seal);" title="清空畫布 Clear Canvas"><span class="tool-btn-v-icon">🗑️</span><span class="tool-btn-v-label">清空</span></button>
+      <div class="tool-v-sep"></div>
+      <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v" id="btn-more-tools" title="更多工具：滑鼠移入可以加入格線／筆刷粗細／底圖／移動畫面等工具 More tools"><span class="tool-btn-v-icon">➕</span><span class="tool-btn-v-label">更多</span></button>
+        <div class="color-popover more-tools-popover" id="more-tools-popover">
+          <div class="color-popover-title">加入工具 Add a tool</div>
+        </div>
+      </div>
     `;
 
-    // 「跟隨大師」相關按鈕：老師才能錄製／清除示範，但「看示範」播放按鈕大家都看得到（只要這一題已經有錄好的示範）。
-    // 這裡故意不寫進上面那個大的 innerHTML 字串，而是另外用 DOM 建立、之後才綁定自己的 onclick——
-    // 因為下面「工具按鈕通用點擊處理」那段會抓所有 .tool-btn-v 並蓋掉 onclick，必須排除這幾個 id、
-    // 而且要等那段跑完之後才綁自己的處理邏輯，才不會被蓋掉。
+    // extraToolsPool：先把「格線／筆刷粗細／底圖／移動畫面／錄示範」這些非核心工具的 DOM 建好、
+    // 放進一個獨立的隱藏容器（不 append 進 vToolbar），使用者從上面「➕更多」的清單裡點了才搬進
+    // 工具列正式顯示——搬過去的是同一份 DOM 節點（不是重建/複製），事件監聽都還在，不用重綁。
+    // pinnedExtraTools 記在模組層級（跟 boardState 一樣），使用者這次工作階段加過的工具，換題目後
+    // 會自動接著顯示，不用每題都重新點一次「➕更多」。
+    var extraToolsPool = {};
+    var moreToolsPopover = vToolbar.querySelector("#more-tools-popover");
+
+    var gridGroupEl = document.createElement("div"); gridGroupEl.className = "extra-tool-group";
+    gridGroupEl.innerHTML = `
+      <div class="tool-v-sep"></div>
+      <div class="grid-btn-group">
+        <button type="button" class="grid-btn-v ${currentGrid==='none'?'active':''}" data-grid="none" title="無格 No Grid">無</button>
+        <button type="button" class="grid-btn-v ${currentGrid==='tian'?'active':''}" data-grid="tian" title="田字格 Tian Grid">田</button>
+        <button type="button" class="grid-btn-v ${currentGrid==='jiu'?'active':''}" data-grid="jiu" title="九宮格 3x3 Grid">九</button>
+      </div>`;
+    extraToolsPool.grid = { label: "▦ 格線", el: gridGroupEl };
+
+    var sizeGroupEl = document.createElement("div"); sizeGroupEl.className = "extra-tool-group";
+    sizeGroupEl.innerHTML = `
+      <div class="tool-v-sep"></div>
+      <div class="size-btn-group">
+        <button type="button" class="size-btn-v ${boardState.size===3?'active':''}" data-size="3" title="細 Thin">細</button>
+        <button type="button" class="size-btn-v ${boardState.size===6?'active':''}" data-size="6" title="中 Medium">中</button>
+        <button type="button" class="size-btn-v ${boardState.size===12?'active':''}" data-size="12" title="粗 Thick">粗</button>
+      </div>`;
+    extraToolsPool.size = { label: "📏 筆刷粗細", el: sizeGroupEl };
+
+    var bgGroupEl = document.createElement("div"); bgGroupEl.className = "extra-tool-group";
+    bgGroupEl.innerHTML = `
+      <div class="tool-v-sep"></div>
+      <button type="button" class="tool-btn-v" id="btn-upload-bg" title="上傳底圖 Upload Background"><span class="tool-btn-v-icon">📷</span><span class="tool-btn-v-label">底圖</span></button>
+      <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除底圖 Remove Background"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清底圖</span></button>
+      <input type="file" id="board-bg-file" accept="image/*" style="display:none;">`;
+    extraToolsPool.bg = { label: "📷 底圖", el: bgGroupEl };
+
+    var panGroupEl = document.createElement("div"); panGroupEl.className = "extra-tool-group";
+    panGroupEl.innerHTML = `
+      <div class="tool-v-sep"></div>
+      <button type="button" class="tool-btn-v ${boardState.tool==='pan'?'active':''}" data-tool="pan" title="移動畫面：放大後用這個工具拖曳畫面 Pan the canvas (use after zooming in)"><span class="tool-btn-v-icon">🖐</span><span class="tool-btn-v-label">移動畫面</span></button>`;
+    extraToolsPool.pan = { label: "🖐 移動畫面", el: panGroupEl };
+
+    // 「跟隨大師」相關按鈕：老師才能錄製／清除示範，跟底圖／格線一樣屬於使用者說要先收合的非核心工具，
+    // 放進 extraToolsPool.demo，預設收合、從「➕更多」點了才加進工具列。錄製／清除的點擊事件在下面
+    // 「跟隨大師」那段照舊綁定（綁在按鈕物件本身，不管當下是否已經被搬進可見的工具列都有效）。
     var recordTraceBtn = null, clearTraceBtn = null;
     if(!isStudent){
+      var demoGroupEl = document.createElement("div"); demoGroupEl.className = "extra-tool-group";
+      demoGroupEl.appendChild((function(){ var s = document.createElement("div"); s.className = "tool-v-sep"; return s; })());
       recordTraceBtn = document.createElement("button");
       recordTraceBtn.type = "button"; recordTraceBtn.className = "tool-btn-v"; recordTraceBtn.id = "btn-record-trace";
       recordTraceBtn.title = "錄製老師示範筆順，存好後學生端可以疊圖跟著寫 Record a teacher demo for students to trace";
       recordTraceBtn.innerHTML = '<span class="tool-btn-v-icon">🖋️</span><span class="tool-btn-v-label">錄示範</span>';
-      vToolbar.appendChild(recordTraceBtn);
+      demoGroupEl.appendChild(recordTraceBtn);
 
       clearTraceBtn = document.createElement("button");
       clearTraceBtn.type = "button"; clearTraceBtn.className = "tool-btn-v"; clearTraceBtn.id = "btn-clear-trace";
@@ -4620,8 +4711,37 @@
       clearTraceBtn.style.color = "#E63946";
       clearTraceBtn.title = "清除已錄製的示範 Clear the recorded demo";
       clearTraceBtn.innerHTML = '<span class="tool-btn-v-icon">🗑️</span><span class="tool-btn-v-label">清示範</span>';
-      vToolbar.appendChild(clearTraceBtn);
+      demoGroupEl.appendChild(clearTraceBtn);
+      extraToolsPool.demo = { label: "🖋️ 錄示範", el: demoGroupEl };
     }
+
+    // 把「➕更多」清單填好：每個選項點一下，就把對應的工具群組從 pool 搬進工具列（插在「➕更多」
+    // 按鈕自己這個 wrap 之前），並記到 pinnedExtraTools，同時把這個選項從清單移除（已經加過了）。
+    var moreToolsWrap = vToolbar.querySelector("#btn-more-tools").closest(".tool-btn-v-wrap");
+    function refreshMoreToolsPopover(){
+      moreToolsPopover.querySelectorAll(".more-tool-opt").forEach(function(o){ o.remove(); });
+      Object.keys(extraToolsPool).forEach(function(key){
+        if(pinnedExtraTools[key]) return; // 已經加進工具列了，清單裡不用再列
+        var opt = document.createElement("button");
+        opt.type = "button"; opt.className = "more-tool-opt"; opt.dataset.add = key;
+        opt.textContent = extraToolsPool[key].label;
+        opt.onclick = function(){ pinExtraTool(key); };
+        moreToolsPopover.appendChild(opt);
+      });
+      moreToolsWrap.style.display = Object.keys(extraToolsPool).every(function(k){ return pinnedExtraTools[k]; }) ? "none" : "";
+    }
+    function pinExtraTool(key){
+      if(pinnedExtraTools[key] || !extraToolsPool[key]) return;
+      pinnedExtraTools[key] = true;
+      vToolbar.insertBefore(extraToolsPool[key].el, moreToolsWrap);
+      refreshMoreToolsPopover();
+      bindExtraToolHandlers(key); // 剛搬進來的按鈕要補上事件監聽（見下方）
+    }
+    Object.keys(extraToolsPool).forEach(function(key){
+      if(pinnedExtraTools[key]) vToolbar.insertBefore(extraToolsPool[key].el, moreToolsWrap);
+    });
+    refreshMoreToolsPopover();
+
     // 「跟隨大師」相關功能（顯示範本／播放筆順動畫／個人描紅逐筆比對）原本拆成三顆按鈕，
     // 工具列太長、太雜，改成只留一顆入口按鈕：點下去才打開「示範／個人描紅」面板，
     // 面板一打開範本就自動顯示，播放動畫跟逐筆比對的功能全部收在面板裡面，不用另外佔工具列的位置。
@@ -4744,13 +4864,22 @@
       stageArea.style.width = Math.floor(availableWidth) + "px";
       stageArea.style.height = Math.floor(availableHeight) + "px";
 
-      // 畫布固定用同一個長寬比例，在剩餘空間中撐到最大（多的部分置中留白），
-      // 這樣每個人存的百分比座標換算出來的位置/形狀才會完全一致。
-      var w = availableWidth, h = Math.floor(w / BOARD_ASPECT_RATIO);
-      if(h > availableHeight){ h = availableHeight; w = Math.floor(h * BOARD_ASPECT_RATIO); }
+      var w, h;
+      if(container.classList.contains("canvas-fs-active")){
+        // 全螢幕模式：畫布（=可互動書寫範圍）直接撐滿整個視窗，不再照 BOARD_ASPECT_RATIO 留白，
+        // 這樣畫面上不會有寫不到字的空白區。底圖本身用 object-fit:contain（見 CSS 的 .bg-img-layer）
+        // 維持原本比例、不變形，多出來的左右／上下空間單純是可以直接下筆的畫布，不會被浪費掉。
+        w = availableWidth; h = availableHeight;
+      } else {
+        // 非全螢幕：畫布固定用同一個長寬比例，在剩餘空間中撐到最大（多的部分置中留白），
+        // 這樣每個人存的百分比座標換算回底圖上的位置/形狀才會完全一致（教師投影跟學生畫面對得齊）。
+        w = availableWidth; h = Math.floor(w / BOARD_ASPECT_RATIO);
+        if(h > availableHeight){ h = availableHeight; w = Math.floor(h * BOARD_ASPECT_RATIO); }
+      }
       cWrap.style.width = Math.floor(w) + "px";
       cWrap.style.height = Math.floor(h) + "px";
       positionGridOverlay();
+      if(typeof applyCanvasZoomPan === "function") applyCanvasZoomPan(); // cWrap 的基準尺寸變了，縮放/平移要重新夾限一次，避免留下超出邊界的舊位移
     }
     boardResizeHandler = fitCanvasToViewport;
     requestAnimationFrame(fitCanvasToViewport);
@@ -4769,11 +4898,15 @@
     var isDrawing = false;
     var currentPath = [];
     var activeSelectedTextId = null;
-    // 這幾個按鈕不是「畫筆／打字／橡皮擦」之類的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
+    var isPanning = false, panStartClientX = 0, panStartClientY = 0, panStartX = 0, panStartY = 0;
+    // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs"];
+    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools"];
 
-    vToolbar.querySelectorAll(".tool-btn-v").forEach(function(b){
+    // 通用的「工具切換」點擊處理抽成一個函式：初始建置工具列時每顆按鈕都要綁一次，
+    // 之後使用者從「➕更多」加入新工具（例如移動畫面）時，新按鈕也要補綁同一套邏輯，
+    // 所以拆出來讓兩邊都能呼叫，不要各自重複一份。
+    function bindGenericToolBtn(b){
       b.onclick = function(){
         if(NON_TOOL_BTN_IDS.indexOf(b.id) !== -1) return;
         vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
@@ -4781,55 +4914,108 @@
         });
         b.classList.add("active");
         boardState.tool = b.dataset.tool;
-        canvas.style.cursor = (boardState.tool === "text" ? "text" : (boardState.tool.includes("eraser") ? "cell" : "crosshair"));
+        canvas.style.cursor = (boardState.tool === "text" ? "text" : (boardState.tool === "pan" ? "grab" : (boardState.tool.includes("eraser") ? "cell" : "crosshair")));
+      };
+    }
+    vToolbar.querySelectorAll(".tool-btn-v").forEach(bindGenericToolBtn);
+
+    // 橡皮擦合併成一顆按鈕：點主按鈕＝直接套用目前選的模式（預設筆畫擦），
+    // hover 開的小面板可以切換筆畫擦／局部擦，切換的同時也順便套用，不用切完再點一次主按鈕。
+    var btnEraser = vToolbar.querySelector("#btn-eraser");
+    function selectEraserTool(){
+      boardState.tool = boardState.eraserMode === "pixel" ? "pixel-eraser" : "stroke-eraser";
+      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
+        if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
+      });
+      if(btnEraser) btnEraser.classList.add("active");
+      canvas.style.cursor = "cell";
+    }
+    if(btnEraser) btnEraser.onclick = function(){ selectEraserTool(); };
+    vToolbar.querySelectorAll(".eraser-mode-opt").forEach(function(opt){
+      opt.onclick = function(e){
+        e.stopPropagation();
+        boardState.eraserMode = opt.dataset.eraserMode;
+        vToolbar.querySelectorAll(".eraser-mode-opt").forEach(function(x){ x.classList.remove("active"); });
+        opt.classList.add("active");
+        var iconEl = vToolbar.querySelector("#btn-eraser-icon");
+        if(iconEl) iconEl.textContent = boardState.eraserMode === "pixel" ? "🧽" : "🪄";
+        selectEraserTool();
       };
     });
 
     setupCanvasFullscreen(container, vToolbar.querySelector("#btn-canvas-fs"), fitCanvasToViewport);
 
-    var btnUploadBg = vToolbar.querySelector("#btn-upload-bg");
-    var btnRemoveBg = vToolbar.querySelector("#btn-remove-bg");
-    var bgFileInput = vToolbar.querySelector("#board-bg-file");
-
-    if(btnUploadBg && bgFileInput){
-      btnUploadBg.onclick = function(e){
-        e.preventDefault(); e.stopPropagation();
-        bgFileInput.click();
-      };
-      bgFileInput.onchange = function(e){
-        var file = e.target.files[0];
-        if(!file) return;
-        var reader = new FileReader();
-        reader.onload = function(evt){
-          var img = new Image();
-          img.onload = function(){
-            var c = document.createElement("canvas");
-            var scale = Math.min(1, 1000 / img.width);
-            c.width = Math.round(img.width * scale);
-            c.height = Math.round(img.height * scale);
-            var cx = c.getContext("2d");
-            cx.drawImage(img, 0, 0, c.width, c.height);
-            var b64 = c.toDataURL("image/jpeg", 0.8);
-            q.bgImage = b64;
-            writeProgress(q.id, { bgImage: b64 });
+    // 格線／筆刷粗細／底圖／移動畫面／錄示範這些非核心工具的實際事件綁定：初始已經被 pin 住的
+    // 工具（上面已經搬進 vToolbar），以及之後使用者從「➕更多」點加入的工具，都會呼叫這裡。
+    function bindExtraToolHandlers(key){
+      if(key === "grid"){
+        gridGroupEl.querySelectorAll(".grid-btn-v").forEach(function(gb){
+          gb.onclick = function(){
+            gridGroupEl.querySelectorAll(".grid-btn-v").forEach(function(x){ x.classList.remove("active"); });
+            gb.classList.add("active");
+            var gType = gb.dataset.grid;
+            gridOverlay.className = "grid-overlay" + (gType === 'tian' ? ' grid-tian' : (gType === 'jiu' ? ' grid-jiu' : ''));
+            gridOverlay.style.display = gType === 'none' ? 'none' : 'block';
+            positionGridOverlay();
+            writeProgress(q.id, { gridType: gType });
+          };
+        });
+      } else if(key === "size"){
+        sizeGroupEl.querySelectorAll(".size-btn-v").forEach(function(sBtn){
+          sBtn.onclick = function(){
+            sizeGroupEl.querySelectorAll(".size-btn-v").forEach(function(x){ x.classList.remove("active"); });
+            sBtn.classList.add("active");
+            boardState.size = Number(sBtn.dataset.size);
+          };
+        });
+      } else if(key === "bg"){
+        var btnUploadBg = bgGroupEl.querySelector("#btn-upload-bg");
+        var btnRemoveBg = bgGroupEl.querySelector("#btn-remove-bg");
+        var bgFileInput = bgGroupEl.querySelector("#board-bg-file");
+        if(btnUploadBg && bgFileInput){
+          btnUploadBg.onclick = function(e){
+            e.preventDefault(); e.stopPropagation();
+            bgFileInput.click();
+          };
+          bgFileInput.onchange = function(e){
+            var file = e.target.files[0];
+            if(!file) return;
+            var reader = new FileReader();
+            reader.onload = function(evt){
+              var img = new Image();
+              img.onload = function(){
+                var c = document.createElement("canvas");
+                var scale = Math.min(1, 1000 / img.width);
+                c.width = Math.round(img.width * scale);
+                c.height = Math.round(img.height * scale);
+                var cx = c.getContext("2d");
+                cx.drawImage(img, 0, 0, c.width, c.height);
+                var b64 = c.toDataURL("image/jpeg", 0.8);
+                q.bgImage = b64;
+                writeProgress(q.id, { bgImage: b64 });
+                writeSections(getSections());
+                renderStage();
+              };
+              img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+          };
+        }
+        if(btnRemoveBg){
+          btnRemoveBg.onclick = function(e){
+            e.preventDefault(); e.stopPropagation();
+            q.bgImage = "";
+            writeProgress(q.id, { bgImage: "" });
             writeSections(getSections());
             renderStage();
           };
-          img.src = evt.target.result;
-        };
-        reader.readAsDataURL(file);
-      };
+        }
+      } else if(key === "pan"){
+        panGroupEl.querySelectorAll(".tool-btn-v").forEach(bindGenericToolBtn);
+      }
+      // key === "demo"：錄示範／清示範的點擊事件在下面「跟隨大師」那段統一綁定，這裡不用重複處理。
     }
-
-    if(btnRemoveBg){
-      btnRemoveBg.onclick = function(e){
-        e.preventDefault(); e.stopPropagation();
-        q.bgImage = "";
-        writeProgress(q.id, { bgImage: "" });
-        writeSections(getSections());
-        renderStage();
-      };
-    }
+    Object.keys(extraToolsPool).forEach(function(key){ if(pinnedExtraTools[key]) bindExtraToolHandlers(key); });
 
     /* ================== 跟隨大師：老師示範錄製與播放 ================== */
     // 共用畫布上的淡色描紅範本現在是「常駐、不用按按鈕」的：只要這一題有錄好的示範、目前不是正在錄製、
@@ -5274,6 +5460,7 @@
             writeProgress(q.id, { texts: texts });
           }
 
+          snapshotForUndo(); // 在拖動縮放開始「之前」存一份快照，上一步就能整個復原成拖動前的大小
           handle.addEventListener("pointermove", onResizeMove);
           handle.addEventListener("pointerup", onResizeUp);
           handle.addEventListener("pointercancel", onResizeUp);
@@ -5283,6 +5470,7 @@
           e.stopPropagation();
 
           if(boardState.tool === "stroke-eraser"){
+            snapshotForUndo();
             texts.splice(idx, 1);
             writeProgress(q.id, { texts: texts });
             return;
@@ -5292,6 +5480,7 @@
           activeSelectedTextId = t.id;
           div.classList.add("active");
           if(fontSelect) fontSelect.value = String(t.fontSize || 36);
+          snapshotForUndo(); // 在拖動開始「之前」存一份快照，上一步就能整個復原成拖動前的位置
 
           var startX = e.clientX, startY = e.clientY;
           var origX = t.x, origY = t.y;
@@ -5339,6 +5528,7 @@
         for(var j=0; j<pts.length; j++){
           var dist = Math.hypot(pts[j].x - p.x, pts[j].y - p.y);
           if(dist < 3.5){
+            snapshotForUndo();
             strokes.splice(i, 1);
             writeProgress(q.id, { strokes: strokes });
             return true;
@@ -5355,6 +5545,17 @@
       if(!canInteract()) return;
       e.preventDefault(); // 避免瀏覽器預設行為把新建立的文字輸入框焦點搶走，觸控時也能避免出現選取/放大鏡等系統手勢
       try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
+
+      if(boardState.tool === "pan"){
+        // 移動畫面：拖曳位移直接是螢幕像素（見 applyCanvasZoomPan 的說明），跟目前縮放比例無關，
+        // 拖起來的手感才會跟滑鼠移動的距離一致，不會縮放愈大拖愈遲鈍或愈敏感。
+        isPanning = true;
+        panStartClientX = e.clientX; panStartClientY = e.clientY;
+        panStartX = canvasPanX; panStartY = canvasPanY;
+        canvas.style.cursor = "grabbing";
+        return;
+      }
+
       var p = getPos(e);
       activeSelectedTextId = null;
 
@@ -5365,6 +5566,7 @@
       if(boardState.tool === "text"){
         showInlineTextInput(cWrap, p, function(txt){
           if(txt && txt.trim()){
+            snapshotForUndo();
             texts.push({
               id: uid("t"),
               text: txt.trim(),
@@ -5393,6 +5595,12 @@
     };
 
     canvas.onpointermove = function(e){
+      if(isPanning){
+        canvasPanX = panStartX + (e.clientX - panStartClientX);
+        canvasPanY = panStartY + (e.clientY - panStartClientY);
+        applyCanvasZoomPan();
+        return;
+      }
       if(!isDrawing) return;
       var p = getPos(e);
       currentPath.push(p);
@@ -5423,9 +5631,11 @@
     };
 
     function endDrawing(){
+      if(isPanning){ isPanning = false; canvas.style.cursor = "grab"; return; }
       if(!isDrawing) return;
       isDrawing = false;
       if(currentPath.length >= 2){
+        snapshotForUndo();
         strokes.push({
           id: uid("st"),
           points: currentPath,
@@ -5452,6 +5662,7 @@
         if(activeSelectedTextId){
           var selObj = texts.find(function(item){ return item.id === activeSelectedTextId; });
           if(selObj){
+            snapshotForUndo();
             selObj.fontSize = boardState.fontSize;
             writeProgress(q.id, { texts: texts });
           }
@@ -5459,17 +5670,8 @@
       };
     }
 
-    vToolbar.querySelectorAll(".grid-btn-v").forEach(function(gb){
-      gb.onclick = function(){
-        vToolbar.querySelectorAll(".grid-btn-v").forEach(function(x){ x.classList.remove("active"); });
-        gb.classList.add("active");
-        var gType = gb.dataset.grid;
-        gridOverlay.className = "grid-overlay" + (gType === 'tian' ? ' grid-tian' : (gType === 'jiu' ? ' grid-jiu' : ''));
-        gridOverlay.style.display = gType === 'none' ? 'none' : 'block';
-        positionGridOverlay();
-        writeProgress(q.id, { gridType: gType });
-      };
-    });
+    // 格線／筆刷粗細的點擊事件已經改在 bindExtraToolHandlers("grid"/"size") 裡綁定
+    // （這兩組現在是收合的非核心工具，元素在 gridGroupEl／sizeGroupEl 裡，不一定在 vToolbar 底下）。
 
     vToolbar.querySelectorAll(".color-dot").forEach(function(d){
       d.onclick = function(){
@@ -5482,23 +5684,90 @@
       };
     });
 
-    vToolbar.querySelectorAll(".size-btn-v").forEach(function(sBtn){
-      sBtn.onclick = function(){
-        vToolbar.querySelectorAll(".size-btn-v").forEach(function(x){ x.classList.remove("active"); });
-        sBtn.classList.add("active");
-        boardState.size = Number(sBtn.dataset.size);
-      };
-    });
+    /* ================== 上一步／下一步（undo/redo） ================== */
+    // 使用者常常不小心誤刪本來要給學生抄寫的內容（點錯清空、橡皮擦擦太大力…），這裡對 strokes／texts
+    // 這兩個「畫面上的內容」做快照式的 undo/redo：每次真的要修改內容之前，先把目前的狀態存一份到
+    // undoStack，修改完再呼叫 refit；上一步／下一步只操作 strokes/texts，不動格線／底圖等版面設定
+    // （那些是「畫布設定」不是「內容」，誤刪的痛點主要是內容，範圍刻意縮小、行為才好預期）。
+    var undoStack = [], redoStack = [];
+    var btnUndo = vToolbar.querySelector("#btn-undo");
+    var btnRedo = vToolbar.querySelector("#btn-redo");
+    function updateUndoRedoBtns(){
+      if(btnUndo){ btnUndo.disabled = !undoStack.length; btnUndo.style.opacity = undoStack.length ? "1" : "0.4"; }
+      if(btnRedo){ btnRedo.disabled = !redoStack.length; btnRedo.style.opacity = redoStack.length ? "1" : "0.4"; }
+    }
+    function snapshotForUndo(){
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts }));
+      if(undoStack.length > 60) undoStack.shift();
+      redoStack.length = 0; // 有新的操作，「下一步」的歷史就作廢了，跟一般軟體的 undo/redo 行為一致
+      updateUndoRedoBtns();
+    }
+    function applyUndoRedoSnapshot(snapText){
+      var obj = JSON.parse(snapText);
+      strokes = obj.strokes; texts = obj.texts;
+      redrawStrokes(); renderTexts();
+      writeProgress(q.id, { strokes: strokes, texts: texts });
+      updateUndoRedoBtns();
+    }
+    if(btnUndo) btnUndo.onclick = function(){
+      if(!undoStack.length) return;
+      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts }));
+      applyUndoRedoSnapshot(undoStack.pop());
+    };
+    if(btnRedo) btnRedo.onclick = function(){
+      if(!redoStack.length) return;
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts }));
+      applyUndoRedoSnapshot(redoStack.pop());
+    };
+    updateUndoRedoBtns();
 
     var clearBtn = vToolbar.querySelector("#btn-clear-draw");
     if(clearBtn){
       clearBtn.onclick = function(){
-        if(confirm("確定要清空畫布上的所有內容嗎？")){
+        if(confirm("確定要清空畫布上的所有內容嗎？（可以按「上一步」復原）")){
+          snapshotForUndo();
           strokes = []; texts = [];
           writeProgress(q.id, { strokes: strokes, texts: texts });
         }
       };
     }
+
+    /* ================== 放大縮小／移動畫面 ================== */
+    // 有時候要看的細節在底圖的角落，畫布固定長寬比例撐滿舞台區之後，靠瀏覽器整頁縮放不容易精準對到
+    // 角落——這裡改在畫布本身做縮放＋平移：canvasZoom/canvasPanX/canvasPanY 只是這次渲染的局部變數
+    // （換題目就重置，不需要跨題記住），transform 直接套用在 cWrap 上，getPos() 等既有的座標換算都是
+    // 從 cWrap.getBoundingClientRect() 反推回百分比，瀏覽器計算 rect 時本來就會把 transform 算進去，
+    // 完全不用改動既有的畫筆/擦除座標邏輯。translate 寫在 scale 前面（transform-origin:0 0 時，
+    // translate 的單位就是螢幕像素，不會被 scale 影響），所以拖曳的位移量可以直接 1:1 對應滑鼠移動距離。
+    var canvasZoom = 1, canvasPanX = 0, canvasPanY = 0;
+    var zoomCtrl = document.createElement("div"); zoomCtrl.className = "canvas-zoom-ctrl";
+    zoomCtrl.innerHTML = `
+      <button type="button" id="btn-canvas-zoom-out" title="縮小 Zoom out">－</button>
+      <span id="canvas-zoom-pct" title="點擊回到 100% Click to reset zoom &amp; pan">100%</span>
+      <button type="button" id="btn-canvas-zoom-in" title="放大 Zoom in">＋</button>
+    `;
+    stageArea.appendChild(zoomCtrl);
+    var zoomPctEl = zoomCtrl.querySelector("#canvas-zoom-pct");
+    function clampPan(){
+      var w = cWrap.clientWidth, h = cWrap.clientHeight;
+      var minX = w * (1 - canvasZoom), minY = h * (1 - canvasZoom);
+      canvasPanX = Math.min(0, Math.max(minX, canvasPanX));
+      canvasPanY = Math.min(0, Math.max(minY, canvasPanY));
+    }
+    function applyCanvasZoomPan(){
+      clampPan();
+      cWrap.style.transform = (canvasZoom === 1) ? "none" : ("translate(" + canvasPanX + "px," + canvasPanY + "px) scale(" + canvasZoom + ")");
+      cWrap.style.transformOrigin = "0 0";
+      if(zoomPctEl) zoomPctEl.textContent = Math.round(canvasZoom * 100) + "%";
+    }
+    function setCanvasZoom(z){
+      canvasZoom = Math.max(1, Math.min(4, Math.round(z * 100) / 100));
+      if(canvasZoom === 1){ canvasPanX = 0; canvasPanY = 0; }
+      applyCanvasZoomPan();
+    }
+    zoomCtrl.querySelector("#btn-canvas-zoom-in").onclick = function(){ setCanvasZoom(canvasZoom + 0.25); };
+    zoomCtrl.querySelector("#btn-canvas-zoom-out").onclick = function(){ setCanvasZoom(canvasZoom - 0.25); };
+    zoomPctEl.onclick = function(){ setCanvasZoom(1); };
 
     // 局部刷新：對方（或自己送出後的回寫）畫了一筆、換了格線、換了底圖時呼叫，只更新畫布內容，
     // 不重建工具列與畫布 DOM，避免整個舞台重繪造成的「抖動」。回傳 false 代表這份畫布已經不在畫面上了，
@@ -5525,7 +5794,8 @@
       } else if(existingImg){
         existingImg.remove();
       }
-      if(btnRemoveBg) btnRemoveBg.style.display = freshBg ? "flex" : "none";
+      var liveBtnRemoveBg = vToolbar.querySelector("#btn-remove-bg");
+      if(liveBtnRemoveBg) liveBtnRemoveBg.style.display = freshBg ? "flex" : "none";
 
       // 老師示範疊圖：如果錄好的示範被更新或清除了（自己存的，或是同一個房間裡其他裝置回寫的），
       // 同步更新按鈕顯示狀態；正在錄製中的時候不要被自己剛寫入 strokes 觸發的刷新打斷。
@@ -5719,8 +5989,15 @@
       }
       stageArea.style.width = Math.floor(availableWidth) + "px";
       stageArea.style.height = Math.floor(availableHeight) + "px";
-      var w = availableWidth, h = Math.floor(w / HANZI_ASPECT_RATIO);
-      if(h > availableHeight){ h = availableHeight; w = Math.floor(h * HANZI_ASPECT_RATIO); }
+      var w, h;
+      if(container.classList.contains("canvas-fs-active")){
+        // 全螢幕模式：畫布撐滿整個視窗，田字格參考方塊仍由 positionGridOverlay 置中，
+        // 方塊以外多出來的空間就是可以直接下筆寫字/做筆記的可互動範圍，不會浪費掉。
+        w = availableWidth; h = availableHeight;
+      } else {
+        w = availableWidth; h = Math.floor(w / HANZI_ASPECT_RATIO);
+        if(h > availableHeight){ h = availableHeight; w = Math.floor(h * HANZI_ASPECT_RATIO); }
+      }
       cWrap.style.width = Math.floor(w) + "px";
       cWrap.style.height = Math.floor(h) + "px";
       positionGridOverlay();
