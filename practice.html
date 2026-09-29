@@ -1243,9 +1243,18 @@
         <button class="btn btn-primary btn-new" id="btn-new-section" type="button">＋ 新增大題 Add Section</button>
 
         <!-- 2026-09-29：投影片不算是「題目」，是上課用的主要內容，所以獨立成跟「新增大題」同一層級的
-             按鈕，不再跟(需要設定題型／答案的)大題編輯流程混在一起；匯入 PDF 簡報的功能也一併搬過來。 -->
-        <button type="button" class="btn btn-sm" id="btn-new-slide" style="width:100%; justify-content:center; margin-top:8px; border:1.5px solid var(--seal); color:var(--seal); font-weight:700;" title="新增一張空白投影片（不是題目，是上課內容，可以直接畫記／貼圖）Add a blank slide — not a question, just teaching content you can draw or paste on">🖼️ 新增投影片 Add Slide</button>
-        <button type="button" class="btn btn-sm" id="btn-import-slides-top" style="width:100%; justify-content:center; margin-top:6px; border:1.5px solid var(--seal); color:var(--seal); font-weight:700;" title="匯入簡報：上傳 PDF（在簡報軟體另存新檔／匯出成 PDF），每一頁自動變成一張投影片 Import a PDF export of your slides — each page becomes a slide">📥 匯入投影片 Import Slides</button>
+             按鈕，不再跟(需要設定題型／答案的)大題編輯流程混在一起。原本「新增投影片」跟「匯入投影片」
+             是兩顆各自獨立、樣式又比「新增大題」淡一階的按鈕，看起來像次要功能；老師反應這兩個在她
+             心裡是跟「新增大題」同一層級的功能，應該合併成一顆、樣式也要完全比照「新增大題」。改成
+             跟下面「編輯題庫」選單同一套「按鈕點開小選單」的做法（.bank-menu-wrap/.bank-menu-pop），
+             但外層按鈕直接套用 .btn-primary.btn-new，看起來就跟「新增大題」一樣是主要功能。 -->
+        <div class="bank-menu-wrap" id="add-slide-menu-wrap" style="margin-top:8px;">
+          <button type="button" class="btn btn-primary btn-new" id="btn-add-slide-menu" title="新增一張投影片：可以是空白投影片，也可以直接匯入 PDF 簡報 Add a slide — blank, or imported from a PDF">🖼️ 新增投影片 Add Slide</button>
+          <div class="bank-menu-pop" id="add-slide-menu-pop">
+            <button type="button" class="bank-menu-item" id="btn-new-slide" title="新增一張空白投影片（不是題目，是上課內容，可以直接畫記／貼圖）Add a blank slide — not a question, just teaching content you can draw or paste on">🖼️ 空白投影片 Blank Slide</button>
+            <button type="button" class="bank-menu-item" id="btn-import-slides-top" title="匯入簡報：上傳 PDF（在簡報軟體另存新檔／匯出成 PDF），每一頁自動變成一張投影片 Import a PDF export of your slides — each page becomes a slide">📥 匯入 PDF Import PDF</button>
+          </div>
+        </div>
         <input type="file" id="import-slides-top-file" accept="application/pdf" style="display:none;">
 
         <div class="bank-menu-wrap" id="bank-menu-wrap">
@@ -3679,7 +3688,10 @@
       return;
     }
     var now = Date.now();
-    if(now - lastCursorSendAt < 80) return;
+    // 2026-09-29：節流間隔從 80ms 調到 50ms——游標位置的廣播頻率跟「殘留一點點跟手指/滑鼠位置對不上」
+    // 的落差直接相關（對方看到的永遠是「幾十毫秒前」送出的那個位置），縮短間隔能直接減少這個落差，
+    // 副作用（多送一點點資料量）在這種輕量的百分比座標上可以忽略。
+    if(now - lastCursorSendAt < 50) return;
     lastCursorSendAt = now;
     var qInfo = getCurrentQInfo(); if(!qInfo) return;
     wasCursorOnBoard = true;
@@ -3964,12 +3976,21 @@
   var btnNewSection = document.getElementById("btn-new-section");
   if(btnNewSection) btnNewSection.onclick = function(){ openSectionDialog(null); };
 
+  // 「新增投影片」選單：跟「編輯題庫」選單同一套開合機制，外層按鈕是 .btn-primary（跟「新增大題」
+  // 同一層級），點開才看得到「空白投影片／匯入 PDF」這兩個實際動作。
+  var addSlideMenuWrap = document.getElementById("add-slide-menu-wrap");
+  var btnAddSlideMenu = document.getElementById("btn-add-slide-menu");
+  var addSlideMenuPop = document.getElementById("add-slide-menu-pop");
+  function closeAddSlideMenu(){ if(addSlideMenuPop) addSlideMenuPop.classList.remove("open"); }
+  if(btnAddSlideMenu) btnAddSlideMenu.onclick = function(e){ e.stopPropagation(); if(addSlideMenuPop) addSlideMenuPop.classList.toggle("open"); };
+  document.addEventListener("click", function(e){ if(addSlideMenuPop && addSlideMenuPop.classList.contains("open") && !e.target.closest("#add-slide-menu-wrap")) closeAddSlideMenu(); });
+
   var btnNewSlide = document.getElementById("btn-new-slide");
-  if(btnNewSlide) btnNewSlide.onclick = function(){ createBlankSlideSection(); };
+  if(btnNewSlide) btnNewSlide.onclick = function(){ closeAddSlideMenu(); createBlankSlideSection(); };
   var btnImportSlidesTop = document.getElementById("btn-import-slides-top");
   var importSlidesTopFileInput = document.getElementById("import-slides-top-file");
   if(btnImportSlidesTop && importSlidesTopFileInput){
-    btnImportSlidesTop.onclick = function(){ importSlidesTopFileInput.click(); };
+    btnImportSlidesTop.onclick = function(){ closeAddSlideMenu(); importSlidesTopFileInput.click(); };
     importSlidesTopFileInput.onchange = function(e){
       var file = e.target.files[0];
       importSlidesTopFileInput.value = ""; // 允許連續兩次選同一個檔案都能觸發 onchange
@@ -5504,6 +5525,10 @@
     var progress = getProgress(q.id);
     var strokes = progress.strokes || [];
     var texts = progress.texts || [];
+    // 2026-09-29：strokesRev 是每次寫入 strokes 時一起存的「時間戳記版本號」，只用來擋掉「明明
+    // 已經比較新的本機內容，卻被一份比較舊、還在路上（雲端還沒同步完）的畫面蓋回去」這種情況——
+    // 細節見下面 refreshFromProgress() 裡的說明。
+    var localStrokesRev = progress.strokesRev || 0;
     // 沒有特別設定格線的話，預設是「無格」：整個空白處都可以直接書寫，不侷限成一個固定大小的方格區域。
     // 老師需要田字格／九宮格時再自己點選，格線只會是畫面正中央一塊參考用的浮層，格線以外一樣能寫字。
     var currentGrid = progress.gridType || q.gridType || "none";
@@ -6477,8 +6502,23 @@
       }
     }
 
+    // 2026-09-29 修正：筆刷「粗細」是照畫布目前的寬度等比例換算，本來用 cWrap.clientWidth（排版
+    // 當下、永遠即時反映最新版面的寬度）來算，但真正拿來畫圖的 canvas.width（畫布內部點陣解析度）
+    // 只有在 resizeCanvas() 真的被呼叫到的時候才會更新——resizeCanvas() 只綁在「畫布第一次建立」跟
+    // 「瀏覽器視窗真的 resize」這兩種情況，「切換全螢幕作答區」（點畫筆全螢幕按鈕，不是瀏覽器視窗
+    // 本身的全螢幕）只會呼叫 fitCanvasToViewport() 改 cWrap 的 CSS 寬高，並不會連帶呼叫
+    // resizeCanvas()。也就是說：上課中途手動切換全螢幕之後，clientWidth 已經變成全螢幕的寬度，
+    // canvas.width 卻還停在切換前（通常小很多）的舊數字——用 clientWidth 算出來的 scale 是「假設
+    // 畫布內部解析度也已經變成全螢幕大小」，但其實還是舊的小解析度，畫出來的線在小解析度的點陣圖上
+    // 就已經比預期粗了一大截，瀏覽器再把這張點陣圖整個拉伸貼滿全螢幕的 CSS 尺寸，等於又放大一次，
+    // 兩層放大疊在一起，線條就會粗到很不正常——這正是老師反應「只有老師端的畫筆特別粗」最常見的
+    // 情境：老師手動切換全螢幕（不是一開始就全螢幕），学生端如果是一進題目就自動全螢幕，resizeCanvas()
+    // 反而剛好接在切換全螢幕的同一個畫面更新之後執行、解析度是對的，才會兩邊看起來不一樣粗。改成
+    // 直接讀 canvas.width（畫布真正的內部解析度，缺席時才退回 clientWidth），粗細換算永遠跟畫布
+    // 實際拿來畫圖的解析度一致，不會被「還沒重新量測」的 CSS 版面尺寸誤導，兩邊都會照書寫者的
+    // 設定，看到同樣粗細比例的畫面。
     function getScaleRatio(){
-      var w = cWrap.clientWidth || canvas.width || 640;
+      var w = canvas.width || cWrap.clientWidth || 640;
       return Math.max(0.4, w / 640);
     }
 
@@ -6644,7 +6684,8 @@
           if(dist < 3.5){
             snapshotForUndo();
             strokes.splice(i, 1);
-            writeProgress(q.id, { strokes: strokes });
+            localStrokesRev = Date.now();
+            writeProgress(q.id, { strokes: strokes, strokesRev: localStrokesRev });
             // 2026-09-29 修正：畫布是點陣圖，陣列裡刪掉這一筆不會自動讓畫面上的線條消失，一定要
             // 自己重畫一次才看得出來被擦掉了。以前這裡沒有呼叫 redrawStrokes()，本機（自己）的畫面
             // 完全要等房間同步（Firebase 回寫）才會更新，在真實網路（不像本機測試環境幾乎零延遲）
@@ -6854,7 +6895,8 @@
           isEraser: boardState.tool === "pixel-eraser"
         };
         strokes.push(newStroke);
-        writeProgress(q.id, { strokes: strokes });
+        localStrokesRev = Date.now();
+        writeProgress(q.id, { strokes: strokes, strokesRev: localStrokesRev });
         // 2026-09-29 效能：redrawStrokes() 是把「目前這一題全部的筆跡」整個清掉重畫一次，成本
         // 會隨著這一題累積的筆跡數量一起往上疊加——上課越久、這頁寫得越多，每寫完一筆到能再畫
         // 下一筆之間的延遲就越明顯，在 iPad 這種效能相對弱的裝置上特別容易感覺到「寫字不連貫」。
@@ -6975,7 +7017,8 @@
       var obj = JSON.parse(snapText);
       strokes = obj.strokes; texts = obj.texts;
       redrawStrokes(); renderTexts();
-      writeProgress(q.id, { strokes: strokes, texts: texts });
+      localStrokesRev = Date.now();
+      writeProgress(q.id, { strokes: strokes, texts: texts, strokesRev: localStrokesRev });
       updateUndoRedoBtns();
     }
     if(btnUndo) btnUndo.onclick = function(){
@@ -6996,7 +7039,8 @@
         if(confirm("確定要清空畫布上的所有內容嗎？（可以按「上一步」復原）")){
           snapshotForUndo();
           strokes = []; texts = [];
-          writeProgress(q.id, { strokes: strokes, texts: texts });
+          localStrokesRev = Date.now();
+          writeProgress(q.id, { strokes: strokes, texts: texts, strokesRev: localStrokesRev });
         }
       };
     }
@@ -7064,7 +7108,34 @@
       // 局部刷新，所以鎖定狀態的視覺／攔截要在這裡也重新套用一次，才能即時反映，不用等換題目。
       applyStudentLockState();
       var freshProgress = getProgress(q.id);
-      strokes = freshProgress.strokes || [];
+      var freshStrokes = freshProgress.strokes || [];
+      // 2026-09-29 修正（一）：「rooms/{roomId}」整棵樹只要任何地方有變化，就會觸發這個局部刷新，
+      // 包括自己剛剛那一筆寫進 Firebase 之後、雲端回傳同一筆資料的「回音」。自己畫的那一筆在
+      // endDrawing() 當下就已經直接加進本機 strokes、也已經畫到畫面上了；以前這裡收到回音時，
+      // 不管內容是不是真的變了，一律把 strokes 整個換成剛從 Firebase 收到的版本、清畫布重畫一次，
+      // 在真實網路下（不像本機測試環境幾乎零延遲）這個回音本身就有延遲，看起來就像「每一筆都要
+      // 等讀取完」。做法：便宜比對「內容其實沒變」（筆畫數量、最後一筆的 id 都相同）。
+      //
+      // 修正（二，比對（一）更進一步）：房間同步是用輪詢（每 150ms 問一次雲端現在的狀態），字寫快
+      // 一點，很容易在「上一筆的回音還沒回來」之前就已經開始畫下一筆——這時候如果剛好輪到的那一次
+      // 輪詢，雲端才剛收到第一筆、還沒收到第二筆，這裡收到的 freshStrokes 會是「只有第一筆」，
+      // 筆畫數量比本機（已經有兩筆）少，上面（一）的「內容沒變」判斷抓不出這種情況（數量真的不一樣），
+      // 就會誤把這份「雲端還沒跟上」的舊資料當成新的，蓋掉本機已經畫好的第二筆，看起來像剛畫的
+      // 東西突然消失、等一下又出現。用 strokesRev（每次寫入 strokes 時一起存的時間戳記版本號）
+      // 擋掉這種情況：只要收到的版本號比「本機自己最後一次寫入的版本號」還舊，一定是還在追上進度
+      // 的過時資料（不管是自己的回音，還是雲端輪詢剛好卡到中間狀態），整批直接忽略，繼續顯示本機
+      // 已經有的內容就好，不會平白無故蓋掉、閃爍。真的是別人（或自己）更新的內容，版本號一定會
+      // 比本機記錄的新，才會正常套用。
+      var freshStrokesRev = freshProgress.strokesRev;
+      var strokesRevIsStale = freshStrokesRev !== undefined && freshStrokesRev !== null && freshStrokesRev < localStrokesRev;
+      var strokesLooksUnchanged = strokesRevIsStale || (strokes.length === freshStrokes.length &&
+        (strokes.length === 0 ||
+          (strokes[strokes.length - 1] && freshStrokes[freshStrokes.length - 1] &&
+           strokes[strokes.length - 1].id === freshStrokes[freshStrokes.length - 1].id)));
+      if(!strokesLooksUnchanged){
+        strokes = freshStrokes;
+        if(freshStrokesRev !== undefined && freshStrokesRev !== null) localStrokesRev = freshStrokesRev;
+      }
       texts = freshProgress.texts || [];
       var freshGrid = freshProgress.gridType || q.gridType || "none";
       var freshBg = freshProgress.bgImage || q.bgImage || "";
@@ -7105,7 +7176,7 @@
         resizePersonalCanvases();
       }
 
-      redrawStrokes();
+      if(!strokesLooksUnchanged) redrawStrokes();
       renderTexts();
       return true;
     }
