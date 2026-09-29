@@ -1213,6 +1213,12 @@
       <div class="sidebar-inner" id="sidebar-inner">
         <button class="btn btn-primary btn-new" id="btn-new-section" type="button">＋ 新增大題 Add Section</button>
 
+        <!-- 2026-09-29：投影片不算是「題目」，是上課用的主要內容，所以獨立成跟「新增大題」同一層級的
+             按鈕，不再跟(需要設定題型／答案的)大題編輯流程混在一起；匯入 PDF 簡報的功能也一併搬過來。 -->
+        <button type="button" class="btn btn-sm" id="btn-new-slide" style="width:100%; justify-content:center; margin-top:8px; border:1.5px solid var(--seal); color:var(--seal); font-weight:700;" title="新增一張空白投影片（不是題目，是上課內容，可以直接畫記／貼圖）Add a blank slide — not a question, just teaching content you can draw or paste on">🖼️ 新增投影片 Add Slide</button>
+        <button type="button" class="btn btn-sm" id="btn-import-slides-top" style="width:100%; justify-content:center; margin-top:6px; border:1.5px solid var(--seal); color:var(--seal); font-weight:700;" title="匯入簡報：上傳 PDF（在簡報軟體另存新檔／匯出成 PDF），每一頁自動變成一張投影片 Import a PDF export of your slides — each page becomes a slide">📥 匯入投影片 Import Slides</button>
+        <input type="file" id="import-slides-top-file" accept="application/pdf" style="display:none;">
+
         <div class="bank-menu-wrap" id="bank-menu-wrap">
           <button type="button" class="btn btn-sm" id="btn-bank-menu" style="width:100%; justify-content:center; margin-top:8px; border:1.5px solid var(--bamboo); color:var(--bamboo); font-weight:700;">編輯題庫 Edit Questions</button>
           <div class="bank-menu-pop" id="bank-menu-pop">
@@ -2230,14 +2236,26 @@
   function hideImportSlidesToast(el){ if(el && el.parentNode) el.parentNode.removeChild(el); }
 
   var isImportingSlides = false;
-  async function importSlidesFromPdf(secId, file){
+  // createNewSection：true 時忽略 secId 對應的既有大題，直接在 secs 裡建一個全新的「投影片」大題
+  // 再匯入——這樣「匯入投影片」可以直接掛在最上層的新增投影片區，不用先手動建立/選一個既有大題。
+  // 整個流程只在最後呼叫一次 writeSections（跟原本一樣），中途完全不重新讀取 getSections()，
+  // 在課堂連線（Firebase 非同步）中也不會有讀到舊資料的競態問題。
+  async function importSlidesFromPdf(secId, file, createNewSection){
     if(isImportingSlides) return;
     if(typeof pdfjsLib === "undefined"){
       alert("簡報匯入功能所需的元件載入失敗，請檢查網路連線後重新整理頁面再試一次。\nThe PDF import component failed to load — please check your connection and reload the page.");
       return;
     }
-    var secs = getSections(); var sec = secs[secId];
-    if(!sec || sec.type !== "board") return;
+    var secs = getSections();
+    var sec;
+    if(createNewSection){
+      var newOrder = Object.keys(secs).length;
+      sec = { id: secId, title: "投影片 " + (newOrder + 1), desc: "", type: "board", order: newOrder, collapsed: false, questions: {}, media: [] };
+      secs[secId] = sec;
+    } else {
+      sec = secs[secId];
+      if(!sec || sec.type !== "board") return;
+    }
     isImportingSlides = true;
     var toast = showImportSlidesToast("匯入中 Importing…");
     try{
@@ -2284,6 +2302,27 @@
       hideImportSlidesToast(toast);
       alert("匯入簡報失敗，請確認上傳的是正常的 PDF 檔案。\nFailed to import — please make sure the file is a valid PDF.\n(" + (err && err.message ? err.message : err) + ")");
     }
+  }
+
+  // 最上層「＋ 新增投影片」區的「匯入投影片」：直接建一個全新的投影片大題來裝匯入的每一頁，
+  // 不再需要老師先手動新增/選一個既有的小白板大題。
+  function importSlidesAsNewSection(file){
+    importSlidesFromPdf(uid("sec"), file, true);
+  }
+
+  // 最上層「＋ 新增投影片」：投影片不是題目，直接建立一張空白投影片（沒有底圖，可以直接畫記／
+  // 貼圖），不跳「新增大題」那個要選題型的彈窗，讓流程單純一點。
+  function createBlankSlideSection(){
+    var secs = getSections();
+    var newSecId = uid("sec");
+    var order = Object.keys(secs).length;
+    var qId = uid("q");
+    secs[newSecId] = {
+      id: newSecId, title: "投影片 " + (order + 1), desc: "", type: "board", order: order, collapsed: false,
+      questions: {}, media: []
+    };
+    secs[newSecId].questions[qId] = { id: qId, order: 0, title: "投影片 1", desc: "", bgImage: "", gridType: "none", media: [], teacherNote: "", weight: 1 };
+    writeSections(secs, qId);
   }
 
   function getCurrentQInfo(){
@@ -3627,8 +3666,6 @@
         </div>
         <div class="section-head-actions">
           <button type="button" class="btn btn-sm btn-ghost btn-edit-sec" title="編輯大題（標題／說明／媒體）Edit Section" style="color:var(--ink-soft);">編輯</button>
-          ${sec.type === "board" ? `<button type="button" class="btn btn-sm btn-ghost btn-import-slides" title="匯入簡報：上傳 PDF（在簡報軟體另存新檔／匯出成 PDF），每一頁自動變成一題小白板，可以翻頁、畫記 Import a PDF export of your slides — each page becomes a whiteboard question" style="color:var(--seal);">匯入簡報</button>
-          <input type="file" class="import-slides-file" accept="application/pdf" style="display:none;">` : ''}
           <button type="button" class="btn btn-sm btn-ghost btn-add-subq" title="新增小題 Add Question" style="color:var(--seal);">新增小題</button>
           <button type="button" class="btn btn-sm btn-ghost btn-del-sec" title="刪除大題 Delete Section" style="color:var(--ink-soft);">刪除</button>
         </div>
@@ -3636,17 +3673,6 @@
 
       head.onclick = function(e){ if(e.target.closest("button")) return; sec.collapsed = !sec.collapsed; writeSections(secs); };
       head.querySelector(".btn-edit-sec").onclick = function(e){ e.stopPropagation(); openSectionDialog(secId); };
-      if(sec.type === "board"){
-        var importSlidesFileInput = head.querySelector(".import-slides-file");
-        head.querySelector(".btn-import-slides").onclick = function(e){ e.stopPropagation(); importSlidesFileInput.click(); };
-        importSlidesFileInput.onclick = function(e){ e.stopPropagation(); };
-        importSlidesFileInput.onchange = function(e){
-          e.stopPropagation();
-          var file = e.target.files[0];
-          importSlidesFileInput.value = ""; // 允許連續兩次選同一個檔案都能觸發 onchange
-          if(file) importSlidesFromPdf(secId, file);
-        };
-      }
       head.querySelector(".btn-add-subq").onclick = function(e){ e.stopPropagation(); openQuestionDialog(secId, null); };
       head.querySelector(".btn-del-sec").onclick = function(e){
         e.stopPropagation();
@@ -3839,6 +3865,20 @@
 
   var btnNewSection = document.getElementById("btn-new-section");
   if(btnNewSection) btnNewSection.onclick = function(){ openSectionDialog(null); };
+
+  var btnNewSlide = document.getElementById("btn-new-slide");
+  if(btnNewSlide) btnNewSlide.onclick = function(){ createBlankSlideSection(); };
+  var btnImportSlidesTop = document.getElementById("btn-import-slides-top");
+  var importSlidesTopFileInput = document.getElementById("import-slides-top-file");
+  if(btnImportSlidesTop && importSlidesTopFileInput){
+    btnImportSlidesTop.onclick = function(){ importSlidesTopFileInput.click(); };
+    importSlidesTopFileInput.onchange = function(e){
+      var file = e.target.files[0];
+      importSlidesTopFileInput.value = ""; // 允許連續兩次選同一個檔案都能觸發 onchange
+      if(file) importSlidesAsNewSection(file);
+    };
+  }
+
   var btnCancelSection = document.getElementById("btn-cancel-section");
   if(btnCancelSection) btnCancelSection.onclick = function(){ closeModalDialog(sectionDialog); };
 
