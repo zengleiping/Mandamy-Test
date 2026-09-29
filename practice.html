@@ -803,6 +803,10 @@
   .canvas-stage-wrap{
     position:relative; width:100%; height:100%; flex-shrink:0;
     background:transparent; border:2.5px solid var(--seal-ring); border-radius:18px; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+    /* 2026-09-29：觸控筆／手指在畫布上按下時，瀏覽器原生的「選取文字」跟長按選單（複製／貼上）
+       很容易被誤觸發，尤其底圖是匯入的投影片、上面其實是圖片而不是真的文字時更明顯，會讓整片
+       反藍、跳出複製貼上的泡泡，擋住畫筆操作。整個畫布區域完全不需要選取文字，直接關掉。 */
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
   }
   /* 格線只是畫面正中央一塊「參考用」的浮層，本身不接收滑鼠事件（pointer-events:none），
      底下的 canvas 仍是整個 canvas-stage-wrap 的大小，所以格線以外的空白處一樣可以直接下筆書寫。
@@ -821,11 +825,18 @@
   .bg-img-layer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;z-index:0;}
   canvas#paint-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;touch-action:none;cursor:crosshair;}
   canvas.trace-overlay-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;}
+  /* 2026-09-29：底圖（尤其匯入投影片的每一頁）圖片還沒載入完成前，cWrap 的長寬比例還是暫時的預設值
+     （見 BOARD_ASPECT_RATIO），這時候如果就開始畫記，那幾筆的百分比座標會是用「錯的」比例算出來的，
+     之後圖片一載入完成、比例校正回正確值，這幾筆就會跟其他人（甚至自己之後畫的）對不齊，尤其投影片
+     文字間距很密時特別明顯。用這層蓋住畫布擋住下筆，直到圖片載入完成、比例確定了才能畫，從源頭避免
+     用錯誤比例算出來的座標被存下來。 */
+  .bg-loading-guard{ position:absolute; inset:0; z-index:50; cursor:wait; }
 
   /* 個人描紅練習：整塊蓋住 cWrap 的獨立疊層，跟共用畫布完全分開，只有自己看得到 */
   .personal-trace-overlay{
     position:absolute; inset:0; z-index:100000; display:flex; flex-direction:column;
     background:var(--surface); border-radius:16px; overflow:hidden;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
   }
   .personal-trace-topbar{
     display:flex; align-items:center; gap:10px; flex-wrap:wrap; flex-shrink:0;
@@ -1769,6 +1780,14 @@
   // 實際的轉換函式（setPhoneticMode／buildPhoneticHtml…）在下面「打字加註音」那段一起定義。
   var currentPhoneticMode = localStorage.getItem("hanyu_phonetic_mode");
 
+  // 2026-09-29：平板＋觸控筆的「掌心誤觸」問題——一旦偵測到這台裝置有在用觸控筆（Apple Pencil／
+  // 電容筆等，pointerType === "pen"），之後畫布上的「手指」輸入就只用來移動畫面（平移），不會被
+  // 當成畫筆／橡皮擦等工具在用，避免寫字時手掌或另一隻手不小心碰到螢幕畫出多餘的線條。純觸控
+  // （沒有筆）的裝置完全不受影響，手指一樣可以正常畫記。整個網頁共用同一個旗標，一旦用過筆就
+  // 一路保持到重新整理頁面為止，不特別針對單一題目或單一次繪圖重置。
+  var stylusEverUsed = false;
+  function isPalmTouch(e){ return e.pointerType === "touch" && stylusEverUsed; }
+
   // 2026-09-29：學生在「鎖定作答」時試圖畫圖／按按鈕，跳出來提醒他的彈窗要顯示哪些語言——
   // 老師在「⚙️ 設定」裡勾選，預設中文＋英文。這個設定要讓同一個房間裡的學生也看得到（老師跟
   // 學生是不同裝置），所以除了存在老師自己瀏覽器的 localStorage，開房間／老師改動時也要一起
@@ -2122,11 +2141,25 @@
   var currentTeacher = null; // 登入中的教師帳號：{ id, username, displayName, isAdmin }
   var isOfflineMode = false; // true＝連不上雲端服務、選擇離線使用本機示範資料（不會同步、也沒有帳號隔離）
 
+  // 2026-09-29：儲存失敗（不管是同步例外還是雲端非同步拒絕）以前完全被 try/catch 吞掉、
+  // 使用者不會看到任何提示，看起來就像「按了儲存沒反應」。這裡改成至少印出錯誤，並且用
+  // lastSaveFsAlertAt 節流，短時間內（例如連續好幾次自動存檔都失敗）只跳一次提示，不洗版。
+  var lastSaveFsAlertAt = 0;
+  function notifySaveFsFailure(err){
+    console.error("儲存失敗", err);
+    var now = Date.now();
+    if(now - lastSaveFsAlertAt < 15000) return;
+    lastSaveFsAlertAt = now;
+    alert("儲存到雲端失敗，剛剛的變更可能沒有真的存起來，請檢查網路連線。如果剛剛上傳了很大的圖片或匯入很多投影片，也可能是檔案太大，建議用較小的圖片再試一次。\nFailed to save to the cloud — your latest change may not be saved. Please check your connection. If you just uploaded a large image or imported many slides, try a smaller file.\n(" + (err && err.message ? err.message : err) + ")");
+  }
   function saveFS(){
     if(currentTeacher){
-      try{ set(ref(db, "teacherLibraries/" + currentTeacher.id), fsData); }catch(e){}
+      try{
+        var p = set(ref(db, "teacherLibraries/" + currentTeacher.id), fsData);
+        if(p && typeof p.catch === "function") p.catch(notifySaveFsFailure);
+      }catch(e){ notifySaveFsFailure(e); }
     } else {
-      try{ localStorage.setItem(STORAGE_FS_KEY, JSON.stringify(fsData)); }catch(e){}
+      try{ localStorage.setItem(STORAGE_FS_KEY, JSON.stringify(fsData)); }catch(e){ notifySaveFsFailure(e); }
     }
   }
 
@@ -2349,7 +2382,17 @@
     if(inRoom()){
       var patch = { "project/sections": newSections };
       if(newCurrentQId !== undefined) patch["project/currentQId"] = newCurrentQId;
-      update(ref(db, "rooms/" + activeRoomId), patch);
+      // update() 可能同步丟出例外（例如資料被 SDK 判定為無效），也可能非同步被雲端服務拒絕
+      // （例如權限或連線問題）——以前兩種都沒有處理，同步例外會讓呼叫端（例如新增小題的
+      // 儲存按鈕）整段中斷、對話框卡住又沒有任何提示。這裡同步例外往外拋（讓呼叫端自己的
+      // try/catch 接住並顯示訊息），非同步的失敗至少印出錯誤、跳一次提示，不要無聲無息。
+      var p = update(ref(db, "rooms/" + activeRoomId), patch);
+      if(p && typeof p.catch === "function"){
+        p.catch(function(err){
+          console.error("同步小題到房間失敗", err);
+          alert("同步失敗，剛剛的變更可能沒有真的存到雲端，請檢查網路連線後再試一次。\nSync failed — the change may not have been saved. Please check your connection and try again.\n(" + (err && err.message ? err.message : err) + ")");
+        });
+      }
     } else {
       var proj = getActiveProject();
       if(proj){ proj.sections = newSections; if(newCurrentQId !== undefined) proj.currentQId = newCurrentQId; saveFS(); renderSidebar(); renderStage(); }
@@ -3214,7 +3257,9 @@
     var rId = String(Math.floor(1000 + Math.random() * 9000));
     activeRoomId = rId; var currentProj = fsData.projects[activeProjectId];
     await set(ref(db, "rooms/" + rId), {
-      project: currentProj, sharedProgress: {}, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs, presence: { teacher: { online:true, name:"老師" } }
+      project: currentProj, sharedProgress: {}, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs,
+      phoneticMode: (currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off",
+      presence: { teacher: { online:true, name:"老師" } }
     });
     attachPresence(rId, "teacher", "老師"); startRoom(rId, "teacher");
     history.replaceState(null, "", "?room=" + rId); renderTopbar();
@@ -3246,6 +3291,10 @@
       if(roomData.theme) applyTheme(roomData.theme.bgMode || "light", roomData.theme.accent || "seal", false);
       if(roomData.classMode){ currentClassMode = roomData.classMode; }
       if(roomData.lockNoticeLangs && roomData.lockNoticeLangs.length) currentLockNoticeLangs = roomData.lockNoticeLangs;
+      // 2026-09-29 修正：拼音／注音加註模式以前只存在各自瀏覽器的 localStorage，老師選了學生端完全
+      // 看不到，跟文字內容本身是不是同步了無關——這裡把它也變成跟 lockNoticeLangs 一樣的房間設定，
+      // 老師改了就同步套用到所有人的畫面（不寫回各自的 localStorage，只影響這次上課的顯示）。
+      if(roomData.phoneticMode !== undefined) applyRoomPhoneticMode(roomData.phoneticMode);
 
       if(roomData.broadcastScore && roomData.broadcastTime){
         if(window.__lastBroadcastTime !== roomData.broadcastTime){
@@ -3927,8 +3976,24 @@
     document.querySelectorAll(".btn-phonetic-mode").forEach(function(b){
       b.classList.toggle("active", b.dataset.phonetic === mode);
     });
+    // 老師在房間裡改注音／拼音設定時，同步廣播給學生，這樣學生看到的文字才會跟老師畫面一致
+    // （見 startRoom 的 roomData.phoneticMode 同步那段）。
+    if(inRoom() && roomRole === "teacher"){
+      update(ref(db, "rooms/" + activeRoomId), { phoneticMode: mode });
+    }
     // 設定改變時，如果目前畫面上剛好是小白板（有用到文字工具的地方），要立刻重繪套用新設定
     if(typeof renderStage === "function") renderStage();
+  }
+
+  // 從房間資料同步套用老師選的注音／拼音模式（不寫回自己的 localStorage——那是個人在房間外
+  // 自己練習時用的預設值，跟這堂課老師的選擇是兩回事）。
+  function applyRoomPhoneticMode(mode){
+    if(mode !== "pinyin" && mode !== "zhuyin") mode = "off";
+    if(mode === currentPhoneticMode) return;
+    currentPhoneticMode = mode;
+    document.querySelectorAll(".btn-phonetic-mode").forEach(function(b){
+      b.classList.toggle("active", b.dataset.phonetic === mode);
+    });
   }
 
   // 拼音（含調號，e.g. "jin1"）轉注音符號：依教育部標準的聲母／韻母對照表換算，
@@ -4283,8 +4348,18 @@
     // 配分比重改到左側欄最下方的「配分總覽」大表統一編輯，這裡維持原本存的比重（新題目預設 1）。
     qObj.weight = (existing && existing.weight && existing.weight > 0) ? existing.weight : 1;
     sec.questions[qId] = qObj;
-    writeSections(secs, qId);
-    closeModalDialog(editorDialog);
+    // 2026-09-29：writeSections（尤其上課中透過 Firebase update() 那條路徑）如果丟出例外
+    // （例如資料格式被雲端服務拒絕），以前完全沒有 try/catch，這一整段就會中斷在這裡，
+    // 底下的 closeModalDialog() 永遠不會被呼叫到——使用者看到的就是「按了儲存完全沒反應」，
+    // 對話框卡住、也沒有任何提示。改成包一層 try/catch，失敗時至少跳出明確的錯誤訊息，
+    // 並且保留對話框、保留已經輸入的內容，讓老師知道要重試一次，而不是誤以為是自己按錯。
+    try{
+      writeSections(secs, qId);
+      closeModalDialog(editorDialog);
+    }catch(err){
+      console.error("儲存題目失敗", err);
+      alert("儲存失敗，請稍後再試一次。如果剛剛上傳的底圖檔案很大（例如手機直接拍的照片），建議先用較小的圖片再試一次。\nSave failed — please try again. If the background image you just uploaded is very large (e.g. a full-size phone photo), try a smaller image.\n(" + (err && err.message ? err.message : err) + ")");
+    }
   };
 
   /* ================== Excel 題庫匯入匯出 ================== */
@@ -5655,8 +5730,17 @@
 
     var cWrap = document.createElement("div");
     cWrap.className = "canvas-stage-wrap";
+    // 圖片還沒載入完成、BOARD_ASPECT_RATIO 還沒校正成底圖真正比例之前，先蓋住畫布不讓人下筆
+    // （見下面 .bg-loading-guard 的說明與 CSS 註解）；沒有底圖的話不需要等待，一開始就是 null。
+    var bgLoadingGuard = null;
     if(currentBg){
       var img = document.createElement("img"); img.className = "bg-img-layer"; img.src = currentBg;
+      bgLoadingGuard = document.createElement("div");
+      bgLoadingGuard.className = "bg-loading-guard";
+      var clearBgLoadingGuard = function(){
+        if(bgLoadingGuard && bgLoadingGuard.parentNode) bgLoadingGuard.parentNode.removeChild(bgLoadingGuard);
+        bgLoadingGuard = null;
+      };
       img.onload = function(){
         // 底圖載入完成後才知道它真正的長寬比例（naturalWidth/naturalHeight 是圖片檔案本身的資料，
         // 每個人載入同一張圖算出來的數字保證完全相同，不是螢幕量出來的，所以不會破壞跨裝置對齊）。
@@ -5666,8 +5750,11 @@
           BOARD_ASPECT_RATIO = Math.max(0.4, Math.min(3, ratio));
           fitCanvasToViewport();
         }
+        clearBgLoadingGuard();
       };
+      img.onerror = clearBgLoadingGuard; // 圖片壞掉／載入失敗也要解除鎖定，不然會卡死永遠不能畫
       cWrap.appendChild(img);
+      cWrap.appendChild(bgLoadingGuard);
     }
     // 格線浮層：pointer-events:none，只是畫面正中央一塊參考用的方框，不會擋住下面 canvas 的書寫範圍
     var gridOverlay = document.createElement("div");
@@ -6250,6 +6337,8 @@
     }
     personalPaintCanvas.onpointerdown = function(e){
       if(!canInteract()) return;
+      if(e.pointerType === "pen") stylusEverUsed = true;
+      if(isPalmTouch(e)) return; // 已經用過觸控筆：手指誤觸這個練習格不當作下筆
       e.preventDefault();
       try{ personalPaintCanvas.setPointerCapture(e.pointerId); }catch(err){}
       personalIsDrawing = true;
@@ -6288,6 +6377,7 @@
     }
     personalPaintCanvas.onpointerup = endPersonalDrawing;
     personalPaintCanvas.onpointercancel = endPersonalDrawing;
+    personalPaintCanvas.oncontextmenu = function(e){ e.preventDefault(); };
 
     if(personalTraceBtn){
       personalTraceBtn.onclick = function(){
@@ -6523,12 +6613,15 @@
     // 都不會被系統手勢（例如捲動／縮放）打斷這一筆的繪製。
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
+      if(e.pointerType === "pen") stylusEverUsed = true;
       e.preventDefault(); // 避免瀏覽器預設行為把新建立的文字輸入框焦點搶走，觸控時也能避免出現選取/放大鏡等系統手勢
       try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
 
       var p = getPos(e);
 
-      if(boardState.tool === "pan" || autoPanEligible(p)){
+      // 已經用過觸控筆的裝置：手指在畫布上只能用來平移畫面，不能畫記／擦除／打字，
+      // 避免寫字時手掌或另一手不小心碰到螢幕誤畫出線條（見上面 isPalmTouch 的說明）。
+      if(boardState.tool === "pan" || autoPanEligible(p) || isPalmTouch(e)){
         // 移動畫面：拖曳位移直接是螢幕像素（見 applyCanvasZoomPan 的說明），跟目前縮放比例無關，
         // 拖起來的手感才會跟滑鼠移動的距離一致，不會縮放愈大拖愈遲鈍或愈敏感。
         isPanning = true;
@@ -6648,6 +6741,9 @@
     }
     canvas.onpointerup = endDrawing;
     canvas.onpointercancel = endDrawing;
+    // 觸控筆長按容易被瀏覽器判斷成「長按選單」（複製／貼上、檢查元素等），直接擋掉，
+    // 跟上面 .canvas-stage-wrap 的 user-select:none 一起徹底避免反藍/選單蓋住畫筆操作。
+    canvas.oncontextmenu = function(e){ e.preventDefault(); };
 
     var fontSelect = vToolbar.querySelector(".board-font-select");
     if(fontSelect){
@@ -7098,6 +7194,8 @@
 
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
+      if(e.pointerType === "pen") stylusEverUsed = true;
+      if(isPalmTouch(e)) return; // 已經用過觸控筆：手指誤觸這個練習格不當作下筆
       e.preventDefault();
       try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
       isDrawing = true;
@@ -7130,6 +7228,7 @@
     }
     canvas.onpointerup = endHanziDrawing;
     canvas.onpointercancel = endHanziDrawing;
+    canvas.oncontextmenu = function(e){ e.preventDefault(); };
 
     clearBtn.onclick = function(){
       strokes = [];
