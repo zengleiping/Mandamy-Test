@@ -950,7 +950,13 @@
     cursor:pointer; transition:background .12s ease, transform .12s ease;
   }
   .chat-emoji-btn:hover{ background:var(--surface-2); transform:scale(1.12); }
-  .chat-compose-row{ display:flex; gap:6px; }
+  .chat-compose-row{ display:flex; gap:6px; align-items:center; }
+  .chat-image-btn{
+    flex-shrink:0; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--grid-line);
+    background:var(--surface-2); color:var(--ink); font-size:15px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .chat-image-btn:hover{ border-color:var(--seal); color:var(--seal); }
   .chat-compose-input{
     flex:1; min-width:0; padding:8px 11px; border-radius:999px; border:1.5px solid var(--grid-line);
     font-size:13px; background:var(--surface-2); color:var(--ink);
@@ -960,6 +966,14 @@
     font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;
   }
   .chat-compose-send:disabled{ opacity:.4; cursor:default; }
+  /* 對話裡傳送的照片：訊息泡泡裡放一張縮圖，點下去放大看（見 openChatImageLightbox） */
+  .chat-msg-image-wrap{ background:transparent !important; padding:0 !important; line-height:0; }
+  .chat-msg-image{ display:block; max-width:170px; max-height:170px; border-radius:12px; cursor:zoom-in; object-fit:cover; }
+  .chat-image-lightbox{
+    position:fixed; inset:0; z-index:9800; background:rgba(20,20,20,0.82);
+    display:flex; align-items:center; justify-content:center; cursor:zoom-out; padding:24px;
+  }
+  .chat-image-lightbox img{ max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
 
   /* ================== 生字練習題型 (Character Practice question type) ================== */
   /* 這一題不是共用畫布，每位學生有自己的練習畫布；版面跟小白板一樣是「側邊面板＋舞台畫布」，
@@ -3264,6 +3278,8 @@
           ${CHAT_EMOJIS.map(function(e){ return '<button type="button" class="chat-emoji-btn" data-emoji="' + e + '">' + e + '</button>'; }).join("")}
         </div>
         <div class="chat-compose-row">
+          <button type="button" class="chat-image-btn" id="btn-chat-image" title="傳送照片 Send a photo">📷</button>
+          <input type="file" id="chat-image-file" accept="image/*" style="display:none;">
           <input type="text" class="chat-compose-input" id="chat-compose-input" maxlength="300" placeholder="打字留言…Type a message…">
           <button type="button" class="chat-compose-send" id="btn-chat-send" title="送出 Send">➤</button>
         </div>
@@ -3272,6 +3288,12 @@
     document.body.appendChild(chatPanelEl);
     chatMessagesEl = chatPanelEl.querySelector("#chat-panel-messages");
     chatInputEl = chatPanelEl.querySelector("#chat-compose-input");
+    // 用事件代理（不是每張圖片各自綁一次），因為 renderChatMessages() 每次都整個 innerHTML 重建，
+    // 個別綁的話每次都要重綁；代理綁在外層容器上就不用管裡面的訊息列表重畫幾次。
+    chatMessagesEl.addEventListener("click", function(e){
+      var img = e.target.closest(".chat-msg-image");
+      if(img) openChatImageLightbox(img.src);
+    });
     chatPanelEl.querySelector("#btn-chat-collapse").onclick = function(){ setChatOpen(false); };
     chatPanelEl.querySelectorAll(".chat-emoji-btn").forEach(function(btn){
       btn.onclick = function(){ chatInputEl.value += btn.dataset.emoji; chatInputEl.focus(); };
@@ -3288,6 +3310,49 @@
     }
     chatPanelEl.querySelector("#btn-chat-send").onclick = trySend;
     chatInputEl.onkeydown = function(e){ if(e.key === "Enter"){ e.preventDefault(); trySend(); } };
+
+    // 傳照片：跟小白板「上傳底圖」同一套做法（FileReader 讀檔→畫到暫時 canvas 上縮小→輸出成
+    // JPEG base64），直接把圖片內容存進訊息本身，不用另外架 Firebase Storage。聊天用的縮圖不需要
+    // 底圖那麼高解析度，寬度／畫質都調低一點，一堂課下來傳很多張照片也不會佔用太多資料庫空間。
+    var chatImageFileInput = chatPanelEl.querySelector("#chat-image-file");
+    chatPanelEl.querySelector("#btn-chat-image").onclick = function(){ chatImageFileInput.click(); };
+    chatImageFileInput.onchange = function(e){
+      var file = e.target.files[0];
+      chatImageFileInput.value = ""; // 清掉，不然同一個檔案選兩次 onchange 不會再觸發
+      if(!file || file.type.indexOf("image/") !== 0 || !inRoom()) return;
+      var reader = new FileReader();
+      reader.onload = function(evt){
+        var img = new Image();
+        img.onload = function(){
+          var c = document.createElement("canvas");
+          var scale = Math.min(1, 800 / img.width);
+          c.width = Math.round(img.width * scale);
+          c.height = Math.round(img.height * scale);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          var b64 = c.toDataURL("image/jpeg", 0.65);
+          push(ref(db, "roomReactions/" + activeRoomId), {
+            kind: "image", imageData: b64, from: myId,
+            fromName: myName || (isStudent ? "學生" : "老師"), fromRole: roomRole, ts: Date.now()
+          });
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    };
+  }
+
+  // 點聊天裡的照片縮圖，蓋一層全螢幕的放大檢視，點哪裡都能關掉
+  var chatImageLightboxEl = null;
+  function openChatImageLightbox(src){
+    if(!chatImageLightboxEl){
+      chatImageLightboxEl = document.createElement("div");
+      chatImageLightboxEl.className = "chat-image-lightbox";
+      chatImageLightboxEl.innerHTML = '<img id="chat-lightbox-img" src="">';
+      chatImageLightboxEl.onclick = function(){ chatImageLightboxEl.style.display = "none"; };
+      document.body.appendChild(chatImageLightboxEl);
+    }
+    chatImageLightboxEl.querySelector("#chat-lightbox-img").src = src;
+    chatImageLightboxEl.style.display = "flex";
   }
 
   function setChatOpen(open){
@@ -3334,9 +3399,11 @@
       }
       var mine = m.from === myId;
       var label = m.fromRole === "teacher" ? "老師" : (m.fromName || "學生");
+      var bubbleHtml = (m.kind === "image" && m.imageData)
+        ? '<div class="chat-msg-bubble chat-msg-image-wrap"><img class="chat-msg-image" src="' + m.imageData + '"></div>'
+        : '<div class="chat-msg-bubble">' + escapeHtml(m.text || "") + '</div>';
       return '<div class="chat-msg' + (mine ? ' me' : '') + '">' +
-        '<div class="chat-msg-meta">' + escapeHtml(label) + '</div>' +
-        '<div class="chat-msg-bubble">' + escapeHtml(m.text || "") + '</div></div>';
+        '<div class="chat-msg-meta">' + escapeHtml(label) + '</div>' + bubbleHtml + '</div>';
     }).join("");
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   }
@@ -3399,6 +3466,17 @@
   // 用來畫出漸隱發光的移動軌跡，讓游標看起來像揮動中的魔法棒。
   var cursorTrails = {};
   var CURSOR_TRAIL_LENGTH = 6;
+  // 2026-09-29 修正「游標對不準」：以前百分比座標是相對於整個 board-area（含工具列寬度、
+  // 置中留白）換算，但畫布本體 cWrap（.canvas-stage-wrap）其實是固定 BOARD_ASPECT_RATIO、
+  // 置中撐到最大，兩者的寬高比例會隨每個人視窗大小、有沒有開全螢幕而不一樣——所以同一個點在
+  // 老師端和學生端換算出來的百分比不同，才會看起來對不準（跟以前寫字板筆跡對不準是同一種問題）。
+  // 修法：一律以 cWrap 為準（跟 getPos() 用同一顆元素、同一套算法），不管有沒有縮放/平移
+  // （getBoundingClientRect 本身已經把 transform 算進去，除出來的比例仍然正確），也不用要求
+  // 老師或學生一定要開全螢幕才會準。找不到 cWrap（連連看/選擇題/重組題沒有這個元素）時才退回
+  // 用 board-area 本身當參考。
+  function getCursorRefEl(boardArea){
+    return (boardArea && boardArea.querySelector(".canvas-stage-wrap")) || boardArea;
+  }
   function renderMultiCursors(cursorsData){
     var box = document.getElementById("multi-cursor-box");
     if(!box) return;
@@ -3406,6 +3484,15 @@
     if(!cursorsData || !cursorOn) return;
     var curInfo = getCurrentQInfo();
     var curQId = curInfo ? curInfo.question.id : null;
+    var boardArea = box.parentElement;
+    var refEl = getCursorRefEl(boardArea);
+    var boxRect = box.getBoundingClientRect();
+    var refRect = refEl ? refEl.getBoundingClientRect() : boxRect;
+    var refLeft = refRect.left - boxRect.left;
+    var refTop = refRect.top - boxRect.top;
+    var refW = refRect.width || 1;
+    var refH = refRect.height || 1;
+    function toPx(pct, base, offset){ return (offset + pct / 100 * base) + "px"; }
     var activePeerIds = {};
     Object.keys(cursorsData).forEach(function(pid){
       if(pid === myId) return;
@@ -3426,7 +3513,7 @@
         var ratio = (i + 1) / trail.length; // 越接近現在的點，光點越大、越不透明
         var dot = document.createElement("div");
         dot.className = "peer-cursor-trail-dot";
-        dot.style.left = pt.x + "%"; dot.style.top = pt.y + "%";
+        dot.style.left = toPx(pt.x, refW, refLeft); dot.style.top = toPx(pt.y, refH, refTop);
         var size = 4 + ratio * 7;
         dot.style.width = size + "px"; dot.style.height = size + "px";
         dot.style.background = color;
@@ -3436,7 +3523,7 @@
       });
 
       var el = document.createElement("div"); el.className = "peer-cursor";
-      el.style.left = c.x + "%"; el.style.top = c.y + "%";
+      el.style.left = toPx(c.x, refW, refLeft); el.style.top = toPx(c.y, refH, refTop);
       el.innerHTML = '<span class="peer-cursor-dot" style="background:' + color + ';"></span>' +
         '<span class="peer-cursor-label" style="background:' + color + ';">' + escapeHtml(c.name || "訪客") + '</span>';
       box.appendChild(el);
@@ -3453,7 +3540,10 @@
     lastCursorSendAt = now;
     var boardArea = document.getElementById("board-area");
     if(!boardArea) return;
-    var rect = boardArea.getBoundingClientRect();
+    var refEl = getCursorRefEl(boardArea);
+    if(!refEl) return;
+    var rect = refEl.getBoundingClientRect();
+    if(!rect.width || !rect.height) return;
     if(e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
     var qInfo = getCurrentQInfo(); if(!qInfo) return;
     var x = (e.clientX - rect.left) / rect.width * 100;
