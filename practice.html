@@ -613,7 +613,15 @@
     align-items:center; justify-content:center; gap:2px; color:var(--ink); transition:all .12s ease; flex-shrink:0;
   }
   :root:not([data-theme="light"]) .tool-btn-v{ border-color:rgba(255,255,255,0.14); }
-  .tool-btn-v:hover{border-color:var(--seal); background:var(--surface-2);}
+  /* 2026-09-29 修正：iPad（觸控）沒有滑鼠，點一下按鈕之後瀏覽器常常會把 :hover 這個「滑鼠正停在上面」
+     的樣式卡住不放（因為觸控裝置沒有真正的「移開滑鼠」事件），結果切換工具時，剛剛點過的那顆按鈕會
+     卡著一層淡淡的反黃底色（--surface-2）跟橘色框，跟真正選中的工具（.active，橘色底 --seal-soft）
+     顏色很像又不太一樣，看起來像「切一半」的中間狀態，其實只是視覺殘留，不代表任何功能。用
+     @media(hover:hover) 只在「真的有滑鼠/觸控板可以懸停」的裝置上才套用這個 hover 樣式，觸控裝置完全
+     不會出現，只看得到目前真正選中的工具（橘色）。 */
+  @media (hover: hover){
+    .tool-btn-v:hover{border-color:var(--seal); background:var(--surface-2);}
+  }
   .tool-btn-v.active{border-color:var(--seal); background:var(--seal-soft); color:var(--seal); box-shadow:0 0 0 2px var(--seal-ring) inset;}
   .tool-btn-v-icon{ font-size:16.5px; line-height:1; }
   .tool-btn-v-icon-img{ width:19px; height:19px; object-fit:contain; display:block; }
@@ -5973,6 +5981,14 @@
     // 跟 wheel 版本共用同一個 setCanvasZoom()。
     var activeTouchPointers = {}; // pointerId -> {x, y}（client 座標）
     var isPinching = false, pinchStartDist = 0, pinchStartZoom = 1;
+    // 2026-09-29 效能：懸停（還沒按下）時用來決定游標要不要顯示「可拖曳」的 autoPanEligible() 裡
+    // 呼叫的 nearExistingInk() 是要把目前這一題「全部筆跡的全部點」都掃過一次的迴圈，成本一樣會隨著
+    // 累積的筆跡越畫越多而越算越久。放大鏡開著時這段以前是每一次 pointermove 都重算一次——有些
+    // iPad（搭配第二代 Apple Pencil）在筆尖還沒碰到螢幕、只是懸浮靠近時就會一直送出 pointermove
+    // （pointerType "pen"），頻率很高，等於放大之後只要筆懸在畫面上就一直在背景算這個迴圈，感覺
+    // 起來就是「縮放跟捲動都有點延遲、不聽使喚」。這裡跟游標廣播（見 lastCursorSendAt）一樣做節流，
+    // 只是純粹用來換游標圖示的裝飾性判斷，稍微延遲個幾十毫秒完全不影響觀感，卻能大幅降低算的次數。
+    var lastHoverCursorCheckAt = 0;
     function touchPointerIds(){ return Object.keys(activeTouchPointers); }
     function touchDist(){
       var ids = touchPointerIds();
@@ -6629,6 +6645,11 @@
             snapshotForUndo();
             strokes.splice(i, 1);
             writeProgress(q.id, { strokes: strokes });
+            // 2026-09-29 修正：畫布是點陣圖，陣列裡刪掉這一筆不會自動讓畫面上的線條消失，一定要
+            // 自己重畫一次才看得出來被擦掉了。以前這裡沒有呼叫 redrawStrokes()，本機（自己）的畫面
+            // 完全要等房間同步（Firebase 回寫）才會更新，在真實網路（不像本機測試環境幾乎零延遲）
+            // 底下就會感覺「橡皮擦按了沒反應、要等一下才擦掉」——這裡直接就地重畫，不用等同步。
+            redrawStrokes();
             return true;
           }
         }
@@ -6760,7 +6781,11 @@
         // 還沒按下、單純滑鼠移過去：放大鏡開著時要即時反應游標，讓老師「按下去之前」就看得出來
         // 現在移過去會是拖曳畫面還是照常畫圖/打字/擦除，不用真的按一次才知道。
         if(canvasZoom > 1 && boardState.tool !== "pan"){
-          canvas.style.cursor = autoPanEligible(getPos(e)) ? "grab" : toolCursor();
+          var nowHoverCheck = Date.now();
+          if(nowHoverCheck - lastHoverCursorCheckAt > 60){
+            lastHoverCursorCheckAt = nowHoverCheck;
+            canvas.style.cursor = autoPanEligible(getPos(e)) ? "grab" : toolCursor();
+          }
         }
         return;
       }
@@ -6796,26 +6821,50 @@
     function endDrawing(e){
       if(e && e.pointerType === "touch" && activeTouchPointers[e.pointerId] !== undefined){
         delete activeTouchPointers[e.pointerId];
-        if(isPinching && touchPointerIds().length < 2) isPinching = false;
+        if(isPinching && touchPointerIds().length < 2){
+          isPinching = false;
+          // 2026-09-29 修正：雙指縮放時放開其中一指，剩下那一指常常還按在螢幕上沒放開——以前這裡
+          // 完全沒接手，剩下那一指的移動事件就這樣被晾在原地，什麼都不會發生（不拖曳也不畫記），
+          // 要整根手指放開、重新按一次才會恢復正常，這正是「縮放跟捲動都有點延遲、不聽使喚」的
+          // 一種情況。改成直接讓剩下那一指接手變成單指拖曳畫面（放大鏡開著時才需要拖曳），
+          // 才符合老師要的「兩指縮放、一指拖曳」，不用整個放開再重新來一次。
+          var remainTouchId = touchPointerIds()[0];
+          if(remainTouchId !== undefined && canvasZoom > 1){
+            var remainPt = activeTouchPointers[remainTouchId];
+            try{ canvas.setPointerCapture(Number(remainTouchId)); }catch(errCap){}
+            isPanning = true;
+            panStartClientX = remainPt.x; panStartClientY = remainPt.y;
+            panStartX = canvasPanX; panStartY = canvasPanY;
+            canvas.style.cursor = "grabbing";
+            return; // 這一指本來就只是縮放用的第二指，不是真的在畫記，不要往下跑到畫筆收尾的邏輯
+          }
+        }
       }
       if(isPanning){ isPanning = false; canvas.style.cursor = "grab"; return; }
       if(!isDrawing) return;
       isDrawing = false;
       if(currentPath.length >= 2){
         snapshotForUndo();
-        strokes.push({
+        var newStroke = {
           id: uid("st"),
           points: currentPath,
           color: boardState.color,
           size: boardState.size,
           opacity: boardState.opacity,
           isEraser: boardState.tool === "pixel-eraser"
-        });
+        };
+        strokes.push(newStroke);
         writeProgress(q.id, { strokes: strokes });
-        // 畫的時候是一段一段（每次 pointermove 兩點）分開 stroke() 疊上去，濃淡調淡時交疊處會
-        // 因為重複疊加 alpha 而看起來比中段深一點點；收筆後整條重畫一次（redrawStrokes 對同一筆
-        // 是一次 beginPath+多個 lineTo+一次 stroke()，不會有這個疊加問題），確保定案的畫面是乾淨的。
-        redrawStrokes();
+        // 2026-09-29 效能：redrawStrokes() 是把「目前這一題全部的筆跡」整個清掉重畫一次，成本
+        // 會隨著這一題累積的筆跡數量一起往上疊加——上課越久、這頁寫得越多，每寫完一筆到能再畫
+        // 下一筆之間的延遲就越明顯，在 iPad 這種效能相對弱的裝置上特別容易感覺到「寫字不連貫」。
+        // 原本每一筆收筆後都整個重畫，是為了修正「筆刷濃淡調淡（opacity<1）時，即時畫的時候
+        // 一段一段分開疊上去，交疊處會因為 alpha 重複疊加而比較深」的視覺瑕疵——但這個瑕疵只有
+        // opacity<1 才看得出來：全不透明的筆跡（預設就是）跟橡皮擦（destination-out，疊加幾次
+        // 視覺上都一樣）重疊完全看不出差異，這兩種情況直接跳過整塊重畫，畫完一筆的成本就變成
+        // 固定的（只跟這一筆本身的長度有關），不會隨著這一題累積的筆跡越畫越多而越畫越頓。
+        var needsFullRedraw = !newStroke.isEraser && newStroke.opacity != null && newStroke.opacity < 1;
+        if(needsFullRedraw) redrawStrokes();
       }
       if(recordingCurrentStrokePoints && recordingCurrentStrokePoints.length >= 2){
         recordingBuffer.strokes.push({ points: recordingCurrentStrokePoints, color: boardState.color, size: boardState.size });
