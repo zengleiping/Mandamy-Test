@@ -412,7 +412,11 @@
     background:var(--surface); border:1.5px solid var(--grid-line);
     border-radius:99px; padding:4px 8px;
     box-shadow:0 6px 20px rgba(0,0,0,0.12); z-index:9999;
-    backdrop-filter:blur(8px);
+    /* 2026-09-29：background 用的是完全不透明的 --surface（#FFFFFF），backdrop-filter 蓋在
+       完全不透明的底色上根本不會有任何可見效果，卻仍然要求瀏覽器每一次底下畫面變動（例如在
+       白板上寫字時，canvas 幾乎每一影格都在重繪）都重新計算一次模糊合成——這顆按鈕全站到處
+       都會顯示（含寫字畫面），在 iPad Safari 上這種「看不出差異但持續耗效能」的合成成本，
+       是造成觸控寫字感覺延遲的原因之一，直接拿掉沒有任何視覺代價。 */
   }
   .zoom-floating-btn{
     width:28px; height:28px; border-radius:50%;
@@ -528,7 +532,10 @@
     position:absolute; top:14px; right:14px; z-index:9002;
     width:38px; height:38px; border-radius:50%;
     border:1.5px solid rgba(28,33,30,0.16);
-    background:rgba(255,255,255,0.92); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    background:rgba(255,255,255,0.96); /* 2026-09-29：拿掉 backdrop-filter——跟上面「全螢幕工具列
+       不用毛玻璃」是同一個道理，這裡背景本來就接近不透明，模糊看不太出來，卻會讓瀏覽器持續花成本
+       合成，畫布正好又幾乎貼在旁邊、寫字時幾乎每一影格都在重繪，這是 iPad 上寫字感覺延遲的可能
+       原因之一，拿掉後改把底色不透明度從 0.92 提高到 0.96 補一點視覺份量，避免看起來太透。 */
     box-shadow:var(--shadow); cursor:pointer; font-size:16px; font-weight:800; color:var(--ink);
   }
   .canvas-fs-exit-btn:hover{ border-color:var(--seal); color:var(--seal); }
@@ -741,7 +748,10 @@
   .canvas-zoom-ctrl{
     position:absolute; left:14px; bottom:14px; z-index:40;
     display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:999px;
-    background:rgba(255,255,255,0.92); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    background:rgba(255,255,255,0.96); /* 2026-09-29：拿掉 backdrop-filter——跟上面「全螢幕工具列
+       不用毛玻璃」是同一個道理，這裡背景本來就接近不透明，模糊看不太出來，卻會讓瀏覽器持續花成本
+       合成，畫布正好又幾乎貼在旁邊、寫字時幾乎每一影格都在重繪，這是 iPad 上寫字感覺延遲的可能
+       原因之一，拿掉後改把底色不透明度從 0.92 提高到 0.96 補一點視覺份量，避免看起來太透。 */
     border:1.5px solid rgba(28,33,30,0.14); box-shadow:var(--shadow);
   }
   .canvas-zoom-ctrl button{
@@ -7039,6 +7049,15 @@
         if(confirm("確定要清空畫布上的所有內容嗎？（可以按「上一步」復原）")){
           snapshotForUndo();
           strokes = []; texts = [];
+          // 2026-09-29 修正：清空只是把陣列設空、寫回雲端，並沒有真的把畫布這張點陣圖擦乾淨——
+          // 以前是靠 refreshFromProgress() 收到雲端回音時「整個重畫」順便清空畫面，但那個函式現在
+          // 已經改成「內容看起來沒變就跳過重畫」（見上面 strokesRev／同步節流的說明）：清空之後本機
+          // 的 strokes 早就是空陣列了，回音一比對「筆畫數量同樣是 0」就會判定成「沒變化」而跳過
+          // 重畫，畫布上原本畫的東西反而卡在畫面上洗不掉——但因為雲端資料確實變成空的，其他裝置收到
+          // 回音時比對「筆畫數量不同」，才會正常清空。結果就是按清空的人自己畫面沒反應，其他人卻被
+          // 清空了。修法跟橡皮擦（checkStrokeHit）、上一步/下一步（applyUndoRedoSnapshot）一樣：
+          // 自己這邊就地重畫，不要依賴、也不要等雲端回音才更新畫面。
+          redrawStrokes(); renderTexts();
           localStrokesRev = Date.now();
           writeProgress(q.id, { strokes: strokes, texts: texts, strokesRev: localStrokesRev });
         }
