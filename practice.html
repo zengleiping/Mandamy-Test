@@ -2,7 +2,10 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 2026-09-29：maximum-scale=1, user-scalable=no 讓 iPad 等觸控裝置的雙指縮放交給畫布自己的
+     pinch-to-zoom（見 renderDrawBoard 裡的 activeTouchPointers／isPinching）處理，不會被系統
+     整頁縮放搶走手勢、跟畫記/平移互相打架，畫布本身也已經用 touch-action:none 各自擋掉。 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>曼米中文 Mandamy</title>
 <!-- 替換瀏覽器分頁標籤的灰色地球圖示 (Favicon) -->
 <link rel="icon" id="dynamic-favicon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='52' r='38' fill='%2398D7FF' stroke='%231C211E' stroke-width='4'/%3E%3Cpath d='M 14 44 C 20 22, 38 16, 50 16 C 62 16, 80 22, 86 44 C 76 52, 66 38, 50 44 C 34 38, 24 52, 14 44 Z' fill='%2395D165' stroke='%231C211E' stroke-width='3.5'/%3E%3Cpath d='M 22 75 C 36 90, 64 90, 78 75 C 66 78, 34 78, 22 75 Z' fill='%2395D165' stroke='%231C211E' stroke-width='3.5'/%3E%3Cellipse cx='37' cy='36' rx='5.5' ry='3.5' fill='%23FF859A'/%3E%3Cellipse cx='63' cy='36' rx='5.5' ry='3.5' fill='%23FF859A'/%3E%3Crect x='36' y='30' width='2.5' height='5' rx='1.2' fill='%231C211E'/%3E%3Crect x='61.5' y='30' width='2.5' height='5' rx='1.2' fill='%231C211E'/%3E%3Cellipse cx='50' cy='32' rx='4.5' ry='3.5' fill='%231C211E'/%3E%3Cpath d='M 50 67 C 36 55, 31 43, 39 37 C 45 32, 50 37, 50 40 C 50 37, 55 32, 61 37 C 69 43, 64 55, 50 67 Z' fill='%23FF7A8E' stroke='%231C211E' stroke-width='3.5'/%3E%3Cpath d='M 14 56 C 20 48, 38 52, 38 58 C 36 64, 20 64, 14 56 Z' fill='%2398D7FF' stroke='%231C211E' stroke-width='3.5'/%3E%3Cpath d='M 86 56 C 80 48, 62 52, 62 58 C 64 64, 80 64, 86 56 Z' fill='%2398D7FF' stroke='%231C211E' stroke-width='3.5'/%3E%3Cellipse cx='78' cy='18' rx='11' ry='9' fill='%23FFFFFF' stroke='%231C211E' stroke-width='3'/%3E%3Cpath d='M 71 24 L 67 29 L 75 26 Z' fill='%23FFFFFF' stroke='%231C211E' stroke-width='2'/%3E%3C/svg%3E">
@@ -60,6 +63,13 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
+  /* 2026-09-29：整個網頁預設關掉原生文字選取／長按選單（複製、貼上、查詢…），這是一個「像
+     App 一樣操作」的畫圖／上課工具，不是文章閱讀頁面，不需要整頁可以選取文字——尤其觸控筆／
+     手指在畫布以外的地方（工具列按鈕、側欄題目列表…）長按時，這個原生手勢常常搶在畫記/點擊
+     之前跳出來，寫字寫到一半整個中斷。只有實際要打字輸入的欄位（input／textarea／
+     contenteditable）另外開回正常的文字選取，不影響老師打題目、備註等輸入體驗。 */
+  html,body{-webkit-touch-callout:none; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;}
+  input, textarea, [contenteditable="true"]{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default;}
   body{background:var(--paper);color:var(--ink);transition:background .25s ease, color .25s ease;}
   .app{
     background:var(--paper); color:var(--ink);
@@ -3226,7 +3236,11 @@
         c2.appendChild(toggleOpen);
         var toggleCursor = document.createElement("label"); toggleCursor.className = "toggle" + (cursorOn ? " on" : "");
         toggleCursor.innerHTML = '<span class="toggle-track"></span><span>' + (cursorOn ? "指標分享 Cursor On" : "指標關閉 Cursor Off") + '</span>';
-        toggleCursor.onclick = function(){ cursorOn = !cursorOn; renderTopbar(); };
+        toggleCursor.onclick = function(){
+          cursorOn = !cursorOn;
+          if(!cursorOn) clearMyRoomCursor(); // 關掉指標分享時，順便把自己之前留在房間裡的游標位置清掉，不留舊資料
+          renderTopbar();
+        };
         c2.appendChild(toggleCursor);
       }
       topbarActions.appendChild(c2);
@@ -3620,20 +3634,47 @@
     Object.keys(cursorTrails).forEach(function(pid){ if(!activePeerIds[pid]) delete cursorTrails[pid]; });
   }
 
+  // 2026-09-29：修正「游標指的位置跟對方實際點的位置對不起來」——真正原因是全螢幕模式下
+  // （學生端預設就是全螢幕），工具列（.draw-toolbar-vertical）是用 position:fixed/absolute
+  // 浮在畫布正上方（見 CSS 的 .board-area.canvas-fs-active .draw-toolbar-vertical），跟
+  // .canvas-stage-wrap 的螢幕範圍是重疊的。以前只用「滑鼠在不在 cWrap 的矩形範圍內」判斷要不要
+  // 送出百分比座標，滑鼠移到浮在畫布上的工具列按鈕時，座標還是「在 cWrap 範圍內」，於是把
+  // 「工具列按鈕在 cWrap 裡的相對位置」當成畫布內容座標送出去——對方（不一定也在全螢幕、工具列
+  // 沒有浮在畫布上）收到後套用同一套換算，位置自然對不起來、甚至剛好落在對方自己工具列按鈕
+  // 附近，看起來就像是「游標想點的是某個工具」。真正該判斷的不是幾何矩形，而是滑鼠當下實際
+  // 「點在哪個元素上」：只要落在工具列／色盤彈窗／全螢幕退出鈕這些浮動 UI 上，就不算是畫布內容
+  // 座標，不送出、並清掉舊的游標，避免對方看到一個過時又容易誤導的位置。
+  function isOverBoardChrome(target){
+    return !!(target && target.closest && target.closest(".draw-toolbar-vertical, .color-popover, .canvas-zoom-ctrl, .canvas-fs-exit-btn, .hanzi-side-panel"));
+  }
+  var wasCursorOnBoard = false;
+  function clearMyRoomCursor(){
+    if(!wasCursorOnBoard) return;
+    wasCursorOnBoard = false;
+    if(inRoom()) remove(ref(db, "roomCursors/" + activeRoomId + "/" + myId));
+  }
   var lastCursorSendAt = 0;
   document.addEventListener("mousemove", function(e){
-    if(!inRoom() || !cursorOn) return;
+    if(!inRoom() || !cursorOn){ wasCursorOnBoard = false; return; }
+    var boardArea = document.getElementById("board-area");
+    if(!boardArea){ clearMyRoomCursor(); return; }
+    var refEl = getCursorRefEl(boardArea);
+    if(!refEl){ clearMyRoomCursor(); return; }
+    var rect = refEl.getBoundingClientRect();
+    if(!rect.width || !rect.height){ clearMyRoomCursor(); return; }
+    if(e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom){
+      clearMyRoomCursor();
+      return;
+    }
+    if(isOverBoardChrome(e.target)){
+      clearMyRoomCursor();
+      return;
+    }
     var now = Date.now();
     if(now - lastCursorSendAt < 80) return;
     lastCursorSendAt = now;
-    var boardArea = document.getElementById("board-area");
-    if(!boardArea) return;
-    var refEl = getCursorRefEl(boardArea);
-    if(!refEl) return;
-    var rect = refEl.getBoundingClientRect();
-    if(!rect.width || !rect.height) return;
-    if(e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
     var qInfo = getCurrentQInfo(); if(!qInfo) return;
+    wasCursorOnBoard = true;
     var x = (e.clientX - rect.left) / rect.width * 100;
     var y = (e.clientY - rect.top) / rect.height * 100;
     set(ref(db, "roomCursors/" + activeRoomId + "/" + myId), { x: x, y: y, name: myName, role: roomRole, qId: qInfo.question.id });
@@ -5925,6 +5966,20 @@
     var currentPath = [];
     var activeSelectedTextId = null;
     var isPanning = false, panStartClientX = 0, panStartClientY = 0, panStartX = 0, panStartY = 0;
+    // 2026-09-29：iPad 等純觸控裝置的雙指縮放（pinch-to-zoom）——瀏覽器的雙指縮放手勢在滑鼠/觸控板
+    // 才會轉成 wheel+ctrlKey 事件（見下面 stageArea 的 wheel 監聽），觸控螢幕的雙指縮放完全走不到
+    // 那條路，之前等於沒接上，畫布本身的「縮放」功能在觸控裝置上形同虛設、手勢也常常被系統整頁縮放
+    // 搶走、跟畫記互相干擾。這裡直接用 Pointer Events 自己追蹤兩根手指的距離變化來算縮放比例，
+    // 跟 wheel 版本共用同一個 setCanvasZoom()。
+    var activeTouchPointers = {}; // pointerId -> {x, y}（client 座標）
+    var isPinching = false, pinchStartDist = 0, pinchStartZoom = 1;
+    function touchPointerIds(){ return Object.keys(activeTouchPointers); }
+    function touchDist(){
+      var ids = touchPointerIds();
+      if(ids.length < 2) return 0;
+      var a = activeTouchPointers[ids[0]], b = activeTouchPointers[ids[1]];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
     // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
     var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next"];
@@ -6614,6 +6669,22 @@
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
       if(e.pointerType === "pen") stylusEverUsed = true;
+
+      if(e.pointerType === "touch"){
+        activeTouchPointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+        if(touchPointerIds().length >= 2){
+          // 第二根手指按下：不管原本這一指是不是已經在畫記／平移，一律轉成雙指縮放，
+          // 並取消掉可能已經開始的那一筆／那次平移，不要留下多餘、只畫一半的筆跡。
+          e.preventDefault();
+          isDrawing = false; currentPath = [];
+          isPanning = false; canvas.style.cursor = toolCursor();
+          isPinching = true;
+          pinchStartDist = touchDist() || 1;
+          pinchStartZoom = canvasZoom;
+          return;
+        }
+      }
+
       e.preventDefault(); // 避免瀏覽器預設行為把新建立的文字輸入框焦點搶走，觸控時也能避免出現選取/放大鏡等系統手勢
       try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
 
@@ -6669,6 +6740,16 @@
     };
 
     canvas.onpointermove = function(e){
+      if(e.pointerType === "touch" && activeTouchPointers[e.pointerId]){
+        activeTouchPointers[e.pointerId].x = e.clientX;
+        activeTouchPointers[e.pointerId].y = e.clientY;
+        if(isPinching){
+          e.preventDefault();
+          var dist = touchDist();
+          if(dist > 0) setCanvasZoom(pinchStartZoom * (dist / pinchStartDist));
+          return;
+        }
+      }
       if(isPanning){
         canvasPanX = panStartX + (e.clientX - panStartClientX);
         canvasPanY = panStartY + (e.clientY - panStartClientY);
@@ -6712,7 +6793,11 @@
       ctx.restore();
     };
 
-    function endDrawing(){
+    function endDrawing(e){
+      if(e && e.pointerType === "touch" && activeTouchPointers[e.pointerId] !== undefined){
+        delete activeTouchPointers[e.pointerId];
+        if(isPinching && touchPointerIds().length < 2) isPinching = false;
+      }
       if(isPanning){ isPanning = false; canvas.style.cursor = "grab"; return; }
       if(!isDrawing) return;
       isDrawing = false;
