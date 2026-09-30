@@ -815,6 +815,26 @@
     border-radius:9px; background:#F59E0B; color:#fff; font:700 11px/18px "Plus Jakarta Sans",sans-serif;
     text-align:center; pointer-events:none; z-index:9;
   }
+  /* 文字多行／對齊／清單（項目符號、編號）。white-space:pre 讓換行照原樣顯示；每一行是一個 .tl，
+     清單的符號用 CSS ::before 產生（不是真的字元），所以不會被編輯、註音或複製到，切換清單樣式也不用改文字內容。 */
+  .movable-text{ white-space:pre !important; }
+  .movable-text .text-content{ display:block; }
+  .movable-text .tl{ min-height:1em; }
+  .movable-text:has(.tl + .tl){ line-height:1.35; }           /* 多行時行距鬆一點，不然上下行會黏在一起 */
+  .movable-text:has(.tl + .tl):has(ruby){ line-height:2.15; } /* 有註音的話仍然要留空間給註音 */
+  .movable-text.list-bullet .tl:not(:empty)::before{ content:"•"; display:inline-block; min-width:1.1em; }
+  .movable-text.list-number{ counter-reset:tl; }
+  .movable-text.list-number .tl:not(:empty){ counter-increment:tl; }
+  .movable-text.list-number .tl:not(:empty)::before{ content:counter(tl) "."; display:inline-block; min-width:1.5em; margin-right:0.15em; }
+  .text-fmt-row{ display:flex; gap:4px; align-items:stretch; }
+  .text-fmt-row .fmt-sep{ width:1px; background:rgba(28,33,30,0.14); margin:3px 2px; }
+  .text-fmt-btn{
+    flex:1; height:28px; padding:0; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    font:700 12px/1 "Plus Jakarta Sans",sans-serif; color:var(--ink); background:var(--surface);
+    border:1.5px solid rgba(28,33,30,0.14); border-radius:7px;
+  }
+  .text-fmt-btn:hover{ border-color:var(--seal); color:var(--seal); }
+  .text-fmt-btn.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
   .text-size-row{ display:flex; gap:6px; align-items:stretch; }
   .text-bold-btn{
     width:34px; flex:none; font-size:15px; font-weight:900; font-family:serif; cursor:pointer;
@@ -4199,8 +4219,20 @@
   // texts 陣列裡（見 renderTexts()），是一個陣列，索引對應 Array.from(text) 的每一個字元——
   // 多音字（例如「誰」）pinyin-pro 自動判斷的讀音不一定是老師要的那個常用音，老師可以點一下
   // 那個字上面的注音自己改，改過的字就用 overrides 裡存的版本，其餘沒改過的字照樣自動產生。
+  // 2026-09-30：文字可以有多行（段落）——依換行拆成一行一個 <div class="tl">，每行各自加註音；
+  // overrides／data-ph-idx 的索引仍然是「整段文字第幾個字元」（換行也算一個字元），跟以前單行時一致。
   function buildPhoneticHtml(text, overrides){
     if(!text) return "";
+    var base = 0;
+    return String(text).split("\n").map(function(line){
+      var h = buildPhoneticLine(line, overrides, base);
+      base += Array.from(line).length + 1;
+      return '<div class="tl">' + h + '</div>';
+    }).join("");
+  }
+  function buildPhoneticLine(text, overrides, baseIdx){
+    if(!text) return "";
+    baseIdx = baseIdx || 0;
     if(currentPhoneticMode !== "pinyin" && currentPhoneticMode !== "zhuyin") return escapeHtml(text);
     if(typeof pinyinPro === "undefined" || typeof pinyinPro.pinyin !== "function") return escapeHtml(text);
     var chars = Array.from(text);
@@ -4215,10 +4247,10 @@
     for(var i = 0; i < chars.length; i++){
       var ch = chars[i];
       if(!isHanChar(ch)){ html += escapeHtml(ch); continue; }
-      var hasOverride = overrides && typeof overrides[i] === "string" && overrides[i] !== "";
-      var annotation = hasOverride ? overrides[i]
+      var hasOverride = overrides && typeof overrides[baseIdx + i] === "string" && overrides[baseIdx + i] !== "";
+      var annotation = hasOverride ? overrides[baseIdx + i]
         : (currentPhoneticMode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i]);
-      html += "<ruby data-ph-idx=\"" + i + "\">" + escapeHtml(ch) + "<rt" + (hasOverride ? " class=\"ph-overridden\"" : "") + ">" + escapeHtml(annotation || "") + "</rt></ruby>";
+      html += "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt" + (hasOverride ? " class=\"ph-overridden\"" : "") + ">" + escapeHtml(annotation || "") + "</rt></ruby>";
     }
     return html;
   }
@@ -4304,17 +4336,24 @@
   }
 
   /* 頁面內文字輸入框（避免依賴瀏覽器原生 prompt()，某些預覽環境會封鎖原生彈窗） */
-  function showInlineTextInput(container, pos, onCommit, initialValue, placeholder){
+  // multiline=true（文字工具用）：改用 textarea，Enter 確認、Shift+Enter 換行（做段落／清單用）。
+  function showInlineTextInput(container, pos, onCommit, initialValue, placeholder, multiline){
     var existing = container.querySelector(".inline-text-input");
     if(existing) existing.remove();
-    var input = document.createElement("input");
-    input.type = "text";
+    var input = document.createElement(multiline ? "textarea" : "input");
+    if(!multiline) input.type = "text"; else input.rows = 1;
     input.className = "inline-text-input";
-    input.placeholder = placeholder || "輸入文字，Enter 確認";
+    input.placeholder = placeholder || (multiline ? "輸入文字，Enter 確認、Shift+Enter 換行" : "輸入文字，Enter 確認");
     if(initialValue) input.value = initialValue;
-    input.style.cssText = "position:absolute; left:" + pos.x + "%; top:" + pos.y + "%; transform:translate(-50%,-50%); z-index:30; width:160px; max-width:70%; padding:7px 12px; border:2px solid var(--seal); border-radius:10px; background:var(--surface); color:var(--ink); font-size:16px; font-family:'LXGW WenKai TC',serif; box-shadow:0 6px 16px rgba(0,0,0,0.15); outline:none;";
+    function autosize(){
+      if(!multiline) return;
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 260) + "px";
+    }
+    input.style.cssText = "position:absolute; left:" + pos.x + "%; top:" + pos.y + "%; transform:translate(-50%,-50%); z-index:30; width:" + (multiline ? "240" : "160") + "px; max-width:70%; box-sizing:border-box; " + (multiline ? "resize:none; overflow:auto; line-height:1.4; " : "") + "padding:7px 12px; border:2px solid var(--seal); border-radius:10px; background:var(--surface); color:var(--ink); font-size:16px; font-family:'LXGW WenKai TC',serif; box-shadow:0 6px 16px rgba(0,0,0,0.15); outline:none;";
     container.appendChild(input);
-    setTimeout(function(){ input.focus(); input.select(); }, 0);
+    setTimeout(function(){ input.focus(); input.select(); autosize(); }, 0);
+    if(multiline) input.addEventListener("input", autosize);
     var done = false;
     function commit(){
       if(done) return; done = true;
@@ -4328,7 +4367,11 @@
     }
     input.addEventListener("keydown", function(ev){
       ev.stopPropagation();
-      if(ev.key === "Enter"){ ev.preventDefault(); commit(); }
+      if(ev.isComposing || ev.keyCode === 229) return; // 中文輸入法選字時按 Enter 是「選定文字」，不是「確認送出」
+      if(ev.key === "Enter"){
+        if(multiline && ev.shiftKey) return; // Shift+Enter：換行
+        ev.preventDefault(); commit();
+      }
       else if(ev.key === "Escape"){ ev.preventDefault(); cancel(); }
     });
     input.addEventListener("mousedown", function(ev){ ev.stopPropagation(); });
@@ -5584,7 +5627,7 @@
   // opacity：畫筆濃淡（1 = 全不透明／最濃，數字越小越淡）——老師點重點時可以調淡一點，
   // 學生跟著描的時候才看得出來哪些是老師畫的、哪些是自己描上去的，兩者疊在一起也不會完全分不出來。
   // 2026-09-30：筆刷粗細預設改成 2（使用者要求）；文字新增 bold（加粗）開關，預設不加粗。
-  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, eraserMode: "stroke" };
+  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke" };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
   // pinnedExtraTools：工具列精簡後，格線／底圖／移動畫面／錄示範這些非核心工具預設收合，
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
@@ -5596,6 +5639,7 @@
   // 接著維持全螢幕，不用每換一題都重新點一次。實際「搬到 body 底下蓋滿視窗」的邏輯統一寫在
   // setupCanvasFullscreen() 這個共用函式，renderDrawBoard／renderHanziBoard 各自呼叫一次。
   var canvasFullscreen = false;
+  var lastTextTap = { id: null, at: 0 }; // 文字方塊「連點兩下＝編輯」的計時（要跨重畫保留，所以放在外層）
   var slideKeyHandler = null; // 老師鍵盤翻頁／翻步驟的監聽器，換題目前先移除
   var canvasFsKeyHandler = null; // 記住上一次掛的 Escape 鍵監聽器，換題目前先移除，避免累積重複監聽
   // 學生第一次遇到小白板／生字練習畫布時，自動幫他們打開一次全螢幕（怕學生自己不會點），
@@ -5751,6 +5795,17 @@
             <div class="text-size-row">
               ${sizeComboHtml("board-font-select", boardState.fontSize, 8, 200, [12,14,16,18,20,24,28,32,36,40,48,52,60,68,72,84,96,120])}
               <button type="button" class="text-bold-btn ${boardState.bold?'active':''}" title="加粗 Bold（選取文字方塊後按，可以改已經打好的字）"><b>B</b></button>
+            </div>
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>段落 Paragraph</span></div>
+            <div class="text-fmt-row">
+              <button type="button" class="text-fmt-btn ${boardState.align==='left'?'active':''}" data-align="left" title="靠左對齊 Align left"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 3h12M2 6.5h8M2 10h12M2 13.5h8"/></svg></button>
+              <button type="button" class="text-fmt-btn ${boardState.align==='center'?'active':''}" data-align="center" title="置中對齊 Center"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 3h12M4 6.5h8M2 10h12M4 13.5h8"/></svg></button>
+              <button type="button" class="text-fmt-btn ${boardState.align==='right'?'active':''}" data-align="right" title="靠右對齊 Align right"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 3h12M6 6.5h8M2 10h12M6 13.5h8"/></svg></button>
+              <span class="fmt-sep"></span>
+              <button type="button" class="text-fmt-btn ${boardState.list==='bullet'?'active':''}" data-list="bullet" title="項目符號 Bullets（每一行一個 •）"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><circle cx="2.5" cy="4" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="2.5" cy="12" r="1.4"/><path d="M6 4h8M6 8h8M6 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+              <button type="button" class="text-fmt-btn ${boardState.list==='number'?'active':''}" data-list="number" title="編號 Numbered list（每一行 1. 2. 3.）">1.</button>
             </div>
           </div>
           <div class="popover-field-row">
@@ -6279,6 +6334,49 @@
       document.addEventListener("keydown", slideKeyHandler);
     }
 
+    // 修改已經打好的文字：用 id 重新找一次（編輯期間房間同步可能已經把 texts 換成新的一批物件，
+    // 直接改舊的物件會白改）。內容清空或沒變＝不動；文字有改就清掉舊的注音修正（字元位置對不上了）。
+    function openTextEditor(textId){
+      var cur = texts.find(function(item){ return item.id === textId; });
+      if(!cur) return;
+      showInlineTextInput(cWrap, { x: cur.x, y: cur.y }, function(newVal){
+        var v = (newVal || "").trim();
+        var target = texts.find(function(item){ return item.id === textId; });
+        if(!target || !v || v === target.text) return;
+        snapshotForUndo();
+        target.text = v;
+        delete target.phoneticOverride;
+        writeProgress(q.id, { texts: texts });
+        renderTexts();
+      }, cur.text, "修改文字，Enter 確認、Shift+Enter 換行、Esc 取消", true);
+    }
+
+    // 對齊（靠左／置中／靠右，作用在多行文字每一行之間）與清單（項目符號／編號，每一行一個）。
+    // 有選取的文字方塊就改那一個，同時記成之後新打的字的預設；再按一次已啟用的清單按鈕＝取消清單。
+    function syncTextFmtUi(a, l){
+      vToolbar.querySelectorAll(".text-fmt-btn").forEach(function(b){
+        if(b.dataset.align) b.classList.toggle("active", b.dataset.align === a);
+        if(b.dataset.list) b.classList.toggle("active", b.dataset.list === l);
+      });
+    }
+    vToolbar.querySelectorAll(".text-fmt-btn").forEach(function(b){
+      b.onclick = function(){
+        var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
+        var curAlign = selObj ? (selObj.align || "left") : boardState.align;
+        var curList = selObj ? (selObj.list || "none") : boardState.list;
+        if(b.dataset.align) curAlign = b.dataset.align;
+        else curList = (curList === b.dataset.list) ? "none" : b.dataset.list;
+        boardState.align = curAlign; boardState.list = curList;
+        if(selObj){
+          snapshotForUndo();
+          selObj.align = curAlign; selObj.list = curList;
+          writeProgress(q.id, { texts: texts });
+          renderTexts();
+        }
+        syncTextFmtUi(curAlign, curList);
+      };
+    });
+
     // 出現時機（第幾次點擊出現）：可以自己輸入也可以下拉選。有選取的文字方塊就改那一個，否則改成之後新打的字的預設值。
     var stepInputEl = vToolbar.querySelector(".text-step-input");
     if(stepInputEl){
@@ -6797,10 +6895,12 @@
         var baseSize = t.fontSize || 36;
         div.style.fontSize = Math.round(baseSize * scale) + "px";
         div.style.fontWeight = isTextBold(t) ? "700" : "400";
+        div.style.textAlign = t.align || "left";
+        if(t.list === "bullet") div.classList.add("list-bullet"); else if(t.list === "number") div.classList.add("list-number");
 
         div.innerHTML = `
           ${(!isStudent && (t.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + t.step + ' 次點擊出現">' + t.step + '</span>' : ''}
-          <span class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</span>
+          <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</div>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
 
@@ -6883,6 +6983,16 @@
             return;
           }
 
+          // 2026-09-30：快速連點兩下同一個文字方塊＝修改文字內容（用自己計時判斷，不用瀏覽器的
+          // dblclick：iPad／觸控筆不一定會觸發，而且拖曳完會重畫整層文字，dblclick 的目標元素會被換掉）。
+          var tapNow = Date.now();
+          if(lastTextTap.id === t.id && tapNow - lastTextTap.at < 400){
+            lastTextTap = { id: null, at: 0 };
+            activeSelectedTextId = t.id;
+            openTextEditor(t.id);
+            return;
+          }
+          lastTextTap = { id: t.id, at: tapNow };
           try{ div.setPointerCapture(e.pointerId); }catch(err){}
           activeSelectedTextId = t.id;
           div.classList.add("active");
@@ -6891,6 +7001,7 @@
           if(boldBtnSync) boldBtnSync.classList.toggle("active", isTextBold(t)); // 選到哪個文字方塊，B 就顯示那個的狀態
           var stepInputSync = vToolbar.querySelector(".text-step-input");
           if(stepInputSync) stepInputSync.value = String(t.step || 0);
+          syncTextFmtUi(t.align || "left", t.list || "none");
           snapshotForUndo(); // 在拖動開始「之前」存一份快照，上一步就能整個復原成拖動前的位置
 
           var startX = e.clientX, startY = e.clientY;
@@ -7039,11 +7150,13 @@
               color: boardState.color,
               fontSize: boardState.fontSize || 36,
               bold: !!boardState.bold,
-              step: boardState.step || 0
+              step: boardState.step || 0,
+              align: boardState.align || "left",
+              list: boardState.list || "none"
             });
             writeProgress(q.id, { texts: texts });
           }
-        });
+        }, undefined, undefined, true);
         return;
       }
 
