@@ -406,6 +406,7 @@
   .reorder-chip.drag-over-insert{ border-color:var(--seal); box-shadow:-9px 0 0 -6px var(--seal), 0 2px 6px rgba(0,0,0,0.03); transform:translateX(4px); }
 
   /* 浮動畫面縮放調節控制器 */
+  .zoom-floating-widget{ display:none !important; } /* 2026-10-01 右下角整頁縮放小工具先隱藏（老師很少用）；要加回來就刪掉這一行，並把下面 currentZoomRatio 改回讀 localStorage */
   .zoom-floating-widget{
     position:fixed; bottom:24px; right:28px;
     display:flex; align-items:center; gap:4px;
@@ -1973,7 +1974,7 @@
   }
 
   /* ================== 畫面縮放控制引擎 ================== */
-  var currentZoomRatio = parseFloat(localStorage.getItem("hanyu_zoom_ratio")) || 1.0;
+  var currentZoomRatio = 1.0; // 縮放小工具隱藏期間固定 100%（原本：parseFloat(localStorage.getItem("hanyu_zoom_ratio")) || 1.0）
 
   function applyStageZoom(ratio){
     currentZoomRatio = Math.max(0.65, Math.min(1.5, Math.round(ratio * 100) / 100));
