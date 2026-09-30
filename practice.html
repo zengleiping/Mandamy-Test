@@ -202,6 +202,22 @@
   .project-grid{
     display:grid;grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));gap:24px;
   }
+  .lobby-tools{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 14px; }
+  .lobby-tools input[type=search]{ flex:1 1 260px; max-width:420px; padding:9px 14px; border-radius:10px; border:1.5px solid var(--grid-line); background:var(--surface); color:var(--ink); font-size:13.5px; }
+  .lobby-tools input[type=search]:focus{ outline:none; border-color:var(--seal); }
+  .lobby-tag-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+  .tag-chip{ font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; border:1.5px solid var(--grid-line); background:var(--surface); color:var(--ink-soft); cursor:pointer; }
+  .tag-chip:hover{ border-color:var(--seal); color:var(--seal); }
+  .tag-chip.on{ background:var(--seal); border-color:var(--seal); color:#fff; }
+  .item-tags{ display:flex; gap:5px; flex-wrap:wrap; margin-top:8px; }
+  .item-tag{ font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--seal-soft); color:var(--seal); }
+  .item-path{ font-size:11.5px; color:var(--ink-soft); margin-top:4px; }
+  .recent-strip{ margin:0 0 18px; }
+  .recent-strip h4{ margin:0 0 8px; font-size:13px; color:var(--ink-soft); font-weight:700; }
+  .recent-strip .recent-row{ display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; }
+  .recent-chip{ flex:none; max-width:240px; padding:8px 14px; border-radius:12px; border:1.5px solid var(--grid-line); background:var(--surface); cursor:pointer; font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .recent-chip:hover{ border-color:var(--seal); color:var(--seal); }
+  .recent-chip small{ display:block; font-weight:500; color:var(--ink-soft); font-size:11px; margin-top:2px; }
 
   .item-card{
     background:var(--surface);border:1.5px solid var(--grid-line);border-radius:16px;
@@ -1532,6 +1548,12 @@
     </div>
 
     <div class="breadcrumb-bar" id="breadcrumb-bar"></div>
+    <!-- 2026-10-01 課程清單：搜尋（名稱／標籤／說明）、標籤篩選、最近開啟 -->
+    <div class="lobby-tools" id="lobby-tools">
+      <input type="search" id="lobby-search" placeholder="🔍 搜尋課程名稱、標籤、說明… Search" autocomplete="off">
+      <div class="lobby-tag-chips" id="lobby-tag-chips"></div>
+    </div>
+    <div class="recent-strip" id="recent-strip" style="display:none;"></div>
     <div class="project-grid" id="project-grid"></div>
   </div>
 
@@ -1636,6 +1658,8 @@
       <input type="text" id="f-proj-title" placeholder="例如：第一課：見面問好" required>
       <label for="f-proj-parent">收納在資料夾</label>
       <select id="f-proj-parent"></select>
+      <label for="f-proj-tags">標籤 Tags（用逗號分開，方便搜尋與篩選）</label>
+      <input type="text" id="f-proj-tags" placeholder="例如：第五課, 生詞, 夏天" autocomplete="off">
       <label for="f-proj-desc">簡介／說明備註</label>
       <textarea id="f-proj-desc" rows="3" placeholder="例如：包含見面問好生詞配對、語意單選題與句子重組練習"></textarea>
     </div>
@@ -1757,17 +1781,18 @@
   </div>
 </dialog>
 
-<!-- 2026-10-01 版本記錄：自動存檔（約每 5 分鐘）、手動存檔、離線／雲端衝突時保留的另一份，都可以在這裡還原 -->
-<dialog class="dialog-modal" id="versions-dialog" style="width:min(640px,94vw);">
+<!-- 2026-10-01 版本記錄：自動存檔（約每 5 分鐘、保留 30 天）、手動存檔、離線／雲端衝突時保留的另一份、還原／刪除前的備份；可釘選永久保留、跟目前內容對比、一鍵還原（整份或單一課程） -->
+<dialog class="dialog-modal" id="versions-dialog" style="width:min(820px,96vw);">
   <div class="dialog-head">
     <h2>🕘 版本記錄 Version History</h2>
   </div>
   <div class="dialog-body">
-    <p style="font-size:12.5px; color:var(--ink-soft); margin:-4px 0 8px; line-height:1.6;">這些版本存在<b>這台裝置</b>的瀏覽器裡（不會上傳雲端）。還原前會自動再存一份「還原前的版本」，所以按錯也能回來。<br>Versions are stored on this device only. Restoring first saves the current state, so you can always undo.</p>
+    <p style="font-size:12.5px; color:var(--ink-soft); margin:-4px 0 8px; line-height:1.6;">這些版本存在<b>這台裝置</b>的瀏覽器裡（不會上傳雲端）。自動存檔約每 5 分鐘一份，<b>保留 30 天</b>（越舊的越稀疏）；📌 <b>釘選</b>的版本永久保留。還原前會自動再存一份「還原前的版本」，所以按錯也能回來。<br>Saved on this device only. Auto-saved about every 5 min and kept for 30 days; pinned versions are kept forever.</p>
     <div id="versions-list"></div>
+    <div id="versions-compare" style="display:none;"></div>
   </div>
   <div class="dialog-foot">
-    <button type="button" class="btn" id="btn-version-save-now">💾 現在存一個版本 Save Now</button>
+    <button type="button" class="btn" id="btn-version-save-now">💾 現在存一個版本（自動釘選）Save &amp; Pin</button>
     <button type="button" class="btn btn-primary" id="btn-versions-close">關閉 Close</button>
   </div>
 </dialog>
@@ -2144,28 +2169,51 @@
   }
   function deleteLib(key){ return reqDelete("libs", key); }
 
-  /* ---- 版本記錄 ---- */
-  var MAX_AUTO = 12, MAX_KEPT = 10;
-  function addVersion(libKey, reason, data, keep){
+  /* ---- 版本記錄 ----
+     自動存檔約每 5 分鐘一份（編輯中才會存，內容沒變就不存）。保留 30 天：
+       · 24 小時內的自動存檔全留；1～7 天只留每小時最新的一份；7～30 天只留每天最新的一份；超過 30 天刪除。
+       · 「保留」的版本（手動存檔、衝突時沒選的那份、還原／刪除前的備份）也是 30 天，不會被稀疏化。
+       · 釘選（pinned）的版本永久保留，不會被自動清掉。 */
+  var DAY_MS = 86400000, HOUR_MS = 3600000;
+  var AUTO_FULL_MS = DAY_MS, AUTO_HOURLY_MS = 7 * DAY_MS, MAX_AGE_MS = 30 * DAY_MS, MAX_KEPT = 60, MAX_AUTO_TOTAL = 500;
+  function addVersion(libKey, reason, data, keep, opts){
     var json = JSON.stringify(data);
-    var rec = { libKey: libKey, at: Date.now(), reason: reason, keep: !!keep, bytes: json.length, hash: hashString(json), data: data };
+    var np = 0; try{ np = Object.keys((data && data.projects) || {}).length; }catch(e){}
+    var rec = { libKey: libKey, at: Date.now(), reason: reason, keep: !!keep, pinned: !!(opts && opts.pinned), np: np, bytes: json.length, hash: hashString(json), data: data };
     return reqPut("versions", rec).then(function(id){ return pruneVersions(libKey).then(function(){ return id; }); });
   }
   function listVersions(libKey){
     return reqAll("versions", "byLib", libKey).then(function(list){
       // 列表不需要帶整份資料，只留描述（避免一次把所有版本的大資料載進記憶體）
-      return list.map(function(v){ return { id: v.id, libKey: v.libKey, at: v.at, reason: v.reason, keep: v.keep, bytes: v.bytes, hash: v.hash }; })
+      return list.map(function(v){ return { id: v.id, libKey: v.libKey, at: v.at, reason: v.reason, keep: v.keep, pinned: !!v.pinned, np: v.np, bytes: v.bytes, hash: v.hash }; })
                  .sort(function(a, b){ return b.at - a.at; });
     });
   }
   function getVersion(id){ return reqGet("versions", id); }
   function deleteVersion(id){ return reqDelete("versions", id); }
+  function setVersionPinned(id, pinned){
+    return reqGet("versions", id).then(function(rec){ if(!rec) return; rec.pinned = !!pinned; return reqPut("versions", rec); });
+  }
+  // 決定哪些版本該刪（純函式，方便測試）：list 為新→舊
+  function versionsToDrop(list, now){
+    var drop = [], seenBucket = {}, keptN = 0, autoN = 0;
+    list.forEach(function(v){
+      if(v.pinned) return;
+      var age = now - v.at;
+      if(age > MAX_AGE_MS){ drop.push(v); return; }
+      if(v.keep){ if(++keptN > MAX_KEPT) drop.push(v); return; }
+      if(age > AUTO_FULL_MS){
+        var bucket = age > AUTO_HOURLY_MS ? "d" + Math.floor(v.at / DAY_MS) : "h" + Math.floor(v.at / HOUR_MS);
+        if(seenBucket[bucket]){ drop.push(v); return; }
+        seenBucket[bucket] = 1;
+      }
+      if(++autoN > MAX_AUTO_TOTAL) drop.push(v);
+    });
+    return drop;
+  }
   function pruneVersions(libKey){
     return listVersions(libKey).then(function(list){
-      var autos = list.filter(function(v){ return !v.keep; });
-      var kept = list.filter(function(v){ return v.keep; });
-      var drop = autos.slice(MAX_AUTO).concat(kept.slice(MAX_KEPT));
-      return Promise.all(drop.map(function(v){ return deleteVersion(v.id); }));
+      return Promise.all(versionsToDrop(list, Date.now()).map(function(v){ return deleteVersion(v.id); }));
     });
   }
 
@@ -2239,7 +2287,7 @@
   Object.assign(api, {
     canon: canon, canonHash: canonHash, hashString: hashString,
     getLib: getLib, listLibs: listLibs, putLibNow: putLibNow, deleteLib: deleteLib,
-    addVersion: addVersion, listVersions: listVersions, getVersion: getVersion, deleteVersion: deleteVersion,
+    addVersion: addVersion, listVersions: listVersions, getVersion: getVersion, deleteVersion: deleteVersion, setVersionPinned: setVersionPinned, versionsToDrop: versionsToDrop, pruneVersions: pruneVersions,
     scheduleSave: scheduleSave, flush: flush, flushAll: flushAll,
     loadLocalDemo: loadLocalDemo, requestPersist: requestPersist, checkAssetsReady: checkAssetsReady
   });
@@ -3602,6 +3650,7 @@
 
   function openProject(projId){
     activeProjectId = projId; var proj = fsData.projects[projId];
+    noteRecent(projId);
     lobbyView.style.display = "none"; classroomView.style.display = "grid";
     document.getElementById("brand-sub").textContent = proj.title;
     renderTopbar(); renderSidebar(); renderStage(); renderTimerWidget();
@@ -3633,13 +3682,137 @@
   }
 
   var projectGrid = document.getElementById("project-grid");
+  var lobbySearchEl = document.getElementById("lobby-search");
+  var lobbyTagChipsEl = document.getElementById("lobby-tag-chips");
+  var recentStripEl = document.getElementById("recent-strip");
+  var lobbyTagFilter = null; // 目前選的標籤（單選；再點一次取消）
+
+  /* ---- 2026-10-01 課程清單：標籤／搜尋／最近開啟／複製 ---- */
+  function projTags(p){ return Array.isArray(p.tags) ? p.tags.filter(function(t){ return typeof t === "string" && t; }) : []; }
+  function parseTagsInput(str){
+    var seen = {}, out = [];
+    String(str || "").split(/[,，、;；\n]+/).forEach(function(t){ t = t.trim(); if(t && !seen[t.toLowerCase()]){ seen[t.toLowerCase()] = 1; out.push(t); } });
+    return out;
+  }
+  function folderPathText(folderId){
+    var parts = [], cur = folderId, guard = 0;
+    while(cur && fsData.folders[cur] && guard++ < 30){ parts.unshift(fsData.folders[cur].title); cur = fsData.folders[cur].parentId || null; }
+    return parts.length ? "📁 " + parts.join(" / ") : "🏠 全部測驗大廳";
+  }
+  // 最近開啟：只記在這台裝置（不寫進課程資料，不會因為「打開看一下」就觸發上傳／產生版本）
+  function recentKey(){ return "mandamy-recent-" + currentLibKey(); }
+  function loadRecent(){ try{ var v = JSON.parse(localStorage.getItem(recentKey()) || "[]"); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+  function noteRecent(projId){
+    var list = loadRecent().filter(function(x){ return x && x.id !== projId; });
+    list.unshift({ id: projId, at: Date.now() });
+    try{ localStorage.setItem(recentKey(), JSON.stringify(list.slice(0, 12))); }catch(e){}
+  }
+  function duplicateProject(projId){
+    var src = fsData.projects[projId]; if(!src) return;
+    var copy = JSON.parse(JSON.stringify(src));
+    copy.id = uid("proj");
+    copy.title = src.title + "（複製 Copy）";
+    fsData.projects[copy.id] = copy;
+    saveFS(); renderLobbyGrid();
+  }
+  function deleteProjectWithBackup(proj){
+    if(!confirm("確定刪除「" + proj.title + "」？\n刪除前會先自動存一份到「🕘 版本記錄」，之後可以還原。\nDelete this test? A backup is saved to Version History first.")) return;
+    var doDelete = function(){ delete fsData.projects[proj.id]; saveFS(); renderLobbyGrid(); };
+    if(MO && MO.ok){
+      MO.addVersion(currentLibKey(), "刪除「" + proj.title + "」前的版本", fsData, true).then(doDelete, function(err){
+        if(confirm("刪除前的備份沒有存成功（" + (err && err.message ? err.message : err) + "）。還是要刪除嗎？\nBackup failed — delete anyway?")) doDelete();
+      });
+    } else doDelete();
+  }
+  function makeProjectCard(proj, opts){
+    opts = opts || {};
+    var totalQ = 0; Object.keys(proj.sections || {}).forEach(function(sid){ totalQ += Object.keys(proj.sections[sid].questions || {}).length; });
+    var tags = projTags(proj);
+    var card = document.createElement("div"); card.className = "item-card";
+    card.innerHTML = `
+      <div><div class="item-card-head"><h3 class="item-title zh">📘 ${escapeHtml(proj.title)}</h3></div><p class="item-desc">${proj.desc || "線上教學練習 Online Practice"}</p>
+        ${opts.showPath ? '<div class="item-path">' + escapeHtml(folderPathText(proj.folderId || null)) + '</div>' : ''}
+        ${tags.length ? '<div class="item-tags">' + tags.map(function(t){ return '<span class="item-tag">' + escapeHtml(t) + '</span>'; }).join("") + '</div>' : ''}</div>
+      <div class="item-card-foot">
+        <span class="item-badge">📄 ${Object.keys(proj.sections||{}).length} 大題 Sections · ${totalQ} 小題 Questions</span>
+        <div class="item-actions-btns">
+          <button type="button" class="btn btn-sm btn-ghost btn-edit-p">編輯 Edit</button>
+          <button type="button" class="btn btn-sm btn-ghost btn-dup-p" title="複製這個課程（含所有內容）Duplicate">複製 Copy</button>
+          <button type="button" class="btn btn-sm btn-ghost btn-del-p" style="color:var(--seal);">刪除 Delete</button>
+        </div>
+      </div>
+    `;
+    card.onclick = function(){ openProject(proj.id); };
+    card.querySelector(".btn-edit-p").onclick = function(e){ e.stopPropagation(); openProjectDialog(proj.id); };
+    card.querySelector(".btn-dup-p").onclick = function(e){ e.stopPropagation(); duplicateProject(proj.id); };
+    card.querySelector(".btn-del-p").onclick = function(e){ e.stopPropagation(); deleteProjectWithBackup(proj); };
+    return card;
+  }
+  function renderRecentStrip(show){
+    recentStripEl.innerHTML = "";
+    var items = show ? loadRecent().filter(function(x){ return fsData.projects && fsData.projects[x.id]; }).slice(0, 6) : [];
+    if(!items.length){ recentStripEl.style.display = "none"; return; }
+    recentStripEl.style.display = "";
+    var h = document.createElement("h4"); h.textContent = "🕘 最近開啟 Recent"; recentStripEl.appendChild(h);
+    var row = document.createElement("div"); row.className = "recent-row";
+    items.forEach(function(x){
+      var pr = fsData.projects[x.id];
+      var c = document.createElement("div"); c.className = "recent-chip"; c.title = pr.title;
+      c.innerHTML = escapeHtml(pr.title) + '<small>' + escapeHtml(fmtTime(x.at)) + '</small>';
+      c.onclick = function(){ openProject(x.id); };
+      row.appendChild(c);
+    });
+    recentStripEl.appendChild(row);
+  }
+  function renderTagChips(){
+    var all = {}; Object.keys(fsData.projects || {}).forEach(function(k){ projTags(fsData.projects[k]).forEach(function(t){ all[t] = (all[t] || 0) + 1; }); });
+    var names = Object.keys(all).sort();
+    if(lobbyTagFilter && !all[lobbyTagFilter]) lobbyTagFilter = null;
+    lobbyTagChipsEl.innerHTML = "";
+    names.forEach(function(t){
+      var chip = document.createElement("button"); chip.type = "button"; chip.className = "tag-chip" + (lobbyTagFilter === t ? " on" : "");
+      chip.textContent = "# " + t + " (" + all[t] + ")";
+      chip.onclick = function(){ lobbyTagFilter = (lobbyTagFilter === t) ? null : t; renderLobbyGrid(); };
+      lobbyTagChipsEl.appendChild(chip);
+    });
+  }
+  if(lobbySearchEl) lobbySearchEl.addEventListener("input", function(){ renderLobbyGrid(); });
+
   function renderLobbyGrid(){
     projectGrid.innerHTML = ""; var targetFolder = currentFolderId || null;
+    renderTagChips();
+    var query = lobbySearchEl ? lobbySearchEl.value.trim().toLowerCase() : "";
+    var filtering = !!(query || lobbyTagFilter);
+    renderRecentStrip(!filtering && targetFolder === null);
+
+    if(filtering){
+      // 搜尋／標籤篩選：跨所有資料夾平鋪顯示符合的課程（和資料夾）
+      var projMatches = Object.keys(fsData.projects || {}).map(function(k){ return fsData.projects[k]; }).filter(function(pr){
+        if(lobbyTagFilter && projTags(pr).indexOf(lobbyTagFilter) === -1) return false;
+        if(!query) return true;
+        var hay = [pr.title, pr.desc].concat(projTags(pr)).join("\n").toLowerCase();
+        return hay.indexOf(query) !== -1;
+      });
+      var folderMatches = lobbyTagFilter ? [] : Object.keys(fsData.folders || {}).map(function(k){ return fsData.folders[k]; }).filter(function(f){ return ((f.title || "") + "\n" + (f.desc || "")).toLowerCase().indexOf(query) !== -1; });
+      if(!projMatches.length && !folderMatches.length){
+        projectGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding: 48px; color:var(--ink-soft); background:var(--surface); border: 2px dashed var(--grid-line); border-radius:14px;"><p>🔍 找不到符合的課程。No match.</p></div>';
+        return;
+      }
+      folderMatches.forEach(function(folder){
+        var card = document.createElement("div"); card.className = "item-card is-folder";
+        card.innerHTML = '<div><div class="item-card-head"><h3 class="item-title zh">' + escapeHtml(folder.title) + '</h3></div><p class="item-desc">' + (folder.desc || "資料夾 Folder") + '</p><div class="item-path">' + escapeHtml(folderPathText(folder.parentId || null)) + '</div></div>';
+        card.onclick = function(){ if(lobbySearchEl) lobbySearchEl.value = ""; currentFolderId = folder.id; renderBreadcrumb(); renderLobbyGrid(); };
+        projectGrid.appendChild(card);
+      });
+      projMatches.forEach(function(pr){ projectGrid.appendChild(makeProjectCard(pr, { showPath: true })); });
+      return;
+    }
+
     var subFolders = Object.keys(fsData.folders || {}).map(function(k){ return fsData.folders[k]; }).filter(function(f){ return (f.parentId || null) === targetFolder; });
     var subProjects = Object.keys(fsData.projects || {}).map(function(k){ return fsData.projects[k]; }).filter(function(p){ return (p.folderId || null) === targetFolder; });
 
     if(subFolders.length === 0 && subProjects.length === 0){
-      projectGrid.innerHTML = `<div style="grid-column: 1 / -1; text-align:center; padding: 48px; color:var(--ink-soft); background:var(--surface); border: 2px dashed var(--grid-line); border-radius:14px;"><p>📂 這裡目前還是空的喔！Nothing here yet</p></div>`;
+      projectGrid.innerHTML = `<div style="grid-column: 1 / -1; text-align:center; padding: 48px; color:var(--ink-soft); background:var(--surface); border: 2px dashed var(--grid-line); border-radius:14px;"><p>📂 這裡目前還沒有內容。Nothing here yet.</p></div>`;
       return;
     }
 
@@ -3665,26 +3838,7 @@
       projectGrid.appendChild(card);
     });
 
-    subProjects.forEach(function(proj){
-      var totalQ = 0; Object.keys(proj.sections || {}).forEach(function(sid){ totalQ += Object.keys(proj.sections[sid].questions || {}).length; });
-      var card = document.createElement("div"); card.className = "item-card";
-      card.innerHTML = `
-        <div><div class="item-card-head"><h3 class="item-title zh">📘 ${escapeHtml(proj.title)}</h3></div><p class="item-desc">${proj.desc || "線上教學練習 Online Practice"}</p></div>
-        <div class="item-card-foot">
-          <span class="item-badge">📄 ${Object.keys(proj.sections||{}).length} 大題 Sections · ${totalQ} 小題 Questions</span>
-          <div class="item-actions-btns">
-            <button type="button" class="btn btn-sm btn-ghost btn-edit-p">編輯 Edit</button>
-            <button type="button" class="btn btn-sm btn-ghost btn-del-p" style="color:var(--seal);">刪除 Delete</button>
-          </div>
-        </div>
-      `;
-      card.onclick = function(){ openProject(proj.id); };
-      card.querySelector(".btn-edit-p").onclick = function(e){ e.stopPropagation(); openProjectDialog(proj.id); };
-      card.querySelector(".btn-del-p").onclick = function(e){
-        e.stopPropagation(); if(confirm(`確定刪除「${proj.title}」？Delete this test?`)){ delete fsData.projects[proj.id]; saveFS(); renderLobbyGrid(); }
-      };
-      projectGrid.appendChild(card);
-    });
+    subProjects.forEach(function(proj){ projectGrid.appendChild(makeProjectCard(proj)); });
   }
 
   function deleteFolderRecursively(folderId){
@@ -3757,9 +3911,10 @@
       var p = fsData.projects[editingProjectId];
       document.getElementById("f-proj-title").value = p ? p.title : "";
       document.getElementById("f-proj-desc").value = p ? (p.desc || "") : "";
+      document.getElementById("f-proj-tags").value = p ? projTags(p).join(", ") : "";
       populateFolderSelect(projParentSelect, p ? (p.folderId || null) : null, null);
     } else {
-      document.getElementById("f-proj-title").value = ""; document.getElementById("f-proj-desc").value = "";
+      document.getElementById("f-proj-title").value = ""; document.getElementById("f-proj-desc").value = ""; document.getElementById("f-proj-tags").value = "";
       populateFolderSelect(projParentSelect, currentFolderId || null, null);
     }
     safeShowModal(projectDialog);
@@ -3770,10 +3925,13 @@
     e.preventDefault();
     var title = document.getElementById("f-proj-title").value.trim(); var desc = document.getElementById("f-proj-desc").value.trim();
     var folderId = document.getElementById("f-proj-parent").value || null; if(!title) return;
+    var tagList = parseTagsInput(document.getElementById("f-proj-tags").value);
     if(editingProjectId && fsData.projects[editingProjectId]){
-      fsData.projects[editingProjectId].title = title; fsData.projects[editingProjectId].desc = desc; fsData.projects[editingProjectId].folderId = folderId;
+      var ep = fsData.projects[editingProjectId];
+      ep.title = title; ep.desc = desc; ep.folderId = folderId;
+      if(tagList.length) ep.tags = tagList; else delete ep.tags;
     } else {
-      var newProj = createDefaultProjectData(title, desc, folderId); fsData.projects[newProj.id] = newProj;
+      var newProj = createDefaultProjectData(title, desc, folderId); if(tagList.length) newProj.tags = tagList; fsData.projects[newProj.id] = newProj;
     }
     saveFS(); closeModalDialog(projectDialog); renderLobbyGrid();
   };
@@ -3978,8 +4136,161 @@
 
   var versionsDialog = document.getElementById("versions-dialog");
   var versionsListEl = document.getElementById("versions-list");
+  var versionsCompareEl = document.getElementById("versions-compare");
   function fmtBytes(n){ return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+
+  /* ---- 版本對比：以「目前內容（或另一個版本）相對於這個版本」描述差異 ---- */
+  function qLabel(q){ return (q && q.title) ? q.title : "（未命名）"; }
+  function progCounts(pr){
+    pr = pr || {};
+    return { "筆跡": (pr.strokes || []).length, "文字": (pr.texts || []).length, "圖片": (pr.images || []).length, "圖案": (pr.shapes || []).length, "媒體": (pr.medias || []).length };
+  }
+  function diffQuestion(qa, qb, pa, pb){
+    var lines = [];
+    ["title", "desc", "teacherNote", "gridType"].forEach(function(f){
+      if((qa[f] || "") !== (qb[f] || "")) lines.push({ title: "標題", desc: "說明", teacherNote: "老師備註", gridType: "格線" }[f] + "有修改");
+    });
+    var bga = (pa && pa.bgImage) || qa.bgImage || "", bgb = (pb && pb.bgImage) || qb.bgImage || "";
+    if(bga !== bgb) lines.push(!bga ? "加入了底圖" : (!bgb ? "移除了底圖" : "更換了底圖"));
+    var ca = progCounts(pa), cb = progCounts(pb);
+    Object.keys(ca).forEach(function(k){ if(ca[k] !== cb[k]) lines.push(k + " " + ca[k] + " → " + cb[k]); });
+    if(!lines.length && MO.canonHash(qa) !== MO.canonHash(qb)) lines.push("題目內容有修改");
+    if(!lines.length && MO.canonHash(pa || {}) !== MO.canonHash(pb || {})) lines.push("作答／書寫內容有修改");
+    return lines;
+  }
+  function diffProject(x, y){
+    var lines = [];
+    if((x.title || "") !== (y.title || "")) lines.push("名稱：「" + x.title + "」→「" + y.title + "」");
+    if((x.desc || "") !== (y.desc || "")) lines.push("說明有修改");
+    if((x.folderId || null) !== (y.folderId || null)) lines.push("移到不同的資料夾");
+    if(MO.canonHash(x.tags || []) !== MO.canonHash(y.tags || [])) lines.push("標籤：" + (projTags(x).join("、") || "（無）") + " → " + (projTags(y).join("、") || "（無）"));
+    var sa = x.sections || {}, sb = y.sections || {}, sids = {};
+    Object.keys(sa).concat(Object.keys(sb)).forEach(function(k){ sids[k] = 1; });
+    Object.keys(sids).forEach(function(sid){
+      var A = sa[sid], B = sb[sid];
+      if(A && !B){ lines.push("➖ 刪除了大題「" + A.title + "」（" + Object.keys(A.questions || {}).length + " 小題）"); return; }
+      if(!A && B){ lines.push("➕ 新增了大題「" + B.title + "」（" + Object.keys(B.questions || {}).length + " 小題）"); return; }
+      if((A.title || "") !== (B.title || "") || A.type !== B.type) lines.push("✏️ 大題「" + A.title + "」" + (A.title !== B.title ? "改名為「" + B.title + "」" : "") + (A.type !== B.type ? "題型改變" : ""));
+      var qa = A.questions || {}, qb = B.questions || {}, qids = {};
+      Object.keys(qa).concat(Object.keys(qb)).forEach(function(k){ qids[k] = 1; });
+      Object.keys(qids).forEach(function(qid){
+        var QA = qa[qid], QB = qb[qid];
+        if(QA && !QB) lines.push("　➖ 刪除了「" + qLabel(QA) + "」");
+        else if(!QA && QB) lines.push("　➕ 新增了「" + qLabel(QB) + "」");
+        else {
+          var ds = diffQuestion(QA, QB, (x.progress || {})[qid], (y.progress || {})[qid]);
+          if(ds.length) lines.push("　✏️ 「" + qLabel(QB) + "」：" + ds.join("；"));
+        }
+      });
+    });
+    return lines;
+  }
+  function diffLibraries(a, b){
+    var out = { projects: [], folders: [] };
+    var pa = (a && a.projects) || {}, pb = (b && b.projects) || {}, ids = {};
+    Object.keys(pa).concat(Object.keys(pb)).forEach(function(k){ ids[k] = 1; });
+    Object.keys(ids).forEach(function(id){
+      var x = pa[id], y = pb[id];
+      if(x && !y) out.projects.push({ id: id, title: x.title, status: "removed", lines: [] });
+      else if(!x && y) out.projects.push({ id: id, title: y.title, status: "added", lines: [] });
+      else if(MO.canonHash(x) !== MO.canonHash(y)) out.projects.push({ id: id, title: y.title || x.title, status: "changed", lines: diffProject(x, y) });
+    });
+    var fa = (a && a.folders) || {}, fb = (b && b.folders) || {}, fids = {};
+    Object.keys(fa).concat(Object.keys(fb)).forEach(function(k){ fids[k] = 1; });
+    Object.keys(fids).forEach(function(id){
+      var x = fa[id], y = fb[id];
+      if(x && !y) out.folders.push("➖ 資料夾「" + x.title + "」已刪除");
+      else if(!x && y) out.folders.push("➕ 新增資料夾「" + y.title + "」");
+      else if(MO.canonHash(x) !== MO.canonHash(y)) out.folders.push("✏️ 資料夾「" + y.title + "」有修改（名稱／位置／說明）");
+    });
+    return out;
+  }
+
+  var compareState = null; // { aId, bId|"current", aData, bData }
+  async function openCompare(vMeta, allVersions){
+    versionsCompareEl.style.display = "block"; versionsListEl.style.display = "none";
+    versionsCompareEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">載入中…Loading…</p>';
+    var aRec = null; try{ aRec = await MO.getVersion(vMeta.id); }catch(e){}
+    if(!aRec || !aRec.data){ versionsCompareEl.innerHTML = '<p style="color:var(--seal);">讀不到這個版本。Couldn\'t read this version.</p>'; return; }
+    compareState = { a: aRec, bId: "current", vMeta: vMeta, all: allVersions };
+    await renderCompare();
+  }
+  async function renderCompare(){
+    var st = compareState; if(!st) return;
+    var bData = fsData, bLabel = "目前內容";
+    if(st.bId !== "current"){
+      var bRec = null; try{ bRec = await MO.getVersion(st.bId); }catch(e){}
+      if(!bRec){ st.bId = "current"; bData = fsData; } else { bData = bRec.data; bLabel = (bRec.reason || "版本") + "（" + fmtTime(bRec.at) + "）"; }
+    }
+    var d = diffLibraries(st.a.data, bData);
+    var wrap = versionsCompareEl; wrap.innerHTML = "";
+    var head = document.createElement("div"); head.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;";
+    var back = document.createElement("button"); back.type = "button"; back.className = "btn btn-sm"; back.textContent = "← 回版本清單 Back";
+    back.onclick = function(){ compareState = null; versionsCompareEl.style.display = "none"; versionsListEl.style.display = ""; };
+    head.appendChild(back);
+    var lbl = document.createElement("span"); lbl.style.cssText = "font-size:13px;font-weight:700;";
+    lbl.textContent = "「" + (st.a.reason || "版本") + "」（" + fmtTime(st.a.at) + "） ⇄ ";
+    head.appendChild(lbl);
+    var sel = document.createElement("select"); sel.style.cssText = "font-size:13px;padding:5px 8px;border-radius:8px;max-width:300px;";
+    var o0 = document.createElement("option"); o0.value = "current"; o0.textContent = "目前內容 Current"; sel.appendChild(o0);
+    st.all.forEach(function(v){ if(v.id === st.a.id) return; var o = document.createElement("option"); o.value = String(v.id); o.textContent = (v.reason || "版本") + "（" + fmtTime(v.at) + "）"; sel.appendChild(o); });
+    sel.value = st.bId === "current" ? "current" : String(st.bId);
+    sel.onchange = function(){ st.bId = sel.value === "current" ? "current" : Number(sel.value); renderCompare(); };
+    head.appendChild(sel);
+    wrap.appendChild(head);
+    var note = document.createElement("p"); note.style.cssText = "font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;line-height:1.6;";
+    note.textContent = "下面列出「" + bLabel + "」相對於這個版本的差異（➕ 是後來多出來的、➖ 是後來刪掉的）。";
+    wrap.appendChild(note);
+    if(!d.projects.length && !d.folders.length){
+      var same = document.createElement("div"); same.style.cssText = "padding:18px;text-align:center;background:var(--surface-2);border-radius:10px;font-size:13.5px;"; same.textContent = "✅ 兩邊的內容完全相同。Identical."; wrap.appendChild(same); return;
+    }
+    var labels = { added: "➕ 新增", removed: "➖ 已刪除", changed: "✏️ 有修改" };
+    d.folders.forEach(function(t){ var r = document.createElement("div"); r.style.cssText = "font-size:13px;padding:4px 2px;"; r.textContent = t; wrap.appendChild(r); });
+    d.projects.forEach(function(pj){
+      var box = document.createElement("div"); box.className = "teacher-admin-row"; box.style.cssText = "flex-direction:column;align-items:stretch;gap:6px;";
+      var top = document.createElement("div"); top.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;";
+      var nm = document.createElement("span"); nm.className = "ta-row-name"; nm.textContent = "📘 " + pj.title; top.appendChild(nm);
+      var bd = document.createElement("span"); bd.className = "ta-badge"; bd.textContent = labels[pj.status]; top.appendChild(bd);
+      if(st.bId === "current" && pj.status !== "added"){
+        var rb = document.createElement("button"); rb.type = "button"; rb.className = "btn btn-sm btn-ghost"; rb.style.marginLeft = "auto";
+        rb.textContent = pj.status === "removed" ? "↩ 把這個課程找回來" : "↩ 只還原這個課程";
+        rb.onclick = function(){ restoreOneProject(st.a, pj); };
+        top.appendChild(rb);
+      }
+      box.appendChild(top);
+      if(pj.lines.length){
+        var ul = document.createElement("div"); ul.style.cssText = "font-size:12.5px;line-height:1.7;color:var(--ink);white-space:pre-wrap;";
+        ul.textContent = pj.lines.join("\n"); box.appendChild(ul);
+      }
+      wrap.appendChild(box);
+    });
+  }
+  async function restoreOneProject(aRec, pj){
+    var src = aRec.data && aRec.data.projects && aRec.data.projects[pj.id];
+    if(!src){ alert("這個版本裡找不到這個課程。"); return; }
+    if(!confirm("把「" + pj.title + "」還原成「" + (aRec.reason || "版本") + "」（" + fmtTime(aRec.at) + "）的樣子？\n其他課程不受影響；目前的內容會先自動存成「還原前的版本」。\nRestore only this test? Everything else stays as is.")) return;
+    try{
+      await MO.addVersion(currentLibKey(), "還原「" + pj.title + "」前的版本（" + fmtTime(Date.now()) + "）", fsData, true);
+      var copy = JSON.parse(JSON.stringify(src));
+      fsData.projects[pj.id] = copy;
+      // 原本所在的資料夾如果已經不存在，放回最上層，避免課程找不到
+      if(copy.folderId && !fsData.folders[copy.folderId]){
+        var vf = aRec.data.folders && aRec.data.folders[copy.folderId];
+        if(vf) fsData.folders[copy.folderId] = JSON.parse(JSON.stringify(vf)); else copy.folderId = null;
+      }
+      if(activeProjectId === pj.id) activeProjectId = null;
+      saveFS();
+      await renderCompare();
+      if(lobbyView.style.display !== "none") renderLobbyGrid();
+      alert("✅ 已還原這個課程。Restored.");
+    }catch(e){
+      console.error("還原課程失敗", e);
+      alert("還原失敗：" + (e && e.message ? e.message : e));
+    }
+  }
+
   async function refreshVersionsList(){
+    versionsCompareEl.style.display = "none"; versionsListEl.style.display = ""; compareState = null;
     if(!MO || !MO.ok){
       versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">這個瀏覽器不支援本機儲存，沒有版本記錄。This browser has no local storage support.</p>';
       return;
@@ -3987,19 +4298,26 @@
     versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">載入中…Loading…</p>';
     var key = currentLibKey();
     var list = [];
-    try{ list = await MO.listVersions(key); }catch(e){ versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--seal);">讀取失敗 Failed to load.</p>'; return; }
+    try{ await MO.pruneVersions(key); list = await MO.listVersions(key); }catch(e){ versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--seal);">讀取失敗 Failed to load.</p>'; return; }
     if(!list.length){
-      versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">目前還沒有版本。編輯約 5 分鐘後會自動存檔，也可以按下面的「現在存一個版本」。<br>No versions yet. One is saved automatically about every 5 minutes of editing, or use “Save Now”.</p>';
+      versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">目前還沒有版本。編輯約 5 分鐘後會自動存檔，也可以按下面的「現在存一個版本」。<br>No versions yet. One is saved automatically about every 5 minutes of editing, or use “Save Now” below.</p>';
       return;
     }
     versionsListEl.innerHTML = "";
-    list.forEach(function(v){
+    function sectionTitle(text){ var h = document.createElement("div"); h.style.cssText = "font-size:12.5px;font-weight:800;color:var(--ink-soft);margin:12px 0 6px;"; h.textContent = text; versionsListEl.appendChild(h); }
+    function dayLabel(ts){ var d = new Date(ts), t = new Date(), y = new Date(Date.now() - 86400000); var same = function(a, b){ return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }; return same(d, t) ? "今天 Today" : (same(d, y) ? "昨天 Yesterday" : (d.getMonth() + 1) + "/" + d.getDate()); }
+    function addRow(v){
       var row = document.createElement("div"); row.className = "teacher-admin-row";
+      var expire = v.pinned ? "" : " · 約 " + Math.max(0, Math.ceil((v.at + 30 * 86400000 - Date.now()) / 86400000)) + " 天後自動清除";
       row.innerHTML = '<div class="ta-row-main"><span class="ta-row-name">' + escapeHtml(v.reason || "版本") + '</span>' +
-        '<span class="ta-row-username">' + escapeHtml(fmtTime(v.at)) + ' · ' + fmtBytes(v.bytes || 0) + '</span>' +
-        (v.keep ? '<span class="ta-badge">保留 Kept</span>' : '') + '</div>' +
-        '<div class="ta-row-actions"><button type="button" class="btn btn-sm btn-ghost ver-restore">還原 Restore</button>' +
+        '<span class="ta-row-username">' + escapeHtml(fmtTime(v.at)) + ' · ' + fmtBytes(v.bytes || 0) + (v.np != null ? ' · ' + v.np + ' 個課程' : '') + escapeHtml(expire) + '</span>' +
+        (v.pinned ? '<span class="ta-badge">📌 已釘選 Pinned</span>' : (v.keep ? '<span class="ta-badge">保留 Kept</span>' : '')) + '</div>' +
+        '<div class="ta-row-actions"><button type="button" class="btn btn-sm btn-ghost ver-pin">' + (v.pinned ? '取消釘選 Unpin' : '📌 釘選 Pin') + '</button>' +
+        '<button type="button" class="btn btn-sm btn-ghost ver-cmp">對比 Compare</button>' +
+        '<button type="button" class="btn btn-sm btn-ghost ver-restore">還原 Restore</button>' +
         '<button type="button" class="btn btn-sm btn-ghost ver-del" style="color:var(--seal);">刪除 Delete</button></div>';
+      row.querySelector(".ver-pin").onclick = async function(){ try{ await MO.setVersionPinned(v.id, !v.pinned); }catch(e){} refreshVersionsList(); };
+      row.querySelector(".ver-cmp").onclick = function(){ openCompare(v, list); };
       row.querySelector(".ver-restore").onclick = function(){ restoreVersion(v.id, v); };
       row.querySelector(".ver-del").onclick = async function(){
         if(!confirm("刪除這個版本？（只刪這個備份，不影響目前的課程）\nDelete this saved version?")) return;
@@ -4007,13 +4325,17 @@
         refreshVersionsList();
       };
       versionsListEl.appendChild(row);
-    });
+    }
+    var pinned = list.filter(function(v){ return v.pinned; }), rest = list.filter(function(v){ return !v.pinned; });
+    if(pinned.length){ sectionTitle("📌 已釘選（永久保留）"); pinned.forEach(addRow); }
+    var lastDay = null;
+    rest.forEach(function(v){ var dl = dayLabel(v.at); if(dl !== lastDay){ sectionTitle(dl); lastDay = dl; } addRow(v); });
   }
   async function restoreVersion(id, meta){
     var v = null;
     try{ v = await MO.getVersion(id); }catch(e){}
     if(!v || !v.data){ alert("讀不到這個版本。Couldn't read this version."); return; }
-    if(!confirm("還原到「" + (meta.reason || "版本") + "」（" + fmtTime(meta.at) + "）？\n目前的內容會先自動存成「還原前的版本」，不會消失。\nRestore this version? The current state is saved first.")) return;
+    if(!confirm("還原整份課程庫到「" + (meta.reason || "版本") + "」（" + fmtTime(meta.at) + "）？\n目前的內容會先自動存成「還原前的版本」，不會消失。\n（只想還原某一個課程的話，請按「對比」再選單一課程。）\nRestore this version? The current state is saved first.")) return;
     try{
       await MO.addVersion(currentLibKey(), "還原前的版本（" + fmtTime(Date.now()) + "）", fsData, true);
       fsData = migrateFS(JSON.parse(JSON.stringify(v.data)));
@@ -4035,9 +4357,9 @@
   document.getElementById("btn-versions-close").onclick = function(){ closeModalDialog(versionsDialog); };
   document.getElementById("btn-version-save-now").onclick = async function(){
     if(!MO || !MO.ok) return;
-    var name = prompt("幫這個版本取個名字（例如：課堂版）\nName this version (e.g. “class copy”)", "手動存檔");
+    var name = prompt("幫這個版本取個名字（例如：課堂版）\n這個版本會自動釘選、永久保留。\nName this version (e.g. “class copy”). It is pinned and kept forever.", "手動存檔");
     if(name === null) return;
-    try{ await MO.addVersion(currentLibKey(), (name.trim() || "手動存檔"), fsData, true); }catch(e){ notifyLocalSaveFailure(e); }
+    try{ await MO.addVersion(currentLibKey(), (name.trim() || "手動存檔"), fsData, true, { pinned: true }); }catch(e){ notifyLocalSaveFailure(e); }
     refreshVersionsList();
   };
 
