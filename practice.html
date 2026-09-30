@@ -361,7 +361,7 @@
   }
   .section-q-count{ font-size:11px; color:var(--ink-soft); white-space:nowrap; }
   .section-head-actions{
-    display:flex; align-items:center; gap:6px; width:100%; justify-content:flex-end;
+    display:flex; align-items:center; gap:4px 6px; width:100%; justify-content:flex-end; flex-wrap:wrap;
     opacity:0.45; transition:opacity .15s ease;
   }
   .section-head-actions button{ pointer-events:auto; white-space:nowrap; padding:5px 10px; font-size:11.5px; }
@@ -867,6 +867,41 @@
   :root:not([data-theme="light"]) .size-combo-input, :root:not([data-theme="light"]) .size-combo-toggle{ border-color:rgba(255,255,255,0.14); }
   /* 2026-09-30 逐步出現：老師端看得到還沒出現的文字（半透明＋左上角步驟號），學生端完全不渲染。 */
   .movable-text.step-hidden{ opacity:0.35; }
+  /* 物件動畫（進場／強調）：用個別的 translate/scale/rotate 屬性，不會動到 transform */
+  @keyframes mmFade{ from{ opacity:0 } to{ opacity:1 } }
+  @keyframes mmFlyL{ from{ opacity:0; translate:-45% 0 } to{ opacity:1; translate:0 0 } }
+  @keyframes mmFlyR{ from{ opacity:0; translate:45% 0 } to{ opacity:1; translate:0 0 } }
+  @keyframes mmFlyT{ from{ opacity:0; translate:0 -45% } to{ opacity:1; translate:0 0 } }
+  @keyframes mmFlyB{ from{ opacity:0; translate:0 45% } to{ opacity:1; translate:0 0 } }
+  @keyframes mmZoom{ from{ opacity:0; scale:.2 } to{ opacity:1; scale:1 } }
+  @keyframes mmWipe{ from{ clip-path:inset(0 100% 0 0) } to{ clip-path:inset(0 0 0 0) } }
+  @keyframes mmBounce{ 0%{ opacity:0; translate:0 -40% } 55%{ opacity:1; translate:0 6% } 75%{ translate:0 -3% } 100%{ translate:0 0 } }
+  @keyframes mmPulse{ 0%{ scale:1 } 40%{ scale:1.25 } 100%{ scale:1 } }
+  @keyframes mmSpin{ from{ opacity:0; rotate:-360deg; scale:.3 } to{ opacity:1; rotate:0deg; scale:1 } }
+  .anim-fade{ animation:mmFade .7s ease both var(--adl,0s); }
+  .anim-flyL{ animation:mmFlyL .7s ease-out both var(--adl,0s); }
+  .anim-flyR{ animation:mmFlyR .7s ease-out both var(--adl,0s); }
+  .anim-flyT{ animation:mmFlyT .7s ease-out both var(--adl,0s); }
+  .anim-flyB{ animation:mmFlyB .7s ease-out both var(--adl,0s); }
+  .anim-zoom{ animation:mmZoom .6s cubic-bezier(.2,.9,.3,1.2) both var(--adl,0s); }
+  .anim-wipe{ animation:mmWipe .8s ease-in-out both var(--adl,0s); }
+  .anim-bounce{ animation:mmBounce .9s ease-out both var(--adl,0s); }
+  .anim-pulse{ animation:mmPulse .8s ease-in-out both var(--adl,0s); }
+  .anim-spin{ animation:mmSpin .9s ease-out both var(--adl,0s); }
+  .anim-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .anim-row select{ font-size:12px; padding:3px 4px; border-radius:6px; border:1.5px solid rgba(28,33,30,.2); background:var(--surface); color:var(--ink); }
+  .anim-row button{ font-size:12px; padding:3px 8px; border-radius:6px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; font-weight:700; }
+  .master-layer{ position:absolute; inset:0; pointer-events:none; z-index:0; overflow:hidden; user-select:none; }
+  .mm-timer{ position:fixed; top:16px; right:16px; z-index:30000; display:flex; align-items:center; gap:8px; padding:8px 14px; background:rgba(28,33,30,.92); color:#fff; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.35); font-variant-numeric:tabular-nums; cursor:grab; user-select:none; touch-action:none; }
+  .mm-timer .mt-t{ font-size:34px; font-weight:800; letter-spacing:1px; }
+  .mm-timer button{ border:none; background:rgba(255,255,255,.18); color:#fff; border-radius:8px; padding:4px 9px; cursor:pointer; font-size:14px; }
+  .mm-timer.mt-end{ background:#B23B32; animation:mtBlink .7s infinite alternate; }
+  @keyframes mtBlink{ to{ opacity:.55; } }
+  .shape-table-btn{ width:100%; margin:2px 0 6px; padding:5px 8px; border-radius:8px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); font-weight:700; font-size:12.5px; cursor:pointer; }
+  .laser-layer{ position:absolute; inset:0; z-index:60; cursor:none; touch-action:none; }
+  .laser-dot{ position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:radial-gradient(circle,#fff 0 12%,#ff1e1e 30%,rgba(255,30,30,.55) 60%,rgba(255,30,30,0) 75%); box-shadow:0 0 14px 4px rgba(255,30,30,.55); pointer-events:none; }
+  .laser-trail{ position:absolute; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%; background:rgba(255,40,40,.6); pointer-events:none; animation:laserFade .42s ease-out forwards; }
+  @keyframes laserFade{ to{ opacity:0; transform:scale(.3); } }
   .text-step-badge{
     position:absolute; left:-10px; top:-12px; min-width:18px; height:18px; padding:0 4px; box-sizing:border-box;
     border-radius:9px; background:#F59E0B; color:#fff; font:700 11px/18px "Plus Jakarta Sans",sans-serif;
@@ -1011,6 +1046,9 @@
   .select-union-box{ position:absolute; border:2px solid var(--seal); border-radius:4px; pointer-events:none; box-shadow:0 0 0 1px rgba(255,255,255,.7); }
   .select-marquee{ position:absolute; border:1.5px dashed var(--seal); background:rgba(232,130,90,.12); pointer-events:none; }
   .select-bar{ position:absolute; display:flex; align-items:center; gap:6px; padding:4px 8px; background:var(--surface); border:1.5px solid var(--seal-ring); border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,.18); pointer-events:auto; white-space:nowrap; z-index:45; }
+  .select-bar .sb-sep{ width:1px; height:18px; background:rgba(28,33,30,.2); }
+  .select-bar .sb-al{ padding:4px 7px; min-width:26px; }
+  .select-guide{ position:absolute; background:#E0338A; pointer-events:none; z-index:41; }
   .select-bar .sb-count{ font-size:12px; font-weight:700; color:var(--ink-soft); }
   .select-bar button{ font-size:12px; font-weight:700; padding:4px 9px; border-radius:8px; border:1.5px solid rgba(28,33,30,.16); background:var(--surface); color:var(--ink); cursor:pointer; }
   .select-bar button:hover{ border-color:var(--seal); color:var(--seal); }
@@ -1636,6 +1674,8 @@
           <div class="bank-menu-pop" id="add-slide-menu-pop">
             <button type="button" class="bank-menu-item" id="btn-new-slide" title="新增一張空白投影片（不是題目，是上課內容，可以直接畫記／貼圖）Add a blank slide — not a question, just teaching content you can draw or paste on">🖼️ 空白投影片 Blank Slide</button>
             <button type="button" class="bank-menu-item" id="btn-import-slides-top" title="匯入簡報：選 PowerPoint（.pptx，文字／圖片／圖案／音檔會變成可編輯的物件）或 PDF（每一頁變成一張底圖）。舊的 .ppt 請先另存成 .pptx。 Import a .pptx (editable objects) or a PDF (one image per page)">📥 匯入簡報（PowerPoint .pptx／PDF）Import Slides</button>
+            <button type="button" class="bank-menu-item" id="btn-deck-export-pptx" title="把目前這份簡報匯出成 PowerPoint（.pptx）：文字、圖片、圖案可以在 PowerPoint 裡編輯；手寫筆跡會合成一張透明圖片。">📤 匯出成 PowerPoint（.pptx）Export</button>
+            <button type="button" class="bank-menu-item" id="btn-deck-export-pdf" title="把目前這份簡報每一頁匯出成一份 PDF（可以當講義發給學生）。">📤 匯出成 PDF（講義）Export PDF</button>
           </div>
         </div>
         <input type="file" id="import-slides-top-file" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none;">
@@ -6197,19 +6237,22 @@
       });
     });
   }
-  function drawSlideThumb(q, cb){
+  function drawSlideThumb(q, cb, W0, asCanvas){
     var prog = getProgress(q.id) || {};
     var bg = prog.bgImage || q.bgImage || "";
     var imgs = prog.images || [];
     Promise.all([loadThumbImg(bg)].concat(imgs.map(function(im){ return loadThumbImg(im.src); }))).then(function(loaded){
       var bgImg = loaded[0];
-      var ratio = bgImg ? Math.max(0.4, Math.min(3, bgImg.naturalWidth / bgImg.naturalHeight)) : 1.5;
-      var W = 192, H = Math.max(40, Math.round(W / ratio));
+      var fr0 = Number(prog.canvasRatio || q.canvasRatio) || 0;
+      var ratio = fr0 > 0 ? fr0 : (bgImg ? Math.max(0.4, Math.min(3, bgImg.naturalWidth / bgImg.naturalHeight)) : 1.5);
+      var W = W0 || 192, H = Math.max(40, Math.round(W / ratio));
       var c = document.createElement("canvas"); c.width = W; c.height = H;
       var x = c.getContext("2d");
       x.fillStyle = "#FFFCF7"; x.fillRect(0, 0, W, H);
-      var tbc = prog.bgColor || q.bgColor || "";
-      if(/^#[0-9a-fA-F]{6}$/.test(tbc)){ x.save(); x.globalAlpha = (prog.bgOp != null ? prog.bgOp : (q.bgOp != null ? q.bgOp : 1)); x.fillStyle = tbc; x.fillRect(0, 0, W, H); x.restore(); }
+      var tbc = prog.bgColor || q.bgColor || "", tbo = (prog.bgOp != null ? prog.bgOp : (q.bgOp != null ? q.bgOp : 1));
+      var fsec = findSectionForQuestion(q.id), mst = (fsec && fsec.sec.master) || null;
+      if(!/^#[0-9a-fA-F]{6}$/.test(tbc) && mst && /^#[0-9a-fA-F]{6}$/.test(mst.bgColor || "")){ tbc = mst.bgColor; tbo = mst.bgOp != null ? mst.bgOp : 1; }
+      if(/^#[0-9a-fA-F]{6}$/.test(tbc)){ x.save(); x.globalAlpha = tbo; x.fillStyle = tbc; x.fillRect(0, 0, W, H); x.restore(); }
       if(bgImg){
         var s0 = Math.min(W / bgImg.naturalWidth, H / bgImg.naturalHeight);
         var bw0 = bgImg.naturalWidth * s0, bh0 = bgImg.naturalHeight * s0;
@@ -6253,14 +6296,32 @@
         var widths = lines.map(function(ln){ return x.measureText(ln).width; });
         var bw = Math.max.apply(null, widths.concat([1]));
         var left = t.x / 100 * W - bw / 2, top = t.y / 100 * H - lines.length * lh / 2;
+        if(t.bgOn && /^#[0-9a-fA-F]{6}$/.test(t.bgColor || "")){ x.save(); x.globalAlpha = (t.bgOp == null ? 1 : t.bgOp); x.fillStyle = t.bgColor; x.fillRect(left - fs * 0.4, top - fs * 0.1, bw + fs * 0.8, lines.length * lh + fs * 0.2); x.restore(); }
+        if(t.bdW > 0){ x.save(); x.strokeStyle = t.bdC || "#333"; x.lineWidth = t.bdW * sc; x.strokeRect(left - fs * 0.4, top - fs * 0.1, bw + fs * 0.8, lines.length * lh + fs * 0.2); x.restore(); }
         lines.forEach(function(ln, i){
           var ax = left;
           if(t.align === "center") ax = left + (bw - widths[i]) / 2; else if(t.align === "right") ax = left + bw - widths[i];
           x.fillText(ln, ax, top + i * lh);
         });
       });
-      var url; try{ url = c.toDataURL("image/jpeg", 0.7); }catch(e){ url = THUMB_BLANK; }
-      cb(url);
+      if(mst){
+        var msc = W / 640; x.save(); x.textBaseline = "alphabetic";
+        function mtxt(tx, cfg){ x.font = "400 " + (cfg.size || 16) * msc + 'px "LXGW WenKai TC", serif'; x.fillStyle = cfg.color || "#7A7A7A"; var w2 = x.measureText(tx).width, pos = cfg.pos || "c"; x.fillText(tx, pos === "l" ? W * 0.03 : pos === "r" ? W * 0.97 - w2 : (W - w2) / 2, H * 0.985 - 2 * msc); }
+        if(mst.footer && mst.footer.text) mtxt(mst.footer.text, mst.footer);
+        if(mst.pageNum && mst.pageNum.on && fsec){ var ks = getSortedQuestionKeys(fsec.sec); mtxt(String(ks.indexOf(q.id) + 1) + (mst.pageNum.total ? " / " + ks.length : ""), mst.pageNum); }
+        x.restore();
+      }
+      function finish(){
+        if(asCanvas){ cb(c); return; }
+        var url; try{ url = c.toDataURL("image/jpeg", 0.7); }catch(e){ url = THUMB_BLANK; }
+        cb(url);
+      }
+      if(mst && mst.logo && mst.logo.src){
+        loadThumbImg(mst.logo.src).then(function(lg){
+          if(lg){ var lw = W * (mst.logo.w || 10) / 100, lh = lw * lg.naturalHeight / lg.naturalWidth, cn = mst.logo.corner || "tr"; x.drawImage(lg, cn[1] === "l" ? W * 0.02 : W * 0.98 - lw, cn[0] === "t" ? H * 0.025 : H * 0.975 - lh, lw, lh); }
+          finish();
+        });
+      } else finish();
     });
   }
   function applySlideThumb(qId, url){
@@ -6377,6 +6438,380 @@
     deleteQuestionById(found.secId, info.question.id);
   });
 
+  /* ===== 投影片整理檢視（Slide Sorter）：大縮圖網格，拖曳或按 ◀ ▶ 重排、複製、刪除、重新命名章節 ===== */
+  function openSlideSorter(){
+    var back = document.createElement("div"); back.className = "tb-modal-back";
+    var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.cssText = "width:min(1100px,96vw);max-height:92vh;overflow:auto;"; back.appendChild(modal);
+    var drag = null;
+    function render(){
+      var secs = getSections(), keys = getSortedSectionKeys().filter(function(k){ return secs[k].type === "board"; });
+      var curInfo = getCurrentQInfo(), curId = curInfo ? curInfo.question.id : null;
+      modal.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><h3 style="margin:0;flex:1;">🗂 投影片整理檢視 Slide Sorter</h3><button type="button" class="tb-row ss-close" style="cursor:pointer;margin:0;padding:5px 14px;">完成</button></div><div class="tb-hint">拖曳縮圖來換順序（也可以拖到別的章節）；觸控裝置請按卡片上的 ◀ ▶。章節＝PowerPoint 的「章節」，可以按名稱旁的 ✎ 重新命名。</div>';
+      modal.querySelector(".ss-close").onclick = function(){ back.remove(); };
+      keys.forEach(function(secId){
+        var sec = secs[secId], qKeys = getSortedQuestionKeys(sec);
+        var h = document.createElement("div"); h.style.cssText = "display:flex;align-items:center;gap:8px;margin:16px 0 6px;font-weight:800;font-size:14px;";
+        h.innerHTML = '<span>📑 ' + escapeHtml(sec.title) + '</span><button type="button" class="tb-row ss-ren" style="cursor:pointer;margin:0;padding:2px 8px;font-size:12px;" title="重新命名章節">✎</button><span style="color:var(--ink-soft);font-weight:600;font-size:12px;">' + qKeys.length + ' 張</span><button type="button" class="tb-row ss-add" style="cursor:pointer;margin:0 0 0 auto;padding:2px 10px;font-size:12px;">＋ 新增空白投影片</button>';
+        h.querySelector(".ss-ren").onclick = function(){ var nm = prompt("章節名稱", sec.title); if(nm && nm.trim()){ var ss = getSections(); ss[secId].title = nm.trim(); writeSections(ss); render(); } };
+        h.querySelector(".ss-add").onclick = function(){ addBlankSlideToSection(secId); setTimeout(render, 120); };
+        modal.appendChild(h);
+        var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;";
+        qKeys.forEach(function(qId, idx){
+          var q = sec.questions[qId];
+          var cached = slideThumbCache[qId];
+          var card = document.createElement("div"); card.setAttribute("draggable", "true"); card.dataset.ssq = qId;
+          card.style.cssText = "border:2px solid " + (qId === curId ? "var(--seal)" : "rgba(28,33,30,.15)") + ";border-radius:10px;padding:6px;background:var(--surface);cursor:grab;position:relative;";
+          card.innerHTML = '<div style="position:absolute;left:8px;top:8px;background:var(--ink);color:#fff;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;">' + (idx + 1) + '</div>' +
+            '<img class="ss-th" src="' + (cached ? cached.url : THUMB_BLANK) + '" data-thumb-qid="' + qId + '" style="width:100%;display:block;border-radius:6px;background:#fff;border:1px solid rgba(28,33,30,.1);aspect-ratio:3/2;object-fit:contain;" alt="">' +
+            '<div style="font-size:12px;font-weight:700;margin:5px 2px 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(q.title) + '</div>' +
+            '<div style="display:flex;gap:4px;"><button type="button" class="tb-row ss-l" style="cursor:pointer;margin:0;padding:2px 8px;" title="往前移">◀</button><button type="button" class="tb-row ss-r" style="cursor:pointer;margin:0;padding:2px 8px;" title="往後移">▶</button><button type="button" class="tb-row ss-dup" style="cursor:pointer;margin:0;padding:2px 8px;font-size:12px;">複製</button><button type="button" class="tb-row ss-del" style="cursor:pointer;margin:0 0 0 auto;padding:2px 8px;font-size:12px;">刪除</button></div>';
+          if(!cached) scheduleSlideThumb(qId);
+          function reorder(toSecId, toIdx){
+            var ss = getSections(), from = ss[secId], to = ss[toSecId]; if(!from || !to) return;
+            var mq = from.questions[qId]; if(!mq) return;
+            if(toSecId === secId){
+              var lst = getSortedQuestionKeys(from); lst.splice(lst.indexOf(qId), 1); lst.splice(Math.max(0, Math.min(lst.length, toIdx)), 0, qId);
+              lst.forEach(function(k, i){ from.questions[k].order = i; });
+            } else {
+              delete from.questions[qId]; var lst2 = getSortedQuestionKeys(to); lst2.splice(Math.max(0, Math.min(lst2.length, toIdx)), 0, qId); to.questions[qId] = mq;
+              lst2.forEach(function(k, i){ to.questions[k].order = i; });
+            }
+            writeSections(ss); setTimeout(render, 80);
+          }
+          card.querySelector(".ss-l").onclick = function(e){ e.stopPropagation(); if(idx > 0) reorder(secId, idx - 1); };
+          card.querySelector(".ss-r").onclick = function(e){ e.stopPropagation(); if(idx < qKeys.length - 1) reorder(secId, idx + 1); };
+          card.querySelector(".ss-dup").onclick = function(e){ e.stopPropagation(); duplicateSlide(secId, qId); setTimeout(render, 150); };
+          card.querySelector(".ss-del").onclick = function(e){ e.stopPropagation(); deleteQuestionById(secId, qId); setTimeout(render, 150); };
+          card.onclick = function(){ setCurrentQ(qId); back.remove(); };
+          card.ondragstart = function(e){ drag = { secId: secId, qId: qId, reorder: reorder }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "ss:" + qId); };
+          card.ondragover = function(e){ if(drag && drag.qId !== qId){ e.preventDefault(); card.style.outline = "3px dashed var(--seal)"; } };
+          card.ondragleave = function(){ card.style.outline = ""; };
+          card.ondrop = function(e){ e.preventDefault(); card.style.outline = ""; if(drag && drag.qId !== qId) drag.reorder(secId, idx); drag = null; };
+          grid.appendChild(card);
+        });
+        modal.appendChild(grid);
+      });
+      // 縮圖畫好後（sidebar 的 applySlideThumb 會更新 .q-thumb），這裡也同步
+    }
+    back.addEventListener("click", function(e){ if(e.target === back) back.remove(); });
+    document.body.appendChild(back); render();
+    var iv = setInterval(function(){
+      if(!document.body.contains(back)){ clearInterval(iv); return; }
+      back.querySelectorAll("img.ss-th").forEach(function(im){ var c = slideThumbCache[im.dataset.thumbQid]; if(c && im.src !== c.url) im.src = c.url; });
+    }, 700);
+  }
+
+  /* ===== 倒數計時器／自動播放 ===== */
+  var mmTimerEl = null, mmTimerIv = 0;
+  function mmBeep(){
+    try{
+      var AC = window.AudioContext || window.webkitAudioContext, ac = new AC();
+      [0, 0.3, 0.6].forEach(function(dt){ var o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; g.gain.value = 0.25; o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + dt); o.stop(ac.currentTime + dt + 0.2); });
+    }catch(e){}
+  }
+  function startCountdownTimer(){
+    if(mmTimerEl){ clearInterval(mmTimerIv); mmTimerEl.remove(); mmTimerEl = null; }
+    var v = prompt("倒數幾分鐘？（可以輸入小數，例如 0.5＝30 秒）", "3"); if(v === null) return;
+    var mins = parseFloat(v); if(!(mins > 0)){ return; }
+    var left = Math.round(mins * 60), paused = false;
+    mmTimerEl = document.createElement("div"); mmTimerEl.className = "mm-timer";
+    mmTimerEl.innerHTML = '<span class="mt-t"></span><button type="button" class="mt-p" title="暫停／繼續">⏸</button><button type="button" class="mt-x" title="關閉">✕</button>';
+    document.body.appendChild(mmTimerEl);
+    function draw(){ var m = Math.floor(left / 60), s2 = left % 60; mmTimerEl.querySelector(".mt-t").textContent = String(m).padStart(2, "0") + ":" + String(s2).padStart(2, "0"); mmTimerEl.classList.toggle("mt-end", left <= 0); }
+    draw();
+    mmTimerIv = setInterval(function(){ if(paused) return; if(left > 0){ left--; draw(); if(left === 0) mmBeep(); } }, 1000);
+    mmTimerEl.querySelector(".mt-p").onclick = function(e){ paused = !paused; e.target.textContent = paused ? "▶" : "⏸"; };
+    mmTimerEl.querySelector(".mt-x").onclick = function(){ clearInterval(mmTimerIv); mmTimerEl.remove(); mmTimerEl = null; };
+    // 可以拖曳
+    var dx = 0, dy = 0, dragging = false;
+    mmTimerEl.addEventListener("pointerdown", function(e){ if(e.target.closest("button")) return; dragging = true; var r = mmTimerEl.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; mmTimerEl.setPointerCapture(e.pointerId); });
+    mmTimerEl.addEventListener("pointermove", function(e){ if(!dragging) return; mmTimerEl.style.left = (e.clientX - dx) + "px"; mmTimerEl.style.top = (e.clientY - dy) + "px"; mmTimerEl.style.right = "auto"; });
+    mmTimerEl.addEventListener("pointerup", function(){ dragging = false; });
+  }
+  var mmAutoIv = 0;
+  function toggleAutoAdvance(btn){
+    if(mmAutoIv){ clearInterval(mmAutoIv); mmAutoIv = 0; if(btn) btn.classList.remove("active"); return; }
+    var v = prompt("每幾秒自動換下一步／下一頁？", "5"); if(v === null) return;
+    var sec = parseFloat(v); if(!(sec >= 1)) return;
+    if(btn) btn.classList.add("active");
+    mmAutoIv = setInterval(function(){
+      var nb = document.querySelector("#btn-slide-next");
+      if(!nb || nb.disabled){ clearInterval(mmAutoIv); mmAutoIv = 0; if(btn) btn.classList.remove("active"); return; }
+      nb.click();
+    }, sec * 1000);
+  }
+  /* ===== 簡報者檢視：另開視窗（備忘稿／下一張／計時器／遠端翻頁），用 BroadcastChannel 跟放映視窗同步 ===== */
+  var presenterWin = null, presenterBC = null;
+  function pvPost(){
+    if(!presenterBC || !presenterWin || presenterWin.closed) return;
+    var info = getCurrentQInfo(); if(!info) return;
+    var found = findSectionForQuestion(info.question.id); if(!found) return;
+    var keys = getSortedQuestionKeys(found.sec), idx = keys.indexOf(info.question.id);
+    var nq = keys[idx + 1] ? found.sec.questions[keys[idx + 1]] : null;
+    var pr = getProgress(info.question.id) || {};
+    var mx = 0; ["texts", "images", "shapes"].forEach(function(k){ (pr[k] || []).forEach(function(o){ mx = Math.max(mx, o.step || 0); }); });
+    var nc = nq ? slideThumbCache[nq.id] : null; if(nq && !nc) scheduleSlideThumb(nq.id);
+    var cc = slideThumbCache[info.question.id];
+    presenterBC.postMessage({ type: "state", title: info.question.title || "", note: info.question.teacherNote || "", idx: idx + 1, total: keys.length, step: pr.revealStep || 0, maxStep: mx, nextTitle: nq ? nq.title : "", nextThumb: nc ? nc.url : "", curThumb: cc ? cc.url : "" });
+  }
+  function openPresenterView(){
+    if(presenterWin && !presenterWin.closed){ presenterWin.focus(); pvPost(); return; }
+    var w = window.open("", "mandamy-presenter", "width=560,height=780");
+    if(!w){ alert("瀏覽器擋住了新視窗，請允許這個網站的彈出視窗後再試一次。\nPop-up blocked — please allow pop-ups for this site."); return; }
+    presenterWin = w;
+    if(!presenterBC){
+      presenterBC = new BroadcastChannel("mandamy-presenter");
+      presenterBC.onmessage = function(e){
+        var m = e.data || {};
+        if(m.type === "hello") pvPost();
+        else if(m.type === "next"){ var nb = document.querySelector("#btn-slide-next"); if(nb && !nb.disabled) nb.click(); }
+        else if(m.type === "prev"){ var pb = document.querySelector("#btn-slide-prev"); if(pb && !pb.disabled) pb.click(); }
+      };
+    }
+    w.document.open();
+    w.document.write('<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>簡報者檢視</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:system-ui,"Noto Sans TC",sans-serif;background:#1c211e;color:#f4efe6;display:flex;flex-direction:column;height:100vh}header{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#2a312d}header b{flex:1;font-size:15px}#timer{font-size:26px;font-variant-numeric:tabular-nums;font-weight:800}button{font:inherit;font-weight:700;padding:8px 14px;border-radius:10px;border:1.5px solid #8a9a90;background:#3a443e;color:#fff;cursor:pointer}button:hover{border-color:#e8825a}main{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}.cur{font-size:15px;color:#c9d4cc}#note{white-space:pre-wrap;font-size:22px;line-height:1.6;background:#fff8e6;color:#2b2b2b;border-radius:12px;padding:14px;min-height:140px}.nx{display:flex;gap:12px;align-items:center}.nx img{width:200px;border-radius:8px;background:#fff}.nav{display:flex;gap:10px;padding:12px 14px;background:#2a312d}.nav button{flex:1;font-size:20px;padding:12px}small{color:#9fb0a5}</style></head><body><header><b id="t">簡報者檢視</b><span id="timer">00:00</span><button id="tp">暫停</button><button id="tr">歸零</button></header><main><div class="cur" id="pos"></div><div id="note"></div><div><small>下一張 Next</small><div class="nx"><img id="nimg" alt=""><span id="ntitle"></span></div></div></main><div class="nav"><button id="pv">◀ 上一步</button><button id="nx">下一步 ▶</button></div><script>var bc=new BroadcastChannel("mandamy-presenter"),sec=0,run=true;function f(n){return String(n).padStart(2,"0")}setInterval(function(){if(run){sec++;document.getElementById("timer").textContent=f(Math.floor(sec/60))+":"+f(sec%60)}},1000);document.getElementById("tp").onclick=function(){run=!run;this.textContent=run?"暫停":"繼續"};document.getElementById("tr").onclick=function(){sec=0;document.getElementById("timer").textContent="00:00"};document.getElementById("nx").onclick=function(){bc.postMessage({type:"next"})};document.getElementById("pv").onclick=function(){bc.postMessage({type:"prev"})};document.addEventListener("keydown",function(e){if(e.key==="ArrowRight"||e.key===" "||e.key==="PageDown"){e.preventDefault();bc.postMessage({type:"next"})}else if(e.key==="ArrowLeft"||e.key==="PageUp"){e.preventDefault();bc.postMessage({type:"prev"})}});bc.onmessage=function(e){var m=e.data;if(!m||m.type!=="state")return;document.getElementById("t").textContent=m.title||"簡報者檢視";document.getElementById("pos").textContent="第 "+m.idx+" / "+m.total+" 張"+(m.maxStep?"　・　步驟 "+m.step+"/"+m.maxStep:"");var n=document.getElementById("note");n.textContent=m.note||"（這一頁沒有備忘稿）";n.style.opacity=m.note?1:.5;var im=document.getElementById("nimg");im.style.display=m.nextThumb?"block":"none";if(m.nextThumb)im.src=m.nextThumb;document.getElementById("ntitle").textContent=m.nextTitle||"（最後一張）"};bc.postMessage({type:"hello"});setInterval(function(){bc.postMessage({type:"hello"})},4000);<\/script></body></html>');
+    w.document.close();
+    setTimeout(pvPost, 400);
+  }
+  /* ===== 尋找與取代（Ctrl/⌘+H）：文字方塊、投影片標題、備忘稿；範圍可選「這份簡報」或「整個專案」 ===== */
+  function openFindReplace(){
+    if(isStudent || document.getElementById("mm-findrep")) return;
+    var back = document.createElement("div"); back.className = "tb-modal-back"; back.id = "mm-findrep";
+    var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(560px,94vw)"; back.appendChild(modal);
+    modal.innerHTML = '<h3>🔎 尋找與取代 Find &amp; Replace</h3>' +
+      '<div style="display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:center;font-size:13px;"><span>尋找</span><input class="fr-find" type="text" style="padding:6px 8px;"><span>取代為</span><input class="fr-rep" type="text" style="padding:6px 8px;"></div>' +
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:10px 0;font-size:12.5px;"><label><input type="checkbox" class="fr-t" checked> 文字方塊</label><label><input type="checkbox" class="fr-n" checked> 備忘稿</label><label><input type="checkbox" class="fr-h" checked> 投影片標題</label><label><input type="checkbox" class="fr-case"> 區分大小寫</label><label>範圍 <select class="fr-scope"><option value="deck">目前這份簡報</option><option value="all">整個專案</option></select></label></div>' +
+      '<div class="fr-out" style="font-size:12.5px;color:var(--ink-soft);max-height:180px;overflow:auto;margin-bottom:8px;">輸入要找的字。</div>' +
+      '<div class="tb-foot"><button type="button" class="fr-go primary">全部取代</button><button type="button" class="fr-close">關閉</button></div>';
+    var $ = function(c){ return modal.querySelector(c); };
+    function targets(){
+      var secs = getSections(), cur = getCurrentQInfo(), curSec = cur ? findSectionForQuestion(cur.question.id) : null, list = [];
+      getSortedSectionKeys().forEach(function(secId){
+        if($(".fr-scope").value === "deck" && curSec && secId !== curSec.secId) return;
+        var sec = secs[secId];
+        getSortedQuestionKeys(sec).forEach(function(qId){ list.push({ secId: secId, sec: sec, qId: qId, q: sec.questions[qId] }); });
+      });
+      return list;
+    }
+    function rx(){ var f = $(".fr-find").value; if(!f) return null; return new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $(".fr-case").checked ? "g" : "gi"); }
+    function scan(doReplace){
+      var re = rx(), out = [], total = 0, rep = $(".fr-rep").value; if(!re) return { total: 0, out: [] };
+      var secs = getSections(), secsChanged = false;
+      targets().forEach(function(t){
+        var hits = 0;
+        if($(".fr-h").checked){ var m = (t.q.title || "").match(re); if(m){ hits += m.length; if(doReplace){ secs[t.secId].questions[t.qId].title = t.q.title.replace(re, function(){ return rep; }); secsChanged = true; } } }
+        if($(".fr-n").checked){ var m2 = (t.q.teacherNote || "").match(re); if(m2){ hits += m2.length; if(doReplace){ secs[t.secId].questions[t.qId].teacherNote = t.q.teacherNote.replace(re, function(){ return rep; }); secsChanged = true; } } }
+        if($(".fr-t").checked && t.sec.type === "board"){
+          var pr = getProgress(t.qId) || {}, changedT = false;
+          (pr.texts || []).forEach(function(o){ var m3 = String(o.text || "").match(re); if(m3){ hits += m3.length; if(doReplace){ o.text = o.text.replace(re, function(){ return rep; }); delete o.phoneticOverride; changedT = true; } } });
+          if(doReplace && changedT) writeProgress(t.qId, { texts: pr.texts });
+        }
+        if(hits){ total += hits; out.push({ t: t, hits: hits }); }
+      });
+      if(doReplace && secsChanged) writeSections(secs);
+      return { total: total, out: out };
+    }
+    function refresh(){
+      var r = scan(false), box = $(".fr-out");
+      if(!$(".fr-find").value){ box.textContent = "輸入要找的字。"; return; }
+      box.innerHTML = r.total ? ('找到 <b>' + r.total + '</b> 處：<br>' + r.out.map(function(x, i){ return '<a href="#" data-i="' + i + '" style="color:var(--seal);">' + escapeHtml(x.t.q.title || "") + '</a>（' + x.hits + '）'; }).join("、")) : "找不到。";
+      box._r = r;
+    }
+    ["fr-find", "fr-case", "fr-t", "fr-n", "fr-h", "fr-scope"].forEach(function(c){ $("." + c).oninput = refresh; $("." + c).onchange = refresh; });
+    $(".fr-out").onclick = function(e){ var a = e.target.closest("a[data-i]"); if(!a) return; e.preventDefault(); var x = $(".fr-out")._r.out[Number(a.dataset.i)]; if(x){ setCurrentQ(x.t.qId); } };
+    $(".fr-go").onclick = function(){
+      var pre = scan(false); if(!pre.total){ alert("找不到要取代的文字。"); return; }
+      if(!confirm("確定把 " + pre.total + " 處「" + $(".fr-find").value + "」取代為「" + $(".fr-rep").value + "」？\n（改完可以用「復原」還原目前這一頁；其他頁請再取代回來。）")) return;
+      var r = scan(true); $(".fr-out").textContent = "已取代 " + r.total + " 處。"; $(".fr-find").value = "";
+    };
+    $(".fr-close").onclick = function(){ back.remove(); };
+    back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
+    document.body.appendChild(back); $(".fr-find").focus();
+  }
+  document.addEventListener("keydown", function(e){
+    if((e.ctrlKey || e.metaKey) && (e.key === "h" || e.key === "H") && !isStudent){ e.preventDefault(); openFindReplace(); }
+  });
+  /* ===== 匯出簡報：PDF（每頁一張圖，當講義）／PowerPoint .pptx（文字、圖片、圖案是可編輯的物件；手寫筆跡合成一張透明圖）===== */
+  function exportDeckInfo(){
+    var cur = getCurrentQInfo(), found = cur ? findSectionForQuestion(cur.question.id) : null;
+    if(!found || found.sec.type !== "board"){ alert("請先點開一份「小白板」簡報（左邊列表裡的任何一張投影片），再按匯出。\nOpen a whiteboard deck first."); return null; }
+    var keys = getSortedQuestionKeys(found.sec);
+    return { secId: found.secId, sec: found.sec, slides: keys.map(function(k){ return found.sec.questions[k]; }) };
+  }
+  function mmDownloadBlob(blob, name){
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  }
+  function mmSafeName(s){ return String(s || "簡報").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 60); }
+  function dataUrlToBytes(u){ var b = atob(u.split(",")[1]), a = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  async function exportDeckPdf(){
+    var info = exportDeckInfo(); if(!info) return;
+    var bar = document.createElement("div"); bar.className = "import-slides-toast"; bar.textContent = "正在產生 PDF…"; document.body.appendChild(bar);
+    try{
+      var pages = [];
+      for(var i = 0; i < info.slides.length; i++){
+        bar.textContent = "正在產生 PDF… " + (i + 1) + " / " + info.slides.length;
+        var cv = await new Promise(function(res){ drawSlideThumb(info.slides[i], res, 1600, true); });
+        pages.push({ w: cv.width, h: cv.height, jpg: dataUrlToBytes(cv.toDataURL("image/jpeg", 0.88)) });
+      }
+      var enc = new TextEncoder(), parts = [], offsets = [], len = 0;
+      function put(x){ var b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); len += b.length; }
+      function obj(n, body){ offsets[n] = len; put(n + " 0 obj\n"); if(typeof body === "string") put(body); else { put(body.head); put(body.data); put("\nendstream"); } put("\nendobj\n"); }
+      put("%PDF-1.4\n");
+      var n = pages.length, kids = pages.map(function(_, i){ return (3 + i * 3) + " 0 R"; }).join(" ");
+      obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+      obj(2, "<< /Type /Pages /Kids [" + kids + "] /Count " + n + " >>");
+      pages.forEach(function(pg, i){
+        var pw = 842, ph = Math.round(842 * pg.h / pg.w * 100) / 100, id = 3 + i * 3;
+        obj(id, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + pw + " " + ph + "] /Resources << /XObject << /Im0 " + (id + 2) + " 0 R >> >> /Contents " + (id + 1) + " 0 R >>");
+        var cs = "q " + pw + " 0 0 " + ph + " 0 0 cm /Im0 Do Q";
+        obj(id + 1, { head: "<< /Length " + cs.length + " >>\nstream\n", data: enc.encode(cs) });
+        obj(id + 2, { head: "<< /Type /XObject /Subtype /Image /Width " + pg.w + " /Height " + pg.h + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + pg.jpg.length + " >>\nstream\n", data: pg.jpg });
+      });
+      var xrefAt = len, total = 3 + n * 3;
+      put("xref\n0 " + total + "\n0000000000 65535 f \n");
+      for(var k = 1; k < total; k++) put(String(offsets[k]).padStart(10, "0") + " 00000 n \n");
+      put("trailer\n<< /Size " + total + " /Root 1 0 R >>\nstartxref\n" + xrefAt + "\n%%EOF");
+      mmDownloadBlob(new Blob(parts, { type: "application/pdf" }), mmSafeName(info.sec.title) + ".pdf");
+    }catch(err){ console.error(err); alert("匯出 PDF 失敗：" + (err && err.message ? err.message : err)); }
+    bar.remove();
+  }
+  async function exportDeckPptx(){
+    var info = exportDeckInfo(); if(!info) return;
+    if(typeof JSZip === "undefined"){ alert("匯出元件還沒載入，請稍後再試。"); return; }
+    var bar = document.createElement("div"); bar.className = "import-slides-toast"; bar.textContent = "正在產生 PowerPoint…"; document.body.appendChild(bar);
+    try{
+      var XE = function(t){ return String(t == null ? "" : t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
+      var hex6 = function(c, d){ return (typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c)) ? c.slice(1).toUpperCase() : d; };
+      var zip = new JSZip(), WE = 12192000;
+      var zf = function(n, d){ zip.file(n, d, { createFolders: false }); };
+      var slideRatios = [], mediaN = 0, contentImgExt = {};
+      var slideXmls = [], slideRels = [];
+      for(var si = 0; si < info.slides.length; si++){
+        bar.textContent = "正在產生 PowerPoint… " + (si + 1) + " / " + info.slides.length;
+        var q = info.slides[si], prog = getProgress(q.id) || {};
+        var bgRef = prog.bgImage || q.bgImage || "", bgEl = await loadThumbImg(bgRef);
+        var fr = Number(prog.canvasRatio || q.canvasRatio) || 0;
+        var ratio = fr > 0 ? fr : (bgEl ? Math.max(0.4, Math.min(3, bgEl.naturalWidth / bgEl.naturalHeight)) : 1.5);
+        var HE = Math.round(WE / ratio); slideRatios.push(HE);
+        var rels = [], shapesXml = [], nid = 2;
+        var X = function(pct){ return Math.round(pct / 100 * WE); }, Y = function(pct){ return Math.round(pct / 100 * HE); };
+        async function addPic(dataUrlOrRef, xEmu, yEmu, wEmu, hEmu, crop, name){
+          var du = await refToDataUrl(dataUrlOrRef); if(!du) return;
+          var mime = (du.match(/^data:([^;,]+)/) || [])[1] || "image/png";
+          var bytes;
+          if(mime === "image/png" || mime === "image/jpeg"){ bytes = dataUrlToBytes(du); }
+          else { var im = new Image(); im.src = du; try{ await im.decode(); }catch(_){ return; } var c2 = document.createElement("canvas"); c2.width = im.naturalWidth; c2.height = im.naturalHeight; c2.getContext("2d").drawImage(im, 0, 0); bytes = dataUrlToBytes(c2.toDataURL("image/png")); mime = "image/png"; }
+          var ext = mime === "image/jpeg" ? "jpeg" : "png"; contentImgExt[ext] = true;
+          mediaN++; var fn = "image" + mediaN + "." + ext; zf("ppt/media/" + fn, bytes);
+          var rid = "rId" + (rels.length + 2); rels.push('<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/' + fn + '"/>');
+          var src = "";
+          if(crop && (crop.l || crop.t || crop.r || crop.b)) src = '<a:srcRect l="' + Math.round((crop.l || 0) * 1000) + '" t="' + Math.round((crop.t || 0) * 1000) + '" r="' + Math.round((crop.r || 0) * 1000) + '" b="' + Math.round((crop.b || 0) * 1000) + '"/>';
+          shapesXml.push('<p:pic><p:nvPicPr><p:cNvPr id="' + (nid++) + '" name="' + XE(name) + '"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="' + rid + '"/>' + (src || "") + '<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="' + Math.round(xEmu) + '" y="' + Math.round(yEmu) + '"/><a:ext cx="' + Math.max(1, Math.round(wEmu)) + '" cy="' + Math.max(1, Math.round(hEmu)) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>');
+        }
+        var bgXml = "";
+        var mm = (info.sec.master) || {};
+        var bgc = hex6(prog.bgColor || q.bgColor, null), bgo = prog.bgOp != null ? prog.bgOp : (q.bgOp != null ? q.bgOp : 1);
+        if(!bgc && mm.bgColor){ bgc = hex6(mm.bgColor, null); bgo = mm.bgOp != null ? mm.bgOp : 1; }
+        bgXml = '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="' + (bgc || "FFFCF7") + '">' + (bgc && bgo < 1 ? '<a:alpha val="' + Math.round(bgo * 100000) + '"/>' : "") + '</a:srgbClr></a:solidFill><a:effectLst/></p:bgPr></p:bg>';
+        if(bgEl){
+          var s0 = Math.min(WE / bgEl.naturalWidth, HE / bgEl.naturalHeight), bw0 = bgEl.naturalWidth * s0, bh0 = bgEl.naturalHeight * s0;
+          await addPic(bgRef, (WE - bw0) / 2, (HE - bh0) / 2, bw0, bh0, null, "背景圖片");
+        }
+        // 依上下層排序（images / shapes / texts 各自有 z，沒有就照原本順序）
+        var entries = [];
+        (prog.images || []).forEach(function(o, i){ entries.push({ k: "image", o: o, z: (o.z != null ? o.z : i), n: entries.length }); });
+        (prog.shapes || []).forEach(function(o, i){ entries.push({ k: "shape", o: o, z: (o.z != null ? o.z : 1000 + i), n: entries.length }); });
+        (prog.texts || []).forEach(function(o, i){ entries.push({ k: "text", o: o, z: (o.z != null ? o.z : 2000 + i), n: entries.length }); });
+        entries.sort(function(a, b){ return (a.z - b.z) || (a.n - b.n); });
+        // 手寫筆跡：合成一張透明 PNG 放在圖片／圖案之上、文字之下（跟畫面上的層次一致）
+        var strokeDone = false;
+        async function addStrokes(){
+          strokeDone = true;
+          var sts = (prog.strokes || []).filter(function(st){ return st.points && st.points.length > 1; }); if(!sts.length) return;
+          var CW = 1600, CH = Math.round(CW / ratio), sc = CW / 640, c = document.createElement("canvas"); c.width = CW; c.height = CH; var l = c.getContext("2d");
+          sts.forEach(function(st){
+            l.save();
+            if(st.isEraser){ l.globalCompositeOperation = "destination-out"; l.lineWidth = Math.max(1, st.size * 2.5 * sc); }
+            else { l.strokeStyle = st.color; l.lineWidth = Math.max(0.8, st.size * sc); l.globalAlpha = (st.opacity == null) ? 1 : st.opacity; }
+            l.lineCap = "round"; l.lineJoin = "round"; l.beginPath(); l.moveTo(st.points[0].x * CW / 100, st.points[0].y * CH / 100);
+            for(var k = 1; k < st.points.length; k++) l.lineTo(st.points[k].x * CW / 100, st.points[k].y * CH / 100);
+            l.stroke(); l.restore();
+          });
+          await addPic(c.toDataURL("image/png"), 0, 0, WE, HE, null, "手寫筆跡");
+        }
+        var mc = document.createElement("canvas").getContext("2d");
+        for(var ei = 0; ei < entries.length; ei++){
+          var e = entries[ei], o = e.o;
+          if(e.k === "text" && !strokeDone) await addStrokes();
+          if(e.k === "image"){
+            var wE = X(o.w), hE = o.h ? Y(o.h) : wE * (o.ar || 1);
+            await addPic(o.src, X(o.x) - wE / 2, Y(o.y) - hE / 2, wE, hE, o.crop, "圖片");
+          } else if(e.k === "shape"){
+            var gx = X(o.x), gy = Y(o.y), gw = X(o.w), gh = Y(o.h), col = hex6(o.color, "B23B32"), lw = Math.max(1, (o.sw || 3)) * 1.5 * 12700;
+            var isLine = o.type === "line" || o.type === "arrow", alpha = (o.op == null ? 1 : o.op);
+            var clrX = function(c){ return '<a:srgbClr val="' + c + '">' + (alpha < 1 ? '<a:alpha val="' + Math.round(alpha * 100000) + '"/>' : "") + '</a:srgbClr>'; };
+            var ln = '<a:ln w="' + Math.round(lw) + '" cap="rnd"><a:solidFill>' + clrX(col) + '</a:solidFill><a:round/>' + (o.type === "arrow" ? '<a:tailEnd type="triangle"/>' : "") + '</a:ln>';
+            var fill = (o.fill && !isLine) ? (o.grad ? '<a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0">' + clrX(col) + '</a:gs><a:gs pos="100000">' + clrX(hex6(o.grad.c2, "FFFFFF")) + '</a:gs></a:gsLst><a:lin ang="' + (o.grad.dir === "v" ? 5400000 : o.grad.dir === "d" ? 2700000 : 0) + '" scaled="0"/></a:gradFill>' : '<a:solidFill>' + clrX(col) + '</a:solidFill>') : '<a:noFill/>';
+            var prst = o.type === "ellipse" ? "ellipse" : o.type === "triangle" ? "triangle" : isLine ? "line" : (o.rad > 0 ? "roundRect" : "rect");
+            var flip = (o.fx ? ' flipH="1"' : "") + (o.fy ? ' flipV="1"' : "");
+            var inner = '<p:spPr><a:xfrm' + flip + '><a:off x="' + gx + '" y="' + gy + '"/><a:ext cx="' + Math.max(1, gw) + '" cy="' + Math.max(1, gh) + '"/></a:xfrm><a:prstGeom prst="' + prst + '"><a:avLst/></a:prstGeom>' + (isLine ? "" : fill) + ln + '</p:spPr>';
+            if(isLine) shapesXml.push('<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="' + (nid++) + '" name="線條"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>' + inner + '</p:cxnSp>');
+            else shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="圖案"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>' + inner + '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="zh-TW"/></a:p></p:txBody></p:sp>');
+          } else {
+            var fsU = o.fontSize || 36, lines = String(o.text || "").split("\n"), bold = (o.bold === undefined || o.bold);
+            mc.font = (bold ? "700 " : "400 ") + fsU + 'px "LXGW WenKai TC", serif';
+            var maxW = Math.max.apply(null, lines.map(function(t){ return mc.measureText(t).width; }).concat([fsU])), unit = WE / 640;
+            var padU = (o.bgOn || o.bdW > 0) ? fsU * 0.45 : 0;
+            var tw = (maxW + padU * 2) * unit * 1.08, th = lines.length * fsU * 1.3 * (o.lh || 1) * unit + (padU ? fsU * 0.24 * unit : 0);
+            var tcol = hex6(o.color, "2B2320"), al = o.align === "center" ? "ctr" : o.align === "right" ? "r" : "l";
+            var bg2 = o.bgOn ? '<a:solidFill><a:srgbClr val="' + hex6(o.bgColor, "FFF3B0") + '">' + ((o.bgOp != null && o.bgOp < 1) ? '<a:alpha val="' + Math.round(o.bgOp * 100000) + '"/>' : "") + '</a:srgbClr></a:solidFill>' : '<a:noFill/>';
+            var ln2 = o.bdW > 0 ? '<a:ln w="' + Math.round(o.bdW * 1.5 * 12700) + '"><a:solidFill><a:srgbClr val="' + hex6(o.bdC, "333333") + '"/></a:solidFill></a:ln>' : '<a:ln><a:noFill/></a:ln>';
+            var paras = lines.map(function(t, li){
+              var pre = o.list === "bullet" ? "• " : o.list === "number" ? (li + 1) + ". " : "";
+              return '<a:p><a:pPr algn="' + al + '">' + (o.lh && Math.abs(o.lh - 1) > 0.02 ? '<a:lnSpc><a:spcPct val="' + Math.round(o.lh * 100000) + '"/></a:lnSpc>' : "") + '</a:pPr><a:r><a:rPr lang="zh-TW" sz="' + Math.max(100, Math.round(fsU * 1.5 * 100)) + '" b="' + (bold ? 1 : 0) + '" dirty="0"><a:solidFill><a:srgbClr val="' + tcol + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(pre + t) + '</a:t></a:r></a:p>';
+            }).join("");
+            shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="文字方塊"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(X(o.x) - tw / 2) + '" y="' + Math.round(Y(o.y) - th / 2) + '"/><a:ext cx="' + Math.round(tw) + '" cy="' + Math.round(th) + '"/></a:xfrm><a:prstGeom prst="' + (o.rad > 0 ? "roundRect" : "rect") + '"><a:avLst/></a:prstGeom>' + bg2 + ln2 + '</p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>' + paras + '</p:txBody></p:sp>');
+          }
+        }
+        if(!strokeDone) await addStrokes();
+        // 母片頁尾／頁碼：當成一般文字方塊放在每一頁
+        function footBox(txt, cfg, nm){
+          var fs = (cfg.size || 16), w = WE * 0.3, h = fs * 1.6 * (WE / 640), pos = cfg.pos || "c";
+          var x = pos === "l" ? WE * 0.03 : pos === "r" ? WE * 0.97 - w : (WE - w) / 2, al = pos === "l" ? "l" : pos === "r" ? "r" : "ctr";
+          shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="' + nm + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(x) + '" y="' + Math.round(HE * 0.985 - h) + '"/><a:ext cx="' + Math.round(w) + '" cy="' + Math.round(h) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="b"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="' + al + '"/><a:r><a:rPr lang="zh-TW" sz="' + Math.round(fs * 150) + '"><a:solidFill><a:srgbClr val="' + hex6(cfg.color, "7A7A7A") + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(txt) + '</a:t></a:r></a:p></p:txBody></p:sp>');
+        }
+        if(mm.footer && mm.footer.text) footBox(mm.footer.text, mm.footer, "頁尾");
+        if(mm.pageNum && mm.pageNum.on) footBox((si + 1) + (mm.pageNum.total ? " / " + info.slides.length : ""), mm.pageNum, "頁碼");
+        if(mm.logo && mm.logo.src){ var lw2 = WE * (mm.logo.w || 10) / 100, lim = await loadThumbImg(mm.logo.src), lh2 = lim ? lw2 * lim.naturalHeight / lim.naturalWidth : lw2, c = mm.logo.corner || "tr"; await addPic(mm.logo.src, c[1] === "l" ? WE * 0.02 : WE * 0.98 - lw2, c[0] === "t" ? HE * 0.025 : HE * 0.975 - lh2, lw2, lh2, null, "標誌"); }
+        slideXmls.push('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld>' + bgXml + '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' + shapesXml.join("") + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>');
+        slideRels.push(rels);
+      }
+      var HEmax = slideRatios[0] || Math.round(WE / 1.5);
+      var NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+      var REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+      var ct = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' + (contentImgExt.png ? '<Default Extension="png" ContentType="image/png"/>' : "") + (contentImgExt.jpeg ? '<Default Extension="jpeg" ContentType="image/jpeg"/>' : "") +
+        '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>' +
+        slideXmls.map(function(_, i){ return '<Override PartName="/ppt/slides/slide' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'; }).join("") + '</Types>';
+      zf("[Content_Types].xml", ct);
+      zf("_rels/.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/officeDocument" Target="ppt/presentation.xml"/></Relationships>');
+      zf("ppt/presentation.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation ' + NS + '><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>' + slideXmls.map(function(_, i){ return '<p:sldId id="' + (256 + i) + '" r:id="rId' + (i + 3) + '"/>'; }).join("") + '</p:sldIdLst><p:sldSz cx="' + WE + '" cy="' + HEmax + '"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>');
+      zf("ppt/_rels/presentation.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/slideMaster" Target="slideMasters/slideMaster1.xml"/><Relationship Id="rId2" Type="' + REL + '/theme" Target="theme/theme1.xml"/>' + slideXmls.map(function(_, i){ return '<Relationship Id="rId' + (i + 3) + '" Type="' + REL + '/slide" Target="slides/slide' + (i + 1) + '.xml"/>'; }).join("") + '</Relationships>');
+      var emptyTree = '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree>';
+      zf("ppt/slideMasters/slideMaster1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster ' + NS + '><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>' + emptyTree + '</p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle><a:lvl1pPr><a:defRPr sz="4400"/></a:lvl1pPr></p:titleStyle><p:bodyStyle><a:lvl1pPr><a:defRPr sz="2800"/></a:lvl1pPr></p:bodyStyle><p:otherStyle><a:lvl1pPr><a:defRPr sz="1800"/></a:lvl1pPr></p:otherStyle></p:txStyles></p:sldMaster>');
+      zf("ppt/slideMasters/_rels/slideMaster1.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/slideLayout" Target="../slideLayouts/slideLayout1.xml"/><Relationship Id="rId2" Type="' + REL + '/theme" Target="../theme/theme1.xml"/></Relationships>');
+      zf("ppt/slideLayouts/slideLayout1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldLayout ' + NS + ' type="blank" preserve="1"><p:cSld name="空白">' + emptyTree + '</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>');
+      zf("ppt/slideLayouts/_rels/slideLayout1.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>');
+      zf("ppt/theme/theme1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Mandamy"><a:themeElements><a:clrScheme name="Mandamy"><a:dk1><a:srgbClr val="2B2320"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="B23B32"/></a:accent1><a:accent2><a:srgbClr val="E8825A"/></a:accent2><a:accent3><a:srgbClr val="4C7A5E"/></a:accent3><a:accent4><a:srgbClr val="3A7CA5"/></a:accent4><a:accent5><a:srgbClr val="6B5B95"/></a:accent5><a:accent6><a:srgbClr val="B8763D"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="Mandamy"><a:majorFont><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/><a:cs typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/><a:cs typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="Office"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>');
+      slideXmls.forEach(function(x, i){
+        zf("ppt/slides/slide" + (i + 1) + ".xml", x);
+        zf("ppt/slides/_rels/slide" + (i + 1) + ".xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' + slideRels[i].join("") + '</Relationships>');
+      });
+      var blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+      mmDownloadBlob(blob, mmSafeName(info.sec.title) + ".pptx");
+    }catch(err){ console.error(err); alert("匯出 PowerPoint 失敗：" + (err && err.message ? err.message : err)); }
+    bar.remove();
+  }
   function renderSidebar(){
     if(isStudent) return;
     sectionTreeListEl.innerHTML = "";
@@ -6459,12 +6894,16 @@
         <div class="section-head-actions">
           <button type="button" class="btn btn-sm btn-ghost btn-edit-sec" title="編輯大題（標題／說明／媒體）Edit Section" style="color:var(--ink-soft);">編輯</button>
           <button type="button" class="btn btn-sm btn-ghost btn-add-subq" title="新增小題 Add Question" style="color:var(--seal);">新增小題</button>
+          ${sec.type === "board" ? '<button type="button" class="btn btn-sm btn-ghost btn-findrep" title="尋找與取代（Ctrl/⌘+H）" style="color:var(--ink-soft);">🔎 尋找</button>' : ''}
+          ${sec.type === "board" ? '<button type="button" class="btn btn-sm btn-ghost btn-sorter" title="投影片整理檢視：大縮圖、拖曳重排、章節" style="color:var(--seal);">🗂 整理檢視</button>' : ''}
           <button type="button" class="btn btn-sm btn-ghost btn-del-sec" title="刪除大題 Delete Section" style="color:var(--ink-soft);">刪除</button>
         </div>
       `;
 
       head.onclick = function(e){ if(e.target.closest("button")) return; sec.collapsed = !sec.collapsed; writeSections(secs); };
       head.querySelector(".btn-edit-sec").onclick = function(e){ e.stopPropagation(); openSectionDialog(secId); };
+      var frBtn = head.querySelector(".btn-findrep"); if(frBtn) frBtn.onclick = function(e){ e.stopPropagation(); openFindReplace(); };
+      var sorterBtn = head.querySelector(".btn-sorter"); if(sorterBtn) sorterBtn.onclick = function(e){ e.stopPropagation(); openSlideSorter(); };
       head.querySelector(".btn-add-subq").onclick = function(e){ e.stopPropagation(); openQuestionDialog(secId, null); };
       head.querySelector(".btn-del-sec").onclick = function(e){
         e.stopPropagation();
@@ -6678,6 +7117,9 @@
 
   var btnNewSlide = document.getElementById("btn-new-slide");
   if(btnNewSlide) btnNewSlide.onclick = function(){ closeAddSlideMenu(); createBlankSlideSection(); };
+  var btnExpPptx = document.getElementById("btn-deck-export-pptx"), btnExpPdf = document.getElementById("btn-deck-export-pdf");
+  if(btnExpPptx) btnExpPptx.onclick = function(){ closeAddSlideMenu(); exportDeckPptx(); };
+  if(btnExpPdf) btnExpPdf.onclick = function(){ closeAddSlideMenu(); exportDeckPdf(); };
   var btnImportSlidesTop = document.getElementById("btn-import-slides-top");
   var importSlidesTopFileInput = document.getElementById("import-slides-top-file");
   if(btnImportSlidesTop && importSlidesTopFileInput){
@@ -8336,7 +8778,7 @@
   var pinnedExtraTools = {};
   // 2026-10-01 工具列自訂：哪些工具放左側／上方／隱藏、順序、收合狀態，存在這台裝置的 localStorage（每台裝置各自記，不同步）
   var TB_STORE_KEY = "mandamy-toolbar-layout-v1";
-  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "transition", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
+  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "transition", "present", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
   var tbConfig = null;
   function loadTbConfig(){
     if(tbConfig) return tbConfig;
@@ -8352,6 +8794,7 @@
   // 接著維持全螢幕，不用每換一題都重新點一次。實際「搬到 body 底下蓋滿視窗」的邏輯統一寫在
   // setupCanvasFullscreen() 這個共用函式，renderDrawBoard／renderHanziBoard 各自呼叫一次。
   var canvasFullscreen = false;
+  var ANIM_NAMES = { none: "無", fade: "淡入", flyL: "從左飛入", flyR: "從右飛入", flyT: "從上飛入", flyB: "從下飛入", zoom: "放大", wipe: "擦去", bounce: "彈跳", pulse: "脈衝（強調）", spin: "旋轉進入" };
   var objClipboard = null;    // 應用程式內部的複製：{ token, kind:"text"|"image", data }，跟系統剪貼簿用 token 對應
   var objKeyHandlers = null;  // 複製／剪下／貼上／Delete 的 document 監聽器，換題目前先移除
   var slideListArmed = false; // 最後一次點擊是不是在左側投影片列表（是的話 Backspace／Delete 刪除目前這張投影片）
@@ -8502,6 +8945,18 @@
       </div>` : ''}
       ${!isStudent ? `
       <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v" id="btn-present" title="放映工具：雷射筆、螢光筆、簡報者檢視 Slide show tools"><span class="tool-btn-v-icon">🔴</span><span class="tool-btn-v-label">放映工具</span></button>
+        <div class="color-popover">
+          <div class="color-popover-title">放映工具 Show tools</div>
+          <button type="button" class="trans-opt pt-laser" title="雷射筆（快速鍵 L）：紅色游標跟著滑鼠／手指，不會留下痕跡；再按一次或 Esc 關閉">🔴 雷射筆 Laser pointer</button>
+          <button type="button" class="trans-opt pt-hl" title="螢光筆：半透明黃色粗筆">🖍 螢光筆 Highlighter</button>
+          <button type="button" class="trans-opt pt-timer" title="倒數計時器（課堂活動用）：時間到會響一聲">⏱ 倒數計時 Countdown</button>
+          <button type="button" class="trans-opt pt-auto" title="自動播放：每隔幾秒自動換下一步／下一頁；再按一次停止">⏵ 自動播放 Auto-advance</button>
+          <button type="button" class="trans-opt pt-presenter" title="另開一個視窗：看備忘稿、下一張、計時器，並可遠端翻頁（放映視窗分享給學生，這個視窗自己看）">🖥 簡報者檢視 Presenter view</button>
+        </div>
+      </div>` : ''}
+      ${!isStudent ? `
+      <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v" id="btn-media" title="嵌入媒體：YouTube／音檔（全班同步播放）Embed media"><span class="tool-btn-v-icon">🎬</span><span class="tool-btn-v-label">媒體</span></button>
         <div class="color-popover">
           <div class="color-popover-title">嵌入媒體 Media</div>
@@ -8569,12 +9024,21 @@
             <div class="popover-field-row-label"><span title="0＝一開始就顯示；1＝老師按第 1 次「▶」才出現，以此類推">動畫：第幾次點擊出現 Animation</span></div>
             ${sizeComboHtml("text-step-input", boardState.step, 0, 30, [0,1,2,3,4,5,6,7,8,9,10])}
           </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="選一個文字方塊／圖片／圖案，再選動畫效果。相同的「第幾次點擊」＝同時出現；延遲可以做出「接在上一個之後」">動畫效果 Effect</span></div>
+            <div class="anim-row">
+              <select class="text-anim-select" title="動畫效果">${Object.keys(ANIM_NAMES).map(function(k){ return '<option value="' + k + '">' + ANIM_NAMES[k] + '</option>'; }).join("")}</select>
+              <select class="text-anim-delay" title="延遲（接在上一個之後）"><option value="0">同時</option><option value="0.5">延遲 0.5 秒</option><option value="1">延遲 1 秒</option><option value="2">延遲 2 秒</option></select>
+              <button type="button" class="text-anim-preview" title="預覽動畫">▶ 預覽</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v ${boardState.tool==='shape'?'active':''}" data-tool="shape" title="圖形 Shapes（滑鼠移入選形狀／顏色／線條粗細；拖曳畫出來，或點一下放預設大小）"><span class="tool-btn-v-icon">🔷</span><span class="tool-btn-v-label">圖案</span></button>
         <div class="color-popover shape-popover">
           <div class="color-popover-title">圖形 Shapes</div>
+          <button type="button" class="shape-table-btn" title="插入表格：由矩形格子＋文字方塊組成，自動群組；點兩下格子文字就能改">▦ 插入表格 Insert table</button>
           <div class="shape-type-row">
             <button type="button" class="shape-type-btn ${boardState.shapeType==='rect'?'active':''}" data-shape="rect" title="矩形 Rectangle">▭</button>
             <button type="button" class="shape-type-btn ${boardState.shapeType==='ellipse'?'active':''}" data-shape="ellipse" title="橢圓 Ellipse">◯</button>
@@ -8803,11 +9267,40 @@
     // 2026-10-01 投影片設定：背景顏色＋透明度（q.bgColor／q.bgOp；沒設＝預設的淺色底）
     var pageBgColor = String(progress.bgColor || q.bgColor || ""), pageBgOp = Number(progress.bgOp != null ? progress.bgOp : (q.bgOp != null ? q.bgOp : 1));
     if(!(pageBgOp >= 0.05 && pageBgOp <= 1)) pageBgOp = 1;
+    // 母片（整份簡報共用）：背景顏色、標誌、頁尾、頁碼。這一頁自己有設背景就用自己的，沒有才用母片的。
+    function getMaster(){
+      var sc = slideSecInfo && getSections()[slideSecInfo.secId];
+      return (sc && sc.master) || (slideSecInfo && slideSecInfo.sec && slideSecInfo.sec.master) || null;
+    }
     function applyPageBackground(){
-      if(/^#[0-9a-fA-F]{6}$/.test(pageBgColor)){
-        var r = parseInt(pageBgColor.substr(1, 2), 16), g = parseInt(pageBgColor.substr(3, 2), 16), b2 = parseInt(pageBgColor.substr(5, 2), 16);
-        cWrap.style.background = "rgba(" + r + "," + g + "," + b2 + "," + pageBgOp + ")";
+      var m = getMaster(), col = pageBgColor, op = pageBgOp;
+      if(!/^#[0-9a-fA-F]{6}$/.test(col) && m && /^#[0-9a-fA-F]{6}$/.test(m.bgColor || "")){ col = m.bgColor; op = m.bgOp != null ? m.bgOp : 1; }
+      if(/^#[0-9a-fA-F]{6}$/.test(col)){
+        var r = parseInt(col.substr(1, 2), 16), g = parseInt(col.substr(3, 2), 16), b2 = parseInt(col.substr(5, 2), 16);
+        cWrap.style.background = "rgba(" + r + "," + g + "," + b2 + "," + op + ")";
       } else cWrap.style.background = "";
+    }
+    function renderMaster(){
+      var old = cWrap.querySelector(".master-layer"); if(old) old.remove();
+      var m = getMaster(); if(!m) return;
+      var layer = document.createElement("div"); layer.className = "master-layer";
+      var sc = getScaleRatio();
+      if(m.logo && m.logo.src){
+        var im = document.createElement("img"); im.src = m.logo.src; im.draggable = false;
+        var c = m.logo.corner || "tr";
+        im.style.cssText = "position:absolute;width:" + (m.logo.w || 10) + "%;" + (c[0] === "t" ? "top:2.5%;" : "bottom:2.5%;") + (c[1] === "l" ? "left:2%;" : "right:2%;");
+        layer.appendChild(im);
+      }
+      function line(txt, cfg){
+        var d = document.createElement("div"); d.textContent = txt;
+        var pos = cfg.pos || "c";
+        d.style.cssText = "position:absolute;bottom:1.5%;white-space:nowrap;font-size:" + Math.round((cfg.size || 16) * sc) + "px;color:" + (cfg.color || "#7A7A7A") + ";" +
+          (pos === "l" ? "left:3%;" : pos === "r" ? "right:3%;" : "left:50%;transform:translateX(-50%);");
+        layer.appendChild(d);
+      }
+      if(m.footer && m.footer.text) line(m.footer.text, m.footer);
+      if(m.pageNum && m.pageNum.on) line(String(slideIndex + 1) + (m.pageNum.total ? " / " + slideSiblingIds.length : ""), m.pageNum);
+      cWrap.insertBefore(layer, cWrap.firstChild);
     }
 
     var stageArea = document.createElement("div");
@@ -8816,6 +9309,7 @@
     var cWrap = document.createElement("div");
     cWrap.className = "canvas-stage-wrap";
     applyPageBackground();
+    setTimeout(renderMaster, 0);
     // 換頁效果：只有「同一份簡報裡從別頁翻過來」才播（第一次打開、重新整理都不播）。
     var transMode = (slideSecInfo && slideSecInfo.sec.transition) || "none";
     if(transMode !== "none" && lastBoardQId && lastBoardQId !== q.id && slideSecInfo && lastBoardSecId === slideSecInfo.secId){
@@ -8908,6 +9402,7 @@
     var TB_ITEM_DEFS = [
       { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
       { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [vToolbar.querySelector(".slide-nav-row"), vToolbar.querySelector(".slide-nav-counter")]; } },
+      { key: "present", label: "放映工具（雷射筆／螢光筆／簡報者檢視）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-present"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "transition", label: "轉場", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "media", label: "媒體（YouTube／音檔）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-media"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "select", label: "選取（框選／群組）", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="select"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
@@ -9534,6 +10029,7 @@
       }
     }
     function updateSlideNavUi(){
+      pvPost();
       var cur = getProgress(q.id).revealStep || 0;
       var mx = maxStepOf(q.id);
       var last = slideSiblingIds.length - 1;
@@ -9932,6 +10428,34 @@
         }
       });
     }
+
+    // 動畫效果：套在目前選取的文字方塊／圖片／圖案上
+    function selectedAnimTarget(){
+      var o = activeSelectedShapeId ? shapes.find(function(x){ return x.id === activeSelectedShapeId; }) : null;
+      if(o) return { o: o, key: "shapes" };
+      o = activeSelectedTextId ? texts.find(function(x){ return x.id === activeSelectedTextId; }) : null;
+      if(o) return { o: o, key: "texts" };
+      o = activeSelectedImageId ? images.find(function(x){ return x.id === activeSelectedImageId; }) : null;
+      return o ? { o: o, key: "images" } : null;
+    }
+    function syncAnimUi(){
+      var tg = selectedAnimTarget(), se = vToolbar.querySelector(".text-anim-select"), de = vToolbar.querySelector(".text-anim-delay");
+      if(se) se.value = (tg && tg.o.anim) || "none"; if(de) de.value = String((tg && tg.o.animDelay) || 0);
+    }
+    var animSel = vToolbar.querySelector(".text-anim-select"), animDel = vToolbar.querySelector(".text-anim-delay"), animPrev = vToolbar.querySelector(".text-anim-preview");
+    function setAnimProps(){
+      var tg = selectedAnimTarget(); if(!tg){ alert("請先點選一個文字方塊、圖片或圖案，再設定動畫。\nSelect an object first."); syncAnimUi(); return; }
+      snapshotForUndo();
+      tg.o.anim = animSel.value === "none" ? undefined : animSel.value; tg.o.animDelay = Number(animDel.value) || undefined;
+      var patch = {}; patch[tg.key] = tg.key === "texts" ? texts : tg.key === "images" ? images : shapes; writeProgress(q.id, patch);
+    }
+    if(animSel) animSel.onchange = function(){ setAnimProps(); if(animSel.value !== "none" && animPrev) animPrev.click(); };
+    if(animDel) animDel.onchange = setAnimProps;
+    if(animPrev) animPrev.onclick = function(e){
+      e.stopPropagation(); var tg = selectedAnimTarget(); if(!tg || !tg.o.anim) return;
+      var st = tg.o.step || 0; startRevealAnim(st - 1, st); renderTexts();
+    };
+    vToolbar.addEventListener("pointerover", syncAnimUi);
 
     // 格線／筆刷粗細／底圖／移動畫面／錄示範這些非核心工具的實際事件綁定：初始已經被 pin 住的
     // 工具（上面已經搬進 vToolbar），以及之後使用者從「➕更多」點加入的工具，都會呼叫這裡。
@@ -10393,6 +10917,7 @@
         traceCanvas.height = ph;
         redrawStrokes();
         renderTexts();
+        renderMaster();
         renderStaticGuide();
         resizePersonalCanvases(); // 個人描紅是自己獨立的一塊畫布，尺寸也要跟著舞台區一起調整
       }
@@ -10434,12 +10959,39 @@
     function applyTextBgDefaults(t){ if(boardState.lineH && Math.abs(boardState.lineH - 1) > 0.001) t.lh = boardState.lineH; if(boardState.textBgOn){ t.bgOn = true; t.bgColor = boardState.textBgColor; t.bgOp = boardState.textBgOp == null ? 1 : boardState.textBgOp; } }
     function textBgRgba(hex, a){ var h = /^#[0-9a-fA-F]{6}$/.test(hex || "") ? hex : "#FFF3B0"; return "rgba(" + parseInt(h.substr(1, 2), 16) + "," + parseInt(h.substr(3, 2), 16) + "," + parseInt(h.substr(5, 2), 16) + "," + (a == null ? 1 : a) + ")"; }
 
+    // 物件格式（框線／陰影／圓角／圖片裁剪）：文字方塊和圖片共用。框線用 box-shadow 畫在外面，不會改變版面大小。
+    function applyObjFmt(el, o, scale){
+      var sh = [];
+      if(o.bdW > 0) sh.push("0 0 0 " + Math.max(1, o.bdW * scale) + "px " + (o.bdC || "#333333"));
+      if(o.shd) sh.push("0 " + Math.round(5 * scale) + "px " + Math.round(14 * scale) + "px rgba(0,0,0,.38)");
+      if(sh.length) el.style.setProperty("box-shadow", sh.join(","), "important");
+      if(o.rad > 0) el.style.setProperty("border-radius", Math.round(o.rad * scale) + "px", "important");
+      if(o.bdW > 0 && el.classList.contains("movable-text") && !o.bgOn) el.style.setProperty("padding", "0.12em 0.45em", "important");
+      var c = o.crop;
+      if(c && (c.l || c.t || c.r || c.b)) el.style.clipPath = "inset(" + (c.t || 0) + "% " + (c.r || 0) + "% " + (c.b || 0) + "% " + (c.l || 0) + "%" + (o.rad > 0 ? " round " + Math.round(o.rad * scale) + "px" : "") + ")";
+    }
+    var lastRevSeen = null, revealAnim = null, revealAnimTimer = 0;
+    function syncRevealAnim(){
+      var rv = getProgress(q.id).revealStep || 0;
+      if(lastRevSeen == null){ lastRevSeen = rv; return; }
+      if(rv !== lastRevSeen){ startRevealAnim(rv > lastRevSeen ? lastRevSeen : null, rv); lastRevSeen = rv; }
+    }
+    function startRevealAnim(from, to){
+      if(from == null){ revealAnim = null; return; }
+      revealAnim = { from: from, to: to };
+      clearTimeout(revealAnimTimer); revealAnimTimer = setTimeout(function(){ revealAnim = null; }, 2800);
+    }
+    function applyAnim(el, o){
+      if(!revealAnim || !o.anim || o.anim === "none") return;
+      var st = o.step || 0; if(!(st > revealAnim.from && st <= revealAnim.to)) return;
+      el.classList.add("anim-" + o.anim); el.style.setProperty("--adl", (o.animDelay || 0) + "s");
+    }
     function renderTexts(){
       if(inPlaceEdit){ inPlaceEdit.refreshStyle(); return; } // 正在就地編輯：不要重建文字層（會把正在打字的框搞掉）
       textLayer.innerHTML = "";
       var scale = getScaleRatio();
       var zrT = zRanks();
-
+      syncRevealAnim();
       var revealNow = getProgress(q.id).revealStep || 0;
       texts.forEach(function(t, idx){
         var stepHidden = (t.step || 0) > revealNow; // 還沒輪到出現
@@ -10449,6 +11001,7 @@
         div.style.left = t.x + "%";
         div.style.top = t.y + "%";
         div.dataset.textId = t.id;
+        applyAnim(div, t);
         div.style.zIndex = String((zrT.map[t.id] || 0) + 1);
         div.style.color = t.color || "var(--ink)";
 
@@ -10462,6 +11015,7 @@
           div.style.setProperty("padding", "0.12em 0.45em", "important");
           div.style.setProperty("border-radius", "0.3em", "important");
         }
+        applyObjFmt(div, t, scale);
         if(t.list === "bullet") div.classList.add("list-bullet"); else if(t.list === "number") div.classList.add("list-number");
 
         div.innerHTML = `
@@ -10915,6 +11469,15 @@
       var col = sh.color || "#B23B32";
       function mk(tag, attrs){ var el = document.createElementNS(SHAPE_NS, tag); Object.keys(attrs).forEach(function(k){ el.setAttribute(k, attrs[k]); }); return el; }
       var common = { stroke: col, "stroke-width": sw, fill: (sh.fill && sh.type !== "line" && sh.type !== "arrow") ? col : "none", "stroke-linejoin": "round", "stroke-linecap": "round" };
+      if(sh.shd) g.style.filter = "drop-shadow(0 " + Math.round(4 * getScaleRatio()) + "px " + Math.round(6 * getScaleRatio()) + "px rgba(0,0,0,.4))";
+      if(sh.grad && common.fill !== "none"){
+        var gid = "gr" + String(sh.id).replace(/[^a-z0-9]/gi, "");
+        var defs = document.createElementNS(SHAPE_NS, "defs"), lg = document.createElementNS(SHAPE_NS, "linearGradient");
+        lg.setAttribute("id", gid);
+        var d = sh.grad.dir || "h"; lg.setAttribute("x1", "0"); lg.setAttribute("y1", "0"); lg.setAttribute("x2", d === "v" ? "0" : "1"); lg.setAttribute("y2", d === "h" ? "0" : "1");
+        [[0, col], [1, sh.grad.c2 || "#FFFFFF"]].forEach(function(st){ var sp = document.createElementNS(SHAPE_NS, "stop"); sp.setAttribute("offset", String(st[0])); sp.setAttribute("stop-color", st[1]); lg.appendChild(sp); });
+        defs.appendChild(lg); g.appendChild(defs); common.fill = "url(#" + gid + ")";
+      }
       if(sh.type === "ellipse"){
         g.appendChild(mk("ellipse", Object.assign({ cx: gm.x + gm.w / 2, cy: gm.y + gm.h / 2, rx: gm.w / 2, ry: gm.h / 2 }, common)));
       } else if(sh.type === "triangle"){
@@ -10930,7 +11493,7 @@
           g.appendChild(mk("polygon", { points: gm.x2 + "," + gm.y2 + " " + (gm.x2 + Math.cos(a1) * L) + "," + (gm.y2 + Math.sin(a1) * L) + " " + (gm.x2 + Math.cos(a2) * L) + "," + (gm.y2 + Math.sin(a2) * L), fill: col, stroke: col, "stroke-width": 1, "stroke-linejoin": "round" }));
         }
       } else {
-        g.appendChild(mk("rect", Object.assign({ x: gm.x, y: gm.y, width: gm.w, height: gm.h, rx: Math.min(6, gm.w / 4, gm.h / 4) }, common)));
+        g.appendChild(mk("rect", Object.assign({ x: gm.x, y: gm.y, width: gm.w, height: gm.h, rx: sh.rad > 0 ? Math.min(gm.w / 2, gm.h / 2, sh.rad * getScaleRatio()) : Math.min(6, gm.w / 4, gm.h / 4) }, common)));
       }
       return g;
     }
@@ -10938,6 +11501,7 @@
       var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400;
       Array.prototype.slice.call(cWrap.querySelectorAll(".shape-svg")).forEach(function(e){ e.remove(); });
       var zrS = zRanks();
+      syncRevealAnim();
       var revealNow = getProgress(q.id).revealStep || 0;
       function mkSvg(g){
         var sv = document.createElementNS(SHAPE_NS, "svg"); sv.setAttribute("class", "shape-svg"); sv.setAttribute("preserveAspectRatio", "none");
@@ -10947,6 +11511,7 @@
         var hid = (sh.step || 0) > revealNow;
         if(hid && isStudent) return;
         var sv = mkSvg(buildShapeSvgEl(sh, W, H, hid));
+        applyAnim(sv, sh);
         var rS = zrS.map[sh.id] || 0;
         if(rS > zrS.minText){ sv.style.zIndex = String(rS + 1); textLayer.appendChild(sv); }
         else { sv.style.zIndex = String(rS); imageLayer.appendChild(sv); }
@@ -11084,6 +11649,7 @@
     function renderImages(){
       imageLayer.innerHTML = "";
       var zrI = zRanks();
+      syncRevealAnim();
       var revealNow = getProgress(q.id).revealStep || 0;
       images.forEach(function(im, idx){
         var stepHidden = (im.step || 0) > revealNow;
@@ -11091,6 +11657,7 @@
         var el = document.createElement("img");
         el.className = "board-image" + (stepHidden ? " step-hidden" : "");
         el.dataset.imgId = im.id; el.draggable = false; setImgSrc(el, im.src);
+        applyAnim(el, im); applyObjFmt(el, im, getScaleRatio());
         el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
         if(im.h){ el.style.height = im.h + "%"; el.style.objectFit = "fill"; }
         var rI = zrI.map[im.id] || 0;
@@ -11653,6 +12220,81 @@
       writeProgress(q.id, patch);
       renderTexts(); renderSelection();
     }
+    // ===== 物件格式：框線／陰影／圓角（文字方塊、圖片、圖案）、圖片裁剪／去背、圖案漸層填色 =====
+    function openObjFormat(){
+      var items = expandGroups(selSet).filter(function(it){ return it.k !== "stroke"; });
+      var objs = items.map(function(it){ return { k: it.k, o: selItemObj(it) }; }).filter(function(x){ return x.o; });
+      if(!objs.length) return;
+      snapshotForUndo();
+      var has = function(k){ return objs.some(function(x){ return x.k === k; }); };
+      var first = objs[0].o;
+      var back = document.createElement("div"); back.className = "tb-modal-back";
+      var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(460px,94vw)"; back.appendChild(modal);
+      function commit(){
+        var patch = {}; if(has("text")) patch.texts = texts; if(has("image")) patch.images = images; if(has("shape")) patch.shapes = shapes;
+        writeProgress(q.id, patch); renderTexts(); renderSelection();
+      }
+      function each(fn){ objs.forEach(function(x){ fn(x.o, x.k); }); commit(); }
+      function row(label, html){ var d = document.createElement("div"); d.style.cssText = "display:flex;align-items:center;gap:8px;margin:9px 0;font-size:13px;flex-wrap:wrap;"; d.innerHTML = '<span style="min-width:74px;font-weight:700;">' + label + '</span>' + html; modal.appendChild(d); return d; }
+      modal.innerHTML = '<h3>🎨 物件格式 Format</h3><div class="tb-hint">套用到選取的 ' + objs.length + ' 個物件，即時生效；不滿意可以按「復原」。</div>';
+      var r1 = row("框線", '<input type="range" class="f-bw" min="0" max="12" step="1" value="' + (first.bdW || 0) + '" style="flex:1;min-width:90px;"><input type="color" class="f-bc" value="' + (first.bdC || "#333333") + '"><b class="f-bwv">' + (first.bdW || 0) + '</b>');
+      r1.querySelector(".f-bw").oninput = function(e){ r1.querySelector(".f-bwv").textContent = e.target.value; each(function(o){ o.bdW = Number(e.target.value) || undefined; o.bdC = r1.querySelector(".f-bc").value; if(objs.length && has("shape") && !has("text") && !has("image")){ if(o.bdW) o.sw = o.bdW; } }); };
+      r1.querySelector(".f-bc").oninput = function(e){ each(function(o, k){ o.bdC = e.target.value; if(k === "shape") o.color = e.target.value; }); };
+      var r2 = row("陰影", '<label><input type="checkbox" class="f-sh" ' + (first.shd ? "checked" : "") + '> 加上陰影</label>');
+      r2.querySelector(".f-sh").onchange = function(e){ each(function(o){ o.shd = e.target.checked || undefined; }); };
+      var r3 = row("圓角", '<input type="range" class="f-rad" min="0" max="60" step="1" value="' + (first.rad || 0) + '" style="flex:1;min-width:90px;"><b class="f-radv">' + (first.rad || 0) + '</b>');
+      r3.querySelector(".f-rad").oninput = function(e){ r3.querySelector(".f-radv").textContent = e.target.value; each(function(o){ o.rad = Number(e.target.value) || undefined; }); };
+      if(has("shape")){
+        var g0 = first.grad || null;
+        var r4 = row("漸層填色", '<label><input type="checkbox" class="f-gr" ' + (g0 ? "checked" : "") + '> 啟用</label><input type="color" class="f-gc" value="' + ((g0 && g0.c2) || "#FFFFFF") + '"><select class="f-gd"><option value="h">左→右</option><option value="v">上→下</option><option value="d">斜向</option></select>');
+        if(g0) r4.querySelector(".f-gd").value = g0.dir || "h";
+        var applyGr = function(){ var on = r4.querySelector(".f-gr").checked; each(function(o, k){ if(k !== "shape") return; if(on){ o.fill = true; o.grad = { c2: r4.querySelector(".f-gc").value, dir: r4.querySelector(".f-gd").value }; } else delete o.grad; }); };
+        r4.querySelector(".f-gr").onchange = applyGr; r4.querySelector(".f-gc").oninput = applyGr; r4.querySelector(".f-gd").onchange = applyGr;
+      }
+      if(has("image")){
+        var cr = first.crop || {};
+        ["l:左", "r:右", "t:上", "b:下"].forEach(function(d){
+          var kx = d.split(":")[0], lb = d.split(":")[1];
+          var rr = row("裁剪・" + lb, '<input type="range" class="f-cr" min="0" max="45" step="1" value="' + (cr[kx] || 0) + '" style="flex:1;min-width:90px;"><b>' + (cr[kx] || 0) + '%</b>');
+          rr.querySelector(".f-cr").oninput = function(e){ rr.querySelector("b").textContent = e.target.value + "%"; each(function(o, k){ if(k !== "image") return; o.crop = Object.assign({}, o.crop || {}); o.crop[kx] = Number(e.target.value) || 0; }); };
+        });
+        var rb = row("去背", '<span style="font-size:12px;">把接近白色的地方變透明</span><input type="range" class="f-tol" min="8" max="80" value="36" style="width:90px;"><button type="button" class="tb-row f-rmbg" style="cursor:pointer;margin:0;padding:4px 12px;">去背</button><button type="button" class="tb-row f-rsbg" style="cursor:pointer;margin:0;padding:4px 12px;">還原原圖</button>');
+        rb.querySelector(".f-rmbg").onclick = async function(e){
+          var btn = e.target; btn.disabled = true; btn.textContent = "處理中…";
+          var tol = Number(rb.querySelector(".f-tol").value);
+          for(var i = 0; i < objs.length; i++){
+            if(objs[i].k !== "image") continue;
+            var im = objs[i].o, url = await refToDataUrl(im.srcOrig || im.src); if(!url) continue;
+            var img = new Image(); img.src = url; try{ await img.decode(); }catch(_){ continue; }
+            var cv = document.createElement("canvas"); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+            var cx = cv.getContext("2d"); cx.drawImage(img, 0, 0);
+            var dt = cx.getImageData(0, 0, cv.width, cv.height), d = dt.data;
+            for(var p = 0; p < d.length; p += 4){
+              var dist = Math.sqrt((255 - d[p]) * (255 - d[p]) + (255 - d[p + 1]) * (255 - d[p + 1]) + (255 - d[p + 2]) * (255 - d[p + 2]));
+              if(dist < tol) d[p + 3] = 0; else if(dist < tol * 1.6) d[p + 3] = Math.round(d[p + 3] * (dist - tol) / (tol * 0.6));
+            }
+            cx.putImageData(dt, 0, 0);
+            var blob = await new Promise(function(r){ cv.toBlob(r, "image/png"); });
+            var ref = await storeMediaBlob(blob); if(!ref) continue;
+            if(!im.srcOrig) im.srcOrig = im.src; im.src = ref;
+          }
+          btn.disabled = false; btn.textContent = "去背"; commit();
+        };
+        rb.querySelector(".f-rsbg").onclick = function(){ each(function(o, k){ if(k === "image" && o.srcOrig){ o.src = o.srcOrig; delete o.srcOrig; } }); };
+        var nt = document.createElement("div"); nt.className = "tb-hint"; nt.textContent = "小提醒：圖片有裁剪時，框線和陰影會被裁掉；需要框線請先不要裁剪。去背只處理接近白色的背景。"; modal.appendChild(nt);
+      }
+      var lk = first.link || {};
+      var slideOpts = slideSiblingIds.map(function(id, i){ var qq = slideSecInfo && slideSecInfo.sec.questions[id]; return '<option value="' + id + '">' + (i + 1) + '. ' + escapeHtml((qq && qq.title) || "") + '</option>'; }).join("");
+      var r5 = row("連結 Link", '<select class="f-lt"><option value="">無</option><option value="slide">跳到投影片</option><option value="url">開啟網址</option></select><select class="f-ls" style="max-width:190px;">' + slideOpts + '</select><input type="text" class="f-lu" placeholder="https://…" style="flex:1;min-width:150px;padding:3px 6px;">');
+      r5.querySelector(".f-lt").value = lk.t || ""; if(lk.t === "slide" && lk.id) r5.querySelector(".f-ls").value = lk.id; r5.querySelector(".f-lu").value = lk.url || "";
+      function showLk(){ var t = r5.querySelector(".f-lt").value; r5.querySelector(".f-ls").style.display = t === "slide" ? "" : "none"; r5.querySelector(".f-lu").style.display = t === "url" ? "" : "none"; }
+      function applyLk(){ var t = r5.querySelector(".f-lt").value; showLk(); each(function(o){ if(t === "slide") o.link = { t: "slide", id: r5.querySelector(".f-ls").value }; else if(t === "url" && r5.querySelector(".f-lu").value.trim()) o.link = { t: "url", url: r5.querySelector(".f-lu").value.trim() }; else delete o.link; }); }
+      showLk(); r5.querySelector(".f-lt").onchange = applyLk; r5.querySelector(".f-ls").onchange = applyLk; r5.querySelector(".f-lu").oninput = applyLk;
+      var lh2 = document.createElement("div"); lh2.className = "tb-hint"; lh2.textContent = "連結在「放映」時輕點物件（或編輯時按住 Ctrl/⌘ 點）就會啟動；可以做成「回到目錄」「選擇題答案」按鈕。"; modal.appendChild(lh2);
+      var ok = document.createElement("button"); ok.type = "button"; ok.className = "tb-row"; ok.style.cssText = "cursor:pointer;margin:12px 0 0;padding:6px 18px;"; ok.textContent = "完成"; ok.onclick = function(){ back.remove(); }; modal.appendChild(ok);
+      back.addEventListener("click", function(e){ if(e.target === back) back.remove(); });
+      document.body.appendChild(back);
+    }
     function renderSelection(){
       selectLayer.innerHTML = "";
       if(!selSet.length) return;
@@ -11674,7 +12316,13 @@
       bar.innerHTML = '<span class="sb-count">已選 ' + items.length + ' 個</span>' +
         (items.length >= 2 && !oneWholeGroup ? '<button type="button" data-act="group" title="組成群組（Ctrl/⌘+G）：之後點一下就整組一起選取、搬動">🔗 組成群組</button>' : '') +
         (inGroup ? '<button type="button" data-act="ungroup" title="解散群組（Ctrl/⌘+Shift+G）">解散群組</button>' : '') +
-        '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>';
+        '<button type="button" data-act="copy" title="複製（Ctrl/⌘+C）；貼上 Ctrl/⌘+V、重複製作 Ctrl/⌘+D">⧉ 複製</button>' +
+        '<button type="button" data-act="dup" title="重複製作（Ctrl/⌘+D）">重複製作</button>' +
+        (items.some(function(x){ return x.k !== "stroke"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
+        '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>' +
+        (selUnits().length >= 2 ? '<span class="sb-sep"></span>' +
+          [["l","⇤","靠左對齊"],["c","⇔","水平置中"],["r","⇥","靠右對齊"],["t","⤒","靠上對齊"],["m","⇕","垂直置中"],["b","⤓","靠下對齊"]].map(function(a){ return '<button type="button" class="sb-al" data-act="al-' + a[0] + '" title="' + a[2] + '">' + a[1] + '</button>'; }).join("") +
+          (selUnits().length >= 3 ? '<button type="button" class="sb-al" data-act="al-dh" title="水平均分">⋯↔</button><button type="button" class="sb-al" data-act="al-dv" title="垂直均分">⋯↕</button>' : '') : '');
       var nearTop = u.t < 9;
       bar.style.left = u.l + "%";
       if(nearTop) bar.style.top = "calc(" + u.b + "% + 6px)"; else bar.style.top = "calc(" + u.t + "% - 38px)";
@@ -11682,6 +12330,10 @@
       bar.addEventListener("click", function(e){
         var bt = e.target.closest("button"); if(!bt) return; e.stopPropagation();
         if(bt.dataset.act === "group") groupSelection(); else if(bt.dataset.act === "ungroup") ungroupSelection(); else if(bt.dataset.act === "delete") deleteSelection();
+        else if(bt.dataset.act === "copy"){ copySelection(); bt.textContent = "✓ 已複製"; }
+        else if(bt.dataset.act === "dup") duplicateSelection();
+        else if(bt.dataset.act === "fmt") openObjFormat();
+        else if(/^al-/.test(bt.dataset.act)) alignSelection(bt.dataset.act.slice(3));
       });
       selectLayer.appendChild(bar);
     }
@@ -11712,15 +12364,33 @@
         var st = strokes.find(function(x){ return x.id === it.id; }); return st ? { it: it, o: st, pts: st.points.map(function(pt){ return { x: pt.x, y: pt.y, t: pt.t }; }) } : null;
       }).filter(Boolean);
       var moved = false, raf = 0, last = null;
+      var u0 = unionBox(selSet), others = [], thr = 0.9;
+      allItems().forEach(function(it){ if(inSel(it)) return; var b = itemBox(it); if(b) others.push(b); });
+      var xT = [0, 50, 100], yT = [0, 50, 100];
+      others.forEach(function(b){ xT.push(b.l, (b.l + b.r) / 2, b.r); yT.push(b.t, (b.t + b.b) / 2, b.b); });
+      function snapAxis(a0, a1, targets, d){
+        var best = null, cand = [a0 + d, (a0 + a1) / 2 + d, a1 + d];
+        cand.forEach(function(c){ targets.forEach(function(t){ var df = t - c; if(Math.abs(df) <= thr && (best === null || Math.abs(df) < Math.abs(best.df))) best = { df: df, at: t }; }); });
+        return best;
+      }
+      function drawGuides(gx, gy){
+        selectLayer.querySelectorAll(".select-guide").forEach(function(n){ n.remove(); });
+        if(gx !== null){ var v = document.createElement("div"); v.className = "select-guide"; v.style.cssText = "left:" + gx + "%;top:0;width:1.5px;height:100%;"; selectLayer.appendChild(v); }
+        if(gy !== null){ var h = document.createElement("div"); h.className = "select-guide"; h.style.cssText = "top:" + gy + "%;left:0;height:1.5px;width:100%;"; selectLayer.appendChild(h); }
+      }
       function apply(){
         raf = 0; if(!last) return;
-        var dx = last.x - p0.x, dy = last.y - p0.y, hasStroke = false;
+        var dx = last.x - p0.x, dy = last.y - p0.y, hasStroke = false, gx = null, gy = null;
+        if(u0 && !(window.event && window.event.altKey)){
+          var sx = snapAxis(u0.l, u0.r, xT, dx), sy = snapAxis(u0.t, u0.b, yT, dy);
+          if(sx){ dx += sx.df; gx = sx.at; } if(sy){ dy += sy.df; gy = sy.at; }
+        }
         orig.forEach(function(g){
           if(g.it.k === "stroke"){ hasStroke = true; g.o.points.forEach(function(pt, i){ pt.x = g.pts[i].x + dx; pt.y = g.pts[i].y + dy; }); }
           else { g.o.x = Math.round((g.x + dx) * 100) / 100; g.o.y = Math.round((g.y + dy) * 100) / 100; }
         });
         if(hasStroke) redrawStrokes();
-        renderTexts(); renderSelection();
+        renderTexts(); renderSelection(); drawGuides(gx, gy);
       }
       function mv(ev){
         var p = getPos(ev);
@@ -11730,6 +12400,7 @@
       function up(){
         window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
         if(raf){ cancelAnimationFrame(raf); apply(); }
+        drawGuides(null, null);
         if(!moved) return;
         var patch = {}, kinds = {};
         orig.forEach(function(g){ kinds[g.it.k] = true; });
@@ -11766,11 +12437,151 @@
       }
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     }
+    // ===== 插入表格：R×C 個矩形格子＋每格一個文字方塊，自動群組（可以解散群組後個別調整）=====
+    function insertTable(rows, cols, header){
+      rows = Math.max(1, Math.min(12, rows | 0)); cols = Math.max(1, Math.min(10, cols | 0));
+      var W = cWrap.clientWidth || 640, H = cWrap.clientHeight || 400;
+      var tw = Math.min(90, cols * 18), cellW = tw / cols, cellHpx = Math.min(H * 0.6 / rows, 72), cellH = cellHpx / H * 100, th = cellH * rows;
+      var x0 = 50 - tw / 2, y0 = Math.max(4, 50 - th / 2);
+      var fs = Math.max(10, Math.min(28, Math.round(cellW / 100 * 640 / 5.2), Math.round(cellH / 100 * 640 * (H / W) * 0.45)));
+      snapshotForUndo();
+      var members = [];
+      for(var r = 0; r < rows; r++){
+        for(var c = 0; c < cols; c++){
+          var isH = header && r === 0;
+          var sh = { id: uid("sh"), type: "rect", x: Math.round((x0 + c * cellW) * 100) / 100, y: Math.round((y0 + r * cellH) * 100) / 100, w: Math.round(cellW * 100) / 100, h: Math.round(cellH * 100) / 100, fx: false, fy: false, color: isH ? "#E8825A" : "#555555", sw: 2, fill: isH, op: isH ? 0.35 : 1, step: 0 };
+          assignNewZ("shape", sh); shapes.push(sh); members.push({ k: "shape", id: sh.id });
+        }
+      }
+      for(var r2 = 0; r2 < rows; r2++){
+        for(var c2 = 0; c2 < cols; c2++){
+          var isH2 = header && r2 === 0;
+          var tx = { id: uid("t"), text: isH2 ? "標題" : "文字", x: Math.round((x0 + (c2 + 0.5) * cellW) * 100) / 100, y: Math.round((y0 + (r2 + 0.5) * cellH) * 100) / 100, color: isH2 ? "#2B2320" : "#8A8A8A", fontSize: fs, bold: isH2, step: 0, align: "center", list: "none" };
+          assignNewZ("text", tx); texts.push(tx); members.push({ k: "text", id: tx.id });
+        }
+      }
+      groups.push({ id: uid("g"), members: members });
+      writeProgress(q.id, { shapes: shapes, texts: texts, groups: groups });
+      switchToSelectTool(); selSet = members.slice(); renderTexts(); renderSelection();
+    }
+    function openTableDialog(){
+      var back = document.createElement("div"); back.className = "tb-modal-back";
+      var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(380px,94vw)"; back.appendChild(modal);
+      modal.innerHTML = '<h3>▦ 插入表格 Insert table</h3><div style="display:flex;gap:10px;align-items:center;font-size:14px;flex-wrap:wrap;">列數 <input type="number" class="tb-r" min="1" max="12" value="3" style="width:64px;padding:4px 6px;"> × 欄數 <input type="number" class="tb-c" min="1" max="10" value="3" style="width:64px;padding:4px 6px;"></div><label style="display:flex;gap:6px;margin:10px 0;font-size:13px;"><input type="checkbox" class="tb-h" checked> 第一列當標題列（橘色底）</label><div class="tb-hint">表格會放在這一頁中間，格子和文字已經自動群組；點兩下格子裡的字就能改，想個別調整請先「解散群組」。</div><div class="tb-foot"><button type="button" class="primary tb-ok">插入</button><button type="button" class="tb-cancel">取消</button></div>';
+      modal.querySelector(".tb-ok").onclick = function(){ insertTable(Number(modal.querySelector(".tb-r").value), Number(modal.querySelector(".tb-c").value), modal.querySelector(".tb-h").checked); back.remove(); };
+      modal.querySelector(".tb-cancel").onclick = function(){ back.remove(); };
+      back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
+      document.body.appendChild(back);
+    }
+    var tableBtn = vToolbar.querySelector(".shape-table-btn"); if(tableBtn) tableBtn.onclick = function(e){ e.stopPropagation(); openTableDialog(); };
+
+    // ===== 複製／貼上／重複製作、對齊與均分、智慧參考線 =====
+    function selItemObj(it){
+      if(it.k === "text") return texts.find(function(x){ return x.id === it.id; });
+      if(it.k === "image") return images.find(function(x){ return x.id === it.id; });
+      if(it.k === "shape") return shapes.find(function(x){ return x.id === it.id; });
+      return strokes.find(function(x){ return x.id === it.id; });
+    }
+    function shiftItems(items, dx, dy){
+      var kinds = {};
+      items.forEach(function(it){
+        var o = selItemObj(it); if(!o) return; kinds[it.k] = true;
+        if(it.k === "stroke") o.points.forEach(function(pt){ pt.x += dx; pt.y += dy; });
+        else { o.x = Math.round((o.x + dx) * 100) / 100; o.y = Math.round((o.y + dy) * 100) / 100; }
+      });
+      return kinds;
+    }
+    function commitKinds(kinds){
+      var patch = {};
+      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+      if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; redrawStrokes(); }
+      writeProgress(q.id, patch); renderTexts(); renderSelection();
+    }
+    function copySelection(){
+      var items = expandGroups(selSet); if(!items.length) return false;
+      var clip = { items: [], groups: [] };
+      items.forEach(function(it){ var o = selItemObj(it); if(o) clip.items.push({ k: it.k, data: JSON.parse(JSON.stringify(o)), oldId: it.id }); });
+      groups.forEach(function(g){ if(g.members.every(function(m){ return items.some(function(x){ return sameItem(x, m); }); })) clip.groups.push(g.members.map(function(m){ return m.id; })); });
+      window.__mmSelClip = clip; window.__mmSelClipN = 0; return true;
+    }
+    function pasteSelClip(offsetPct){
+      var clip = window.__mmSelClip; if(!clip || !clip.items.length) return false;
+      window.__mmSelClipN = (window.__mmSelClipN || 0) + 1;
+      var off = offsetPct != null ? offsetPct : Math.min(window.__mmSelClipN, 8) * 2.5;
+      snapshotForUndo();
+      var idMap = {}, made = [], kinds = {};
+      clip.items.forEach(function(ci){
+        var d = JSON.parse(JSON.stringify(ci.data)), nid = uid(ci.k === "image" ? "im" : ci.k === "shape" ? "sh" : ci.k === "stroke" ? "s" : "t");
+        idMap[ci.oldId] = nid; d.id = nid;
+        if(ci.k === "stroke"){ d.points.forEach(function(pt){ pt.x += off; pt.y += off; }); strokes.push(d); }
+        else {
+          d.x = Math.round((d.x + off) * 100) / 100; d.y = Math.round((d.y + off) * 100) / 100;
+          d.z = undefined; delete d.z;
+          assignNewZ(ci.k, d);
+          (ci.k === "image" ? images : ci.k === "shape" ? shapes : texts).push(d);
+        }
+        kinds[ci.k] = true; made.push({ k: ci.k, id: nid });
+      });
+      clip.groups.forEach(function(ids){ groups.push({ id: uid("g"), members: ids.filter(function(i){ return idMap[i]; }).map(function(i){ var k = clip.items.find(function(c){ return c.oldId === i; }).k; return { k: k, id: idMap[i] }; }) }); });
+      groups = groups.filter(function(g){ return g.members.length >= 2; });
+      var patch = { groups: groups };
+      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+      if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; redrawStrokes(); }
+      writeProgress(q.id, patch);
+      if(boardState.tool !== "select") switchToSelectTool();
+      selSet = made; renderTexts(); renderSelection();
+      return true;
+    }
+    function duplicateSelection(){ if(copySelection()) pasteSelClip(3); }
+    // 對齊：以「單位」（整個群組算一個）為單位，對齊到選取範圍的邊或中線；均分：中間的單位等距
+    function selUnits(){
+      var items = expandGroups(selSet), used = {}, units = [];
+      items.forEach(function(it){
+        var key = it.k + ":" + it.id; if(used[key]) return;
+        var g = findGroupOf(it.k, it.id), members = g ? g.members : [it];
+        members.forEach(function(m){ used[m.k + ":" + m.id] = true; });
+        var box = unionBox(members); if(box) units.push({ members: members, box: box });
+      });
+      return units;
+    }
+    function alignSelection(mode){
+      var units = selUnits(); if(units.length < 2) return;
+      var u = unionBox(expandGroups(selSet)); if(!u) return;
+      snapshotForUndo();
+      var kinds = {};
+      function mv(un, dx, dy){ var k = shiftItems(un.members, dx, dy); Object.keys(k).forEach(function(x){ kinds[x] = true; }); }
+      if(mode === "dh" || mode === "dv"){
+        if(units.length < 3) return;
+        var H = mode === "dh", key0 = H ? "l" : "t", key1 = H ? "r" : "b";
+        units.sort(function(a, b){ return (a.box[key0] + a.box[key1]) - (b.box[key0] + b.box[key1]); });
+        var total = 0; units.forEach(function(x){ total += x.box[key1] - x.box[key0]; });
+        var gap = ((H ? u.r - u.l : u.b - u.t) - total) / (units.length - 1), pos = u[key0];
+        units.forEach(function(x){ var d = pos - x.box[key0]; mv(x, H ? d : 0, H ? 0 : d); pos += (x.box[key1] - x.box[key0]) + gap; });
+      } else {
+        units.forEach(function(x){
+          var b = x.box, dx = 0, dy = 0;
+          if(mode === "l") dx = u.l - b.l; else if(mode === "r") dx = u.r - b.r; else if(mode === "c") dx = (u.l + u.r) / 2 - (b.l + b.r) / 2;
+          else if(mode === "t") dy = u.t - b.t; else if(mode === "b") dy = u.b - b.b; else if(mode === "m") dy = (u.t + u.b) / 2 - (b.t + b.b) / 2;
+          if(dx || dy) mv(x, dx, dy);
+        });
+      }
+      commitKinds(kinds);
+    }
     document.addEventListener("keydown", function selectKeys(e){
       if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", selectKeys); return; }
-      if(boardState.tool !== "select" || editableTarget(e.target)) return;
+      if(editableTarget(e.target)) return;
       var mod = e.ctrlKey || e.metaKey;
+      if(mod && (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y")){
+        var ub = vToolbar.querySelector((e.shiftKey || e.key === "y" || e.key === "Y") ? "#btn-redo" : "#btn-undo");
+        if(ub){ e.preventDefault(); ub.click(); } return;
+      }
+      if(boardState.tool !== "select") return;
       if(mod && (e.key === "g" || e.key === "G")){ e.preventDefault(); if(e.shiftKey) ungroupSelection(); else groupSelection(); }
+      else if(mod && (e.key === "c" || e.key === "C") && selSet.length){ e.preventDefault(); copySelection(); }
+      else if(mod && (e.key === "x" || e.key === "X") && selSet.length){ e.preventDefault(); copySelection(); deleteSelection(); }
+      else if(mod && (e.key === "v" || e.key === "V") && window.__mmSelClip){ e.preventDefault(); pasteSelClip(); }
+      else if(mod && (e.key === "d" || e.key === "D") && selSet.length){ e.preventDefault(); duplicateSelection(); }
+      else if(selSet.length && /^Arrow(Left|Right|Up|Down)$/.test(e.key)){ e.preventDefault(); var st1 = e.shiftKey ? 2 : 0.3; snapshotForUndo(); commitKinds(shiftItems(expandGroups(selSet), e.key === "ArrowLeft" ? -st1 : e.key === "ArrowRight" ? st1 : 0, e.key === "ArrowUp" ? -st1 : e.key === "ArrowDown" ? st1 : 0)); }
       else if(mod && (e.key === "a" || e.key === "A")){ e.preventDefault(); selSet = expandGroups(allItems().filter(function(it){ return !!itemBox(it); })); renderSelection(); }
       else if((e.key === "Delete" || e.key === "Backspace") && selSet.length){ e.preventDefault(); deleteSelection(); }
       else if(e.key === "Escape" && selSet.length){ selSet = []; renderSelection(); }
@@ -11938,6 +12749,45 @@
       writeProgress(q.id, { texts: texts, shapes: shapes, images: images, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
       renderTexts();
     }
+    function openMasterDialog(){
+      if(!slideSecInfo) return;
+      var secsM = getSections(), scM = secsM[slideSecInfo.secId]; if(!scM) return;
+      var m = JSON.parse(JSON.stringify(scM.master || {}));
+      m.footer = m.footer || { text: "", pos: "c", size: 16, color: "#7A7A7A" }; m.pageNum = m.pageNum || { on: false, pos: "r", size: 16, color: "#7A7A7A", total: false }; m.logo = m.logo || { src: "", corner: "tr", w: 10 };
+      var back = document.createElement("div"); back.className = "tb-modal-back";
+      var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(520px,94vw)"; back.appendChild(modal);
+      function save(){
+        var ss = getSections(); if(!ss[slideSecInfo.secId]) return;
+        var empty = !m.bgColor && !(m.footer && m.footer.text) && !(m.pageNum && m.pageNum.on) && !(m.logo && m.logo.src);
+        if(empty) delete ss[slideSecInfo.secId].master; else ss[slideSecInfo.secId].master = JSON.parse(JSON.stringify(m));
+        writeSections(ss); applyPageBackground(); renderMaster();
+      }
+      function row(label, html){ var d = document.createElement("div"); d.style.cssText = "display:flex;align-items:center;gap:8px;margin:9px 0;font-size:13px;flex-wrap:wrap;"; d.innerHTML = '<span style="min-width:84px;font-weight:700;">' + label + '</span>' + html; modal.appendChild(d); return d; }
+      modal.innerHTML = '<h3>🎛 母片 Slide Master</h3><div class="tb-hint">這裡的設定會套用到這份簡報的每一頁（學生端也看得到）。</div>';
+      var hasBg = /^#[0-9a-fA-F]{6}$/.test(m.bgColor || "");
+      var r1 = row("背景顏色", '<label><input type="checkbox" class="m-bgon" ' + (hasBg ? "checked" : "") + '> 使用</label><input type="color" class="m-bgc" value="' + (hasBg ? m.bgColor : "#FFF8E6") + '"><input type="range" class="m-bgo" min="5" max="100" value="' + Math.round((m.bgOp == null ? 1 : m.bgOp) * 100) + '" style="width:90px;" title="透明度">');
+      function bgChange(){ if(r1.querySelector(".m-bgon").checked){ m.bgColor = r1.querySelector(".m-bgc").value; m.bgOp = Number(r1.querySelector(".m-bgo").value) / 100; } else { delete m.bgColor; delete m.bgOp; } save(); }
+      ["m-bgon", "m-bgc", "m-bgo"].forEach(function(c){ r1.querySelector("." + c).oninput = bgChange; r1.querySelector("." + c).onchange = bgChange; });
+      var r2 = row("頁尾文字", '<input type="text" class="m-ft" value="' + escapeHtml(m.footer.text || "") + '" placeholder="例如：曼米中文 第一冊" style="flex:1;min-width:140px;padding:4px 6px;"><select class="m-fp"><option value="l">靠左</option><option value="c">置中</option><option value="r">靠右</option></select>');
+      r2.querySelector(".m-fp").value = m.footer.pos || "c";
+      r2.querySelector(".m-ft").oninput = function(e){ m.footer.text = e.target.value; save(); };
+      r2.querySelector(".m-fp").onchange = function(e){ m.footer.pos = e.target.value; save(); };
+      var r3 = row("頁碼", '<label><input type="checkbox" class="m-pn" ' + (m.pageNum.on ? "checked" : "") + '> 顯示頁碼</label><label><input type="checkbox" class="m-pt" ' + (m.pageNum.total ? "checked" : "") + '> 含總頁數</label><select class="m-pp"><option value="l">靠左</option><option value="c">置中</option><option value="r">靠右</option></select>');
+      r3.querySelector(".m-pp").value = m.pageNum.pos || "r";
+      r3.querySelector(".m-pn").onchange = function(e){ m.pageNum.on = e.target.checked; save(); };
+      r3.querySelector(".m-pt").onchange = function(e){ m.pageNum.total = e.target.checked; save(); };
+      r3.querySelector(".m-pp").onchange = function(e){ m.pageNum.pos = e.target.value; save(); };
+      var r4 = row("標誌 Logo", '<button type="button" class="tb-row m-lu" style="cursor:pointer;margin:0;padding:4px 10px;">選擇圖片…</button><select class="m-lc"><option value="tl">左上</option><option value="tr">右上</option><option value="bl">左下</option><option value="br">右下</option></select><input type="range" class="m-lw" min="3" max="30" value="' + (m.logo.w || 10) + '" style="width:90px;" title="大小"><button type="button" class="tb-row m-lx" style="cursor:pointer;margin:0;padding:4px 10px;">移除</button><input type="file" class="m-lf" accept="image/*" style="display:none;">');
+      r4.querySelector(".m-lc").value = m.logo.corner || "tr";
+      r4.querySelector(".m-lu").onclick = function(){ r4.querySelector(".m-lf").click(); };
+      r4.querySelector(".m-lf").onchange = function(e){ var f = e.target.files && e.target.files[0]; if(!f) return; downscaleImageFile(f, function(res){ if(!res){ alert("這張圖片讀不進來。"); return; } m.logo.src = res.src; save(); }); };
+      r4.querySelector(".m-lc").onchange = function(e){ m.logo.corner = e.target.value; save(); };
+      r4.querySelector(".m-lw").oninput = function(e){ m.logo.w = Number(e.target.value); save(); };
+      r4.querySelector(".m-lx").onclick = function(){ m.logo.src = ""; save(); };
+      var foot = document.createElement("div"); foot.className = "tb-foot"; var done = document.createElement("button"); done.className = "primary"; done.textContent = "完成"; done.onclick = function(){ back.remove(); }; foot.appendChild(done); modal.appendChild(foot);
+      back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
+      document.body.appendChild(back);
+    }
     function openSlideSetupDialog(){
       var back = document.createElement("div"); back.className = "tb-modal-back";
       var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(560px,94vw)"; back.appendChild(modal);
@@ -11997,6 +12847,9 @@
           tg.appendChild(bt);
         });
         modal.appendChild(tg);
+        sec("母片 Slide Master（套用到整份簡報）");
+        var mh = document.createElement("div"); mh.className = "tb-hint"; mh.textContent = "設定整份簡報共用的背景顏色、標誌（Logo）、頁尾文字和頁碼；每一頁自己設定的背景優先。"; modal.appendChild(mh);
+        var mb = document.createElement("button"); mb.type = "button"; mb.className = "tb-row"; mb.style.cssText = "cursor:pointer;margin:6px 0;"; mb.textContent = "🎛 編輯母片…"; mb.onclick = function(){ back.remove(); openMasterDialog(); }; modal.appendChild(mb);
         var foot = document.createElement("div"); foot.className = "tb-foot";
         var done = document.createElement("button"); done.className = "primary"; done.textContent = "完成"; done.onclick = function(){ back.remove(); };
         foot.appendChild(done); modal.appendChild(foot);
@@ -12022,6 +12875,65 @@
         if(penOpacityValueEl) penOpacityValueEl.textContent = penOpacitySlider.value + "%";
       };
     }
+
+    // ===== 放映工具：雷射筆／螢光筆／簡報者檢視 =====
+    var laserOn = false, laserLayer = null;
+    function setLaser(on){
+      laserOn = on;
+      var lb = vToolbar.querySelector(".pt-laser"); if(lb) lb.classList.toggle("active", on);
+      if(laserLayer){ laserLayer.remove(); laserLayer = null; }
+      if(!on) return;
+      laserLayer = document.createElement("div"); laserLayer.className = "laser-layer";
+      var dot = document.createElement("div"); dot.className = "laser-dot"; dot.style.display = "none"; laserLayer.appendChild(dot);
+      var lastT = 0;
+      function at(e){
+        var r = cWrap.getBoundingClientRect();
+        dot.style.display = "block"; dot.style.left = (e.clientX - r.left) + "px"; dot.style.top = (e.clientY - r.top) + "px";
+        var now = Date.now(); if(now - lastT < 28) return; lastT = now;
+        var tr = document.createElement("div"); tr.className = "laser-trail"; tr.style.left = dot.style.left; tr.style.top = dot.style.top; laserLayer.appendChild(tr);
+        setTimeout(function(){ tr.remove(); }, 420);
+      }
+      laserLayer.addEventListener("pointermove", at);
+      laserLayer.addEventListener("pointerdown", function(e){ e.preventDefault(); at(e); try{ laserLayer.setPointerCapture(e.pointerId); }catch(_){} });
+      laserLayer.addEventListener("pointerleave", function(){ dot.style.display = "none"; });
+      cWrap.appendChild(laserLayer);
+    }
+    function useHighlighter(){
+      setLaser(false);
+      var pb = vToolbar.querySelector('button[data-tool="pen"]'); if(pb) pb.click();
+      if(typeof applyBrushColor === "function") applyBrushColor("#FFE23B");
+      boardState.size = 16; boardState.opacity = 0.4;
+      var si = vToolbar.querySelector(".pen-size-input"); if(si) si.value = "16";
+      var os = vToolbar.querySelector("#pen-opacity-slider"); if(os){ os.value = "40"; var ov = vToolbar.querySelector("#pen-opacity-value"); if(ov) ov.textContent = "40%"; }
+    }
+    var ptLaser = vToolbar.querySelector(".pt-laser"), ptHl = vToolbar.querySelector(".pt-hl"), ptPv = vToolbar.querySelector(".pt-presenter");
+    if(ptLaser) ptLaser.onclick = function(e){ e.stopPropagation(); setLaser(!laserOn); };
+    if(ptHl) ptHl.onclick = function(e){ e.stopPropagation(); useHighlighter(); };
+    if(ptPv) ptPv.onclick = function(e){ e.stopPropagation(); openPresenterView(); };
+    var ptTm = vToolbar.querySelector(".pt-timer"), ptAu = vToolbar.querySelector(".pt-auto");
+    if(ptTm) ptTm.onclick = function(e){ e.stopPropagation(); startCountdownTimer(); };
+    if(ptAu) ptAu.onclick = function(e){ e.stopPropagation(); toggleAutoAdvance(ptAu); };
+    // 超連結／動作按鈕：放映中（或按住 Ctrl/⌘）輕點有設連結的物件，就跳到指定投影片或開啟網址
+    var linkDown = null;
+    cWrap.addEventListener("pointerdown", function(e){ linkDown = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
+    cWrap.addEventListener("pointerup", function(e){
+      if(isStudent || !linkDown) return;
+      var d = linkDown; linkDown = null;
+      if(Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 600) return;
+      if(!(canvasFullscreen || e.ctrlKey || e.metaKey)) return;
+      if(e.target.closest && e.target.closest(".select-bar, .laser-layer, .tn-float")) return;
+      var hit = hitTestItem(getPos(e)); if(!hit || hit.k === "stroke") return;
+      var o = selItemObj(hit); if(!o || !o.link) return;
+      if(o.link.t === "slide" && o.link.id){ setCurrentQ(o.link.id); }
+      else if(o.link.t === "url" && o.link.url){ var u = /^https?:\/\//i.test(o.link.url) ? o.link.url : "https://" + o.link.url; window.open(u, "_blank", "noopener"); }
+    }, true);
+    vToolbar.addEventListener("click", function(e){ var tb = e.target.closest && e.target.closest("button[data-tool]"); if(tb && laserOn) setLaser(false); });
+    document.addEventListener("keydown", function laserKeys(e){
+      if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", laserKeys); return; }
+      if(isStudent || editableTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if(e.key === "l" || e.key === "L"){ setLaser(!laserOn); }
+      else if(e.key === "Escape" && laserOn){ setLaser(false); }
+    });
 
     // 選好顏色之後，要同步更新畫筆／文字兩份面板裡的所有 UI：色點的 active 狀態、原生色盤目前
     // 顯示的顏色——不管顏色是從色點、原生色盤、還是滴管挑出來的，統一都走這個函式。
@@ -12233,6 +13145,7 @@
       var freshBgColor = String(freshProgress.bgColor || q.bgColor || ""), freshBgOp = Number(freshProgress.bgOp != null ? freshProgress.bgOp : (q.bgOp != null ? q.bgOp : 1));
       if(!(freshBgOp >= 0.05 && freshBgOp <= 1)) freshBgOp = 1;
       if(freshBgColor !== pageBgColor || freshBgOp !== pageBgOp){ pageBgColor = freshBgColor; pageBgOp = freshBgOp; applyPageBackground(); }
+      renderMaster();
       var freshFixed = Number(freshProgress.canvasRatio || q.canvasRatio) || 0;
       if(freshFixed !== fixedRatio){
         // 老師改了畫布大小：學生端（和老師的另一台裝置）即時跟著變
