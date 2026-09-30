@@ -910,7 +910,11 @@
   .movable-text rt{
     font-size:0.42em; font-weight:600; font-family:"Plus Jakarta Sans",sans-serif;
     color:inherit; opacity:0.8; user-select:none; text-align:center; letter-spacing:0;
+    cursor:text; /* 只有注音本身可以點來改，字本身維持跟外層文字方塊一樣可以拖曳的游標 */
   }
+  /* 2026-09-30：手動改過的注音／拼音（多音字自動判斷不是老師要的讀音時）跟自動產生的區分開來，
+     一看就知道哪些字是自己改過的，不透明度也提高到看得清楚。 */
+  .movable-text rt.ph-overridden{ opacity:1; color:var(--seal); }
   .movable-text:has(ruby){ line-height:2.15; padding-top:0.3em !important; }
 
   .resize-handle{
@@ -4150,7 +4154,12 @@
   // 把一段文字轉成帶拼音／注音的 HTML（用 <ruby>/<rt>，瀏覽器原生會把 <rt> 顯示在字的正上方）；
   // 非中文字元（標點、英文、數字、空白…）原樣輸出，不加註音。currentPhoneticMode 是 "off" 或
   // pinyin-pro 還沒載入完成時，直接回傳跳脫過的原文字，行為跟以前完全一樣。
-  function buildPhoneticHtml(text){
+  //
+  // 2026-09-30 新增：overrides 是「這個文字方塊自己存的注音／拼音修正」，跟 t.text 一起存在
+  // texts 陣列裡（見 renderTexts()），是一個陣列，索引對應 Array.from(text) 的每一個字元——
+  // 多音字（例如「誰」）pinyin-pro 自動判斷的讀音不一定是老師要的那個常用音，老師可以點一下
+  // 那個字上面的注音自己改，改過的字就用 overrides 裡存的版本，其餘沒改過的字照樣自動產生。
+  function buildPhoneticHtml(text, overrides){
     if(!text) return "";
     if(currentPhoneticMode !== "pinyin" && currentPhoneticMode !== "zhuyin") return escapeHtml(text);
     if(typeof pinyinPro === "undefined" || typeof pinyinPro.pinyin !== "function") return escapeHtml(text);
@@ -4166,8 +4175,10 @@
     for(var i = 0; i < chars.length; i++){
       var ch = chars[i];
       if(!isHanChar(ch)){ html += escapeHtml(ch); continue; }
-      var annotation = currentPhoneticMode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i];
-      html += "<ruby>" + escapeHtml(ch) + "<rt>" + escapeHtml(annotation || "") + "</rt></ruby>";
+      var hasOverride = overrides && typeof overrides[i] === "string" && overrides[i] !== "";
+      var annotation = hasOverride ? overrides[i]
+        : (currentPhoneticMode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i]);
+      html += "<ruby data-ph-idx=\"" + i + "\">" + escapeHtml(ch) + "<rt" + (hasOverride ? " class=\"ph-overridden\"" : "") + ">" + escapeHtml(annotation || "") + "</rt></ruby>";
     }
     return html;
   }
@@ -4253,16 +4264,17 @@
   }
 
   /* 頁面內文字輸入框（避免依賴瀏覽器原生 prompt()，某些預覽環境會封鎖原生彈窗） */
-  function showInlineTextInput(container, pos, onCommit){
+  function showInlineTextInput(container, pos, onCommit, initialValue, placeholder){
     var existing = container.querySelector(".inline-text-input");
     if(existing) existing.remove();
     var input = document.createElement("input");
     input.type = "text";
     input.className = "inline-text-input";
-    input.placeholder = "輸入文字，Enter 確認";
+    input.placeholder = placeholder || "輸入文字，Enter 確認";
+    if(initialValue) input.value = initialValue;
     input.style.cssText = "position:absolute; left:" + pos.x + "%; top:" + pos.y + "%; transform:translate(-50%,-50%); z-index:30; width:160px; max-width:70%; padding:7px 12px; border:2px solid var(--seal); border-radius:10px; background:var(--surface); color:var(--ink); font-size:16px; font-family:'LXGW WenKai TC',serif; box-shadow:0 6px 16px rgba(0,0,0,0.15); outline:none;";
     container.appendChild(input);
-    setTimeout(function(){ input.focus(); }, 0);
+    setTimeout(function(){ input.focus(); input.select(); }, 0);
     var done = false;
     function commit(){
       if(done) return; done = true;
@@ -6609,9 +6621,43 @@
         div.style.fontSize = Math.round(baseSize * scale) + "px";
 
         div.innerHTML = `
-          <span class="text-content">${buildPhoneticHtml(t.text)}</span>
+          <span class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</span>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
+
+        // 2026-09-30 新增：多音字（例如「誰」）自動產生的拼音／注音不一定是老師要的常用讀音，
+        // 點一下字上方的注音就能自己改成想要的讀音，改完存在 t.phoneticOverride（跟 t.text 一起
+        // 存進這一題的 texts，自動同步給所有人）。用 pointerdown 而不是 click，並且要搶在事件
+        // 冒泡到外層 div.onpointerdown（拖曳整個文字方塊）之前 stopPropagation，不然會變成
+        // 「點注音卻在拖著整個文字方塊走」。
+        // 只在點到 <rt>（注音本身）的時候才攔截，不能整個 <ruby> 都攔截——<ruby>的子節點除了
+        // <rt> 之外還包含那個漢字本身的文字節點，瀏覽器 elementFromPoint 對著漢字點下去，命中的
+        // 也是外層的 <ruby>，如果整個 <ruby> 都攔截，會連「點在字上準備拖曳整個文字方塊」都被
+        // 誤判成要編輯注音，導致文字方塊完全拖不動。
+        div.querySelectorAll(".text-content rt").forEach(function(rtEl){
+          rtEl.onpointerdown = function(e){
+            e.stopPropagation(); e.preventDefault();
+            var rubyEl = rtEl.closest("ruby");
+            var idx = Number(rubyEl.dataset.phIdx);
+            var curVal = rtEl.textContent;
+            var rubyRect = rubyEl.getBoundingClientRect();
+            var wrapRect = cWrap.getBoundingClientRect();
+            var editorPos = {
+              x: ((rubyRect.left + rubyRect.width / 2 - wrapRect.left) / wrapRect.width) * 100,
+              y: ((rubyRect.top - wrapRect.top) / wrapRect.height) * 100
+            };
+            showInlineTextInput(cWrap, editorPos, function(newVal){
+              snapshotForUndo();
+              if(!Array.isArray(t.phoneticOverride)) t.phoneticOverride = [];
+              var trimmed = (newVal || "").trim();
+              // 清空輸入框＝恢復自動判斷的讀音，不是「這個字不要注音」——真的不想要這個字有注音，
+              // 用橡皮擦把整個文字方塊擦掉重打會更清楚，不會跟「打字漏打」混在一起。
+              t.phoneticOverride[idx] = trimmed === "" ? null : trimmed;
+              writeProgress(q.id, { texts: texts });
+              renderTexts();
+            }, curVal, "自訂這個字的拼音／注音，留空＝恢復自動判斷");
+          };
+        });
 
         // 改用 Pointer Events（統一處理滑鼠／觸控／觸控筆，包含 iPad 手指與 Apple Pencil），
         // 並在按下時用 setPointerCapture 把後續的移動/放開事件牢牢鎖定在這個元素上，
