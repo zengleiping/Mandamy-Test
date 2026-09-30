@@ -908,8 +908,19 @@
   .tb-foot button{ padding:8px 16px; border-radius:10px; border:1.5px solid rgba(28,33,30,0.16); background:var(--surface); color:var(--ink); font-weight:700; cursor:pointer; }
   .tb-foot button.primary{ background:var(--seal); color:#fff; border-color:var(--seal); }
   /* 圖形（矩形／圓／三角形／線／箭頭）：SVG 畫在圖片上面、筆跡下面，另外疊透明的 .shape-proxy 負責選取／拖曳／縮放 */
-  .shape-layer{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
-  .shape-layer svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .shape-layer{ display:none; }
+  .shape-svg{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
+  .arrange-opt{ justify-content:flex-start; }
+  .arrange-hint{ font-size:11px; color:var(--ink-soft); margin-top:6px; line-height:1.4; max-width:180px; white-space:normal; }
+  #btn-notes.has-note::after{ content:''; position:absolute; top:5px; right:7px; width:8px; height:8px; border-radius:50%; background:var(--seal); }
+  #btn-notes{ position:relative; }
+  .tn-float{ position:absolute; right:18px; bottom:18px; width:300px; z-index:50; background:#FFF8E6; border:1.5px solid var(--seal); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.22); display:flex; flex-direction:column; overflow:hidden; }
+  :root:not([data-theme="light"]) .tn-float{ background:#3a3326; color:#fff; }
+  .board-area.canvas-fs-active .tn-float{ z-index:9002; }
+  .tn-float-head{ display:flex; align-items:center; gap:6px; padding:5px 8px; background:rgba(178,59,50,.12); font-size:12px; font-weight:700; color:var(--seal); cursor:grab; user-select:none; touch-action:none; }
+  .tn-float-head span{ flex:1; }
+  .tn-float-head button{ border:none; background:transparent; cursor:pointer; font-size:14px; color:var(--seal); }
+  .tn-float textarea{ border:none; outline:none; resize:vertical; min-height:90px; max-height:50vh; padding:8px 10px; font-size:14px; line-height:1.6; background:transparent; color:inherit; font-family:inherit; }
   .shape-proxy{ position:absolute; pointer-events:auto; box-sizing:border-box; border:1.5px dashed transparent; cursor:grab; touch-action:none; }
   .shape-proxy:hover{ border-color:#1E88E5; }
   .shape-proxy.active{ border-color:var(--seal); cursor:grabbing; }
@@ -3959,7 +3970,7 @@
       });
       (prog.shapes || []).forEach(function(sh){
         var gx = sh.x / 100 * W, gy = sh.y / 100 * H, gw = sh.w / 100 * W, gh = sh.h / 100 * H;
-        x.save(); x.strokeStyle = sh.color || "#B23B32"; x.fillStyle = sh.color || "#B23B32"; x.lineWidth = Math.max(0.8, (sh.sw || 3) * W / 640); x.lineJoin = "round"; x.lineCap = "round"; x.beginPath();
+        x.save(); x.globalAlpha = (sh.op === undefined || sh.op === null) ? 1 : sh.op; x.strokeStyle = sh.color || "#B23B32"; x.fillStyle = sh.color || "#B23B32"; x.lineWidth = Math.max(0.8, (sh.sw || 3) * W / 640); x.lineJoin = "round"; x.lineCap = "round"; x.beginPath();
         if(sh.type === "ellipse") x.ellipse(gx + gw / 2, gy + gh / 2, Math.abs(gw / 2), Math.abs(gh / 2), 0, 0, Math.PI * 2);
         else if(sh.type === "triangle"){ x.moveTo(gx + gw / 2, gy); x.lineTo(gx + gw, gy + gh); x.lineTo(gx, gy + gh); x.closePath(); }
         else if(sh.type === "line" || sh.type === "arrow"){ x.moveTo(sh.fx ? gx + gw : gx, sh.fy ? gy + gh : gy); x.lineTo(sh.fx ? gx : gx + gw, sh.fy ? gy : gy + gh); }
@@ -5505,7 +5516,7 @@
     var sec = currentInfo.section; var q = currentInfo.question;
     var allList = getAllQuestionsList(); var currentIndex = allList.findIndex(function(it){ return it.question.id === q.id; });
     var mediaFingerprint = (sec.media || []).map(function(m){ return m.id; }).join(",") + "|" + (q.media || []).map(function(m){ return m.id; }).join(",");
-    var stageSignature = JSON.stringify([q.id, sec.title, sec.desc || "", q.title, q.desc || "", currentIndex, allList.length, currentClassMode, !!isStudent, mediaFingerprint, q.teacherNote || ""]);
+    var stageSignature = JSON.stringify([q.id, sec.title, sec.desc || "", q.title, q.desc || "", currentIndex, allList.length, currentClassMode, !!isStudent, mediaFingerprint, (sec.type === "board" ? "" : (q.teacherNote || ""))]);
 
     if((sec.type === "board" || sec.type === "hanzi") && liveBoardQId === q.id && stageSignature === lastStageSignature && liveBoardRefresh && liveBoardRefresh()){
       return; // 局部刷新成功：只更新畫布內容（筆畫／文字／格線／底圖），不重建整個舞台
@@ -5567,7 +5578,7 @@
     head.appendChild(actWrap);
     stageEl.appendChild(head);
 
-    if(!isStudent && q.teacherNote && q.teacherNote.trim()){
+    if(!isStudent && sec.type !== "board" && q.teacherNote && q.teacherNote.trim()){
       var noteBlock = document.createElement("div"); noteBlock.className = "teacher-note-block";
       var tnIcon = document.createElement("div"); tnIcon.className = "tn-icon"; tnIcon.textContent = "🔒";
       var tnBody = document.createElement("div"); tnBody.className = "tn-body";
@@ -6016,7 +6027,7 @@
   // opacity：畫筆濃淡（1 = 全不透明／最濃，數字越小越淡）——老師點重點時可以調淡一點，
   // 學生跟著描的時候才看得出來哪些是老師畫的、哪些是自己描上去的，兩者疊在一起也不會完全分不出來。
   // 2026-09-30：筆刷粗細預設改成 2（使用者要求）；文字新增 bold（加粗）開關，預設不加粗。
-  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false };
+  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false, shapeOpacity: 1 };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
   // pinnedExtraTools：工具列精簡後，格線／底圖／移動畫面／錄示範這些非核心工具預設收合，
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
@@ -6024,7 +6035,7 @@
   var pinnedExtraTools = {};
   // 2026-10-01 工具列自訂：哪些工具放左側／上方／隱藏、順序、收合狀態，存在這台裝置的 localStorage（每台裝置各自記，不同步）
   var TB_STORE_KEY = "mandamy-toolbar-layout-v1";
-  var TB_DEFAULT = { left: ["fs", "pen", "text", "shape", "eraser"], top: ["nav", "transition", "media", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false };
+  var TB_DEFAULT = { left: ["fs", "pen", "text", "shape", "eraser"], top: ["nav", "transition", "media", "notes", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false };
   var tbConfig = null;
   function loadTbConfig(){
     if(tbConfig) return tbConfig;
@@ -6261,10 +6272,26 @@
             ${sizeComboHtml("shape-size-input", boardState.shapeSize, 1, 40, [1,2,3,4,6,8,10,14,20])}
           </div>
           <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>濃淡 Opacity</span><b id="shape-opacity-value">${Math.round((boardState.shapeOpacity==null?1:boardState.shapeOpacity)*100)}%</b></div>
+            <input type="range" id="shape-opacity-slider" min="10" max="100" step="5" value="${Math.round((boardState.shapeOpacity==null?1:boardState.shapeOpacity)*100)}">
+          </div>
+          <div class="popover-field-row">
             <button type="button" class="shape-fill-btn ${boardState.shapeFill?'active':''}" title="實心／空心 Filled or outline">■ 填滿 Fill</button>
           </div>
         </div>
       </div>
+      <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v" id="btn-arrange" title="排列：調整選取物件的上下層（文字／圖形／圖片）Arrange layers"><span class="tool-btn-v-icon">🗂️</span><span class="tool-btn-v-label">層級</span></button>
+        <div class="color-popover arrange-popover">
+          <div class="color-popover-title">上下層 Arrange</div>
+          <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="front">⤒ 移到最上層</button>
+          <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="forward">↑ 上一層</button>
+          <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="backward">↓ 下一層</button>
+          <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="back">⤓ 移到最下層</button>
+          <div class="arrange-hint">先用「文字」或「圖形」工具點選一個物件。快捷鍵：Ctrl+] 上一層、Ctrl+[ 下一層，加 Shift 移到最上／最下。</div>
+        </div>
+      </div>
+      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-notes" title="老師備註：這一頁只有你看得到的備註（可以隨時開關）Speaker notes — only you can see them"><span class="tool-btn-v-icon">📝</span><span class="tool-btn-v-label">備註</span></button>` : ''}
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v ${(boardState.tool==='stroke-eraser'||boardState.tool==='pixel-eraser')?'active':''}" id="btn-eraser" title="橡皮擦：預設整條擦掉，滑鼠移入可切換成局部擦 Eraser — hover to switch modes"><img class="tool-btn-v-icon tool-btn-v-icon-img" id="btn-eraser-icon" src="${TOOL_ICON_ERASER}" alt=""><span class="tool-btn-v-label">橡皮擦</span></button>
         <div class="color-popover">
@@ -6547,6 +6574,8 @@
       { key: "pen", label: "筆", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="pen"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "text", label: "文字", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="text"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "shape", label: "圖形", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="shape"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "arrange", label: "層級（上下層）", cat: "b", find: function(){ var b = vToolbar.querySelector("#btn-arrange"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "notes", label: "老師備註", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-notes")]; } },
       { key: "eraser", label: "橡皮擦", cat: "b", find: function(){ var b = vToolbar.querySelector("#btn-eraser"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "undo", label: "上一步", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-undo")]; } },
       { key: "redo", label: "下一步", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-redo")]; } },
@@ -6649,6 +6678,58 @@
     }
     container.insertBefore(topBar, layout);
     applyToolbarLayout();
+
+    // ===== 老師備註：浮動面板（只有老師；每一頁各自的備註；老師自己決定要不要打開）=====
+    (function(){
+      if(isStudent) return;
+      var NOTES_KEY = "mandamy-notes-open", NOTES_POS_KEY = "mandamy-notes-pos";
+      var btn = vToolbar.querySelector("#btn-notes"); if(!btn) return;
+      var panel = null;
+      function hasNote(){ return !!(q.teacherNote && q.teacherNote.trim()); }
+      function isOpenPref(){ var v = null; try{ v = localStorage.getItem(NOTES_KEY); }catch(e){} return v === null ? hasNote() : v === "1"; }
+      function setOpenPref(on){ try{ localStorage.setItem(NOTES_KEY, on ? "1" : "0"); }catch(e){} }
+      function syncBtn(open){ btn.classList.toggle("active", open); btn.classList.toggle("has-note", hasNote()); }
+      function save(val){
+        var info = findSectionForQuestion(q.id); if(!info) return;
+        var secs = getSections(); var qq = secs[info.secId] && secs[info.secId].questions[q.id]; if(!qq) return;
+        val = val.trim(); if((qq.teacherNote || "") === val) return;
+        qq.teacherNote = val; q.teacherNote = val; writeSections(secs); syncBtn(panel && panel.style.display !== "none");
+      }
+      function build(){
+        panel = document.createElement("div"); panel.className = "tn-float";
+        panel.innerHTML = '<div class="tn-float-head"><span>📝 老師備註（只有老師看得到）</span><button type="button" title="關閉 Close">✕</button></div><textarea placeholder="這一頁的備註：講稿、答案、上課提示……學生端不會顯示。打完點一下別處就自動存檔。"></textarea>';
+        var ta = panel.querySelector("textarea"); ta.value = q.teacherNote || "";
+        var saveTimer = null;
+        ta.addEventListener("input", function(){ clearTimeout(saveTimer); saveTimer = setTimeout(function(){ save(ta.value); }, 700); }); // 點畫布不會讓輸入框失焦，所以邊打邊自動存
+        ta.addEventListener("change", function(){ save(ta.value); });
+        ta.addEventListener("blur", function(){ save(ta.value); });
+        ta.addEventListener("keydown", function(e){ e.stopPropagation(); }); // 打字時不要觸發翻頁／刪除物件的快捷鍵
+        panel.querySelector("button").onclick = function(){ setOpen(false); };
+        panel.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+        var head = panel.querySelector(".tn-float-head");
+        head.onpointerdown = function(e){
+          if(e.target.closest("button")) return;
+          e.preventDefault(); try{ head.setPointerCapture(e.pointerId); }catch(er){}
+          var cr = container.getBoundingClientRect(), pr = panel.getBoundingClientRect(), dx = e.clientX - pr.left, dy = e.clientY - pr.top;
+          function mv(ev){
+            var l = Math.max(0, Math.min(cr.width - 80, ev.clientX - cr.left - dx)), t = Math.max(0, Math.min(cr.height - 40, ev.clientY - cr.top - dy));
+            panel.style.left = l + "px"; panel.style.top = t + "px"; panel.style.right = "auto"; panel.style.bottom = "auto";
+          }
+          function up(){ head.removeEventListener("pointermove", mv); head.removeEventListener("pointerup", up); head.removeEventListener("pointercancel", up); try{ localStorage.setItem(NOTES_POS_KEY, JSON.stringify({ l: panel.style.left, t: panel.style.top })); }catch(er){} }
+          head.addEventListener("pointermove", mv); head.addEventListener("pointerup", up); head.addEventListener("pointercancel", up);
+        };
+        try{ var pos = JSON.parse(localStorage.getItem(NOTES_POS_KEY) || "null"); if(pos && pos.l && pos.t){ panel.style.left = pos.l; panel.style.top = pos.t; panel.style.right = "auto"; panel.style.bottom = "auto"; } }catch(er){}
+        container.appendChild(panel);
+      }
+      function setOpen(on){
+        if(on && !panel) build();
+        if(panel) panel.style.display = on ? "" : "none";
+        setOpenPref(on); syncBtn(on);
+        if(on && panel){ var t = panel.querySelector("textarea"); setTimeout(function(){ try{ t.focus(); }catch(er){} }, 30); }
+      }
+      btn.addEventListener("click", function(e){ e.stopPropagation(); setOpen(!(panel && panel.style.display !== "none")); });
+      if(isOpenPref()){ build(); syncBtn(true); } else syncBtn(false);
+    })();
 
     // ===== 長按工具圖示就能拖曳：放到左側或上方工具列的任何位置（放開的位置＝新位置）=====
     (function(){
@@ -6905,7 +6986,7 @@
     }
     // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media"];
+    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
 
     // 目前選定工具「本來該有」的游標樣式——跟放大縮小/自動拖曳無關，單純工具本身的樣子。
     // 抽成函式是因為畫布縮放後的「靠近墨跡才恢復成工具游標」也要用到同一份邏輯（見下面
@@ -7133,6 +7214,7 @@
       var off = (pasteOffsetN++ % 6) * 3;
       var obj = { id: uid("im"), src: res.src, ar: res.ar, x: Math.min(95, 50 + off), y: Math.min(95, 50 + off), w: w, step: 0 };
       snapshotForUndo();
+      assignNewZ("image", obj);
       images.push(obj);
       writeProgress(q.id, { images: images });
       activateTextToolQuietly();
@@ -7154,6 +7236,7 @@
       var copy = JSON.parse(JSON.stringify(objClipboard.data));
       copy.id = uid(objClipboard.kind === "image" ? "im" : (objClipboard.kind === "shape" ? "sh" : "t"));
       copy.x = Math.min(95, copy.x + off); copy.y = Math.min(95, copy.y + off);
+      if(copy.z !== undefined && copy.z !== null) copy.z = copy.z + 0.0001 * (pasteOffsetN + 1);
       snapshotForUndo();
       if(objClipboard.kind === "shape"){
         shapes.push(copy); writeProgress(q.id, { shapes: shapes });
@@ -7174,6 +7257,7 @@
       };
       if(!t.text) return;
       snapshotForUndo();
+      assignNewZ("text", t);
       texts.push(t); writeProgress(q.id, { texts: texts });
       activateTextToolQuietly(); activeSelectedTextId = t.id; activeSelectedImageId = null; activeSelectedShapeId = null; renderTexts();
     }
@@ -7216,6 +7300,11 @@
       key: function(e){
         if(!document.body.contains(cWrap) || editableTarget(e.target) || liveLocked() || slideListArmed) return;
         if((e.key === "Delete" || e.key === "Backspace") && currentSelectedObj()){ e.preventDefault(); deleteSelectedObj(); }
+        if((e.ctrlKey || e.metaKey) && (e.key === "]" || e.key === "[" || e.key === "}" || e.key === "{") && currentSelectedObj()){
+          e.preventDefault();
+          var fwd = (e.key === "]" || e.key === "}");
+          arrangeSelected(e.shiftKey ? (fwd ? "front" : "back") : (fwd ? "forward" : "backward"));
+        }
       }
     };
     document.addEventListener("copy", objKeyHandlers.copy);
@@ -7785,6 +7874,7 @@
     function renderTexts(){
       textLayer.innerHTML = "";
       var scale = getScaleRatio();
+      var zrT = zRanks();
 
       var revealNow = getProgress(q.id).revealStep || 0;
       texts.forEach(function(t, idx){
@@ -7794,6 +7884,7 @@
         div.className = "movable-text" + (t.id === activeSelectedTextId ? " active" : "") + (stepHidden ? " step-hidden" : "");
         div.style.left = t.x + "%";
         div.style.top = t.y + "%";
+        div.style.zIndex = String((zrT.map[t.id] || 0) + 1);
         div.style.color = t.color || "var(--ink)";
 
         var baseSize = t.fontSize || 36;
@@ -8165,6 +8256,54 @@
       inp.click();
     }
 
+
+    /* ===== 上下層：文字／圖形／圖片共用一套 z 順序（物件的 z 欄位；沒有 z 的用預設：圖片 < 圖形 < 文字，依陣列順序）===== */
+    function objZ(kind, o, idx){ return (o.z !== undefined && o.z !== null) ? o.z : (kind === "image" ? idx : (kind === "shape" ? 1000 + idx : 2000 + idx)); }
+    function buildZList(){
+      var L = [];
+      images.forEach(function(o, i){ L.push({ kind: "image", o: o, z: objZ("image", o, i), n: L.length }); });
+      shapes.forEach(function(o, i){ L.push({ kind: "shape", o: o, z: objZ("shape", o, i), n: L.length }); });
+      texts.forEach(function(o, i){ L.push({ kind: "text", o: o, z: objZ("text", o, i), n: L.length }); });
+      L.sort(function(a, b){ return (a.z - b.z) || (a.n - b.n); });
+      return L;
+    }
+    function zRanks(){
+      var L = buildZList(), map = {}, minText = Infinity;
+      L.forEach(function(it, r){ it.rank = r; map[it.o.id] = r; if(it.kind === "text" && r < minText) minText = r; });
+      return { map: map, minText: minText, list: L };
+    }
+    function hasExplicitZ(){
+      function hz(o){ return o.z !== undefined && o.z !== null; }
+      return images.some(hz) || shapes.some(hz) || texts.some(hz);
+    }
+    // 新物件：文字放最上面；圖片／圖形放在「最底下那個文字」的下面（維持原本「圖形在文字後面」的習慣）。
+    // 只有在使用者調整過上下層（已經有 z）之後才需要明確指定，沒有調整過就靠預設順序。
+    function assignNewZ(kind, obj){
+      if(!hasExplicitZ()) return;
+      var L = buildZList(); if(!L.length) return;
+      var top = L[L.length - 1].z;
+      if(kind === "text"){ obj.z = top + 1; return; }
+      var minT = Infinity; L.forEach(function(it){ if(it.kind === "text" && it.z < minT) minT = it.z; });
+      obj.z = (minT === Infinity) ? top + 1 : (minT - 0.5 + (images.length + shapes.length) * 1e-6);
+    }
+    function arrangeSelected(mode){
+      var sel = currentSelectedObj();
+      if(!sel){ alert("請先用「文字」或「圖形」工具點選一個物件。\nSelect an object first (Text or Shapes tool)."); return; }
+      var L = buildZList(); var idx = -1;
+      L.forEach(function(it, i){ if(it.o.id === sel.obj.id) idx = i; });
+      if(idx < 0) return;
+      var changed = {}, a = L[idx];
+      function setZ(it, z){ it.o.z = z; changed[it.kind] = true; }
+      if(mode === "front"){ if(idx === L.length - 1) return; snapshotForUndo(); setZ(a, L[L.length - 1].z + 1); }
+      else if(mode === "back"){ if(idx === 0) return; snapshotForUndo(); setZ(a, L[0].z - 1); }
+      else if(mode === "forward"){ if(idx === L.length - 1) return; snapshotForUndo(); var b = L[idx + 1], az = a.z; setZ(a, b.z); setZ(b, az); }
+      else if(mode === "backward"){ if(idx === 0) return; snapshotForUndo(); var b2 = L[idx - 1], az2 = a.z; setZ(a, b2.z); setZ(b2, az2); }
+      var patch = {};
+      if(changed.text) patch.texts = texts; if(changed.image) patch.images = images; if(changed.shape) patch.shapes = shapes;
+      writeProgress(q.id, patch);
+      renderTexts();
+    }
+
     /* ===== 圖形 ===== */
     var SHAPE_NS = "http://www.w3.org/2000/svg";
     function shapeGeom(sh, W, H){
@@ -8174,7 +8313,8 @@
     }
     function buildShapeSvgEl(sh, W, H, dim){
       var g = document.createElementNS(SHAPE_NS, "g");
-      if(dim) g.setAttribute("opacity", "0.35");
+      var opV = ((sh.op === undefined || sh.op === null) ? 1 : sh.op) * (dim ? 0.35 : 1);
+      if(opV < 1) g.setAttribute("opacity", String(opV));
       var gm = shapeGeom(sh, W, H);
       var sw = Math.max(1, (sh.sw || 3) * getScaleRatio());
       var col = sh.color || "#B23B32";
@@ -8199,19 +8339,24 @@
       }
       return g;
     }
-    var shapeSvgEl = null;
     function renderShapeSvg(draft){
       var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400;
-      if(!shapeSvgEl){ shapeSvgEl = document.createElementNS(SHAPE_NS, "svg"); shapeSvgEl.setAttribute("preserveAspectRatio", "none"); shapeLayer.appendChild(shapeSvgEl); }
-      shapeSvgEl.setAttribute("viewBox", "0 0 " + W + " " + H);
-      while(shapeSvgEl.firstChild) shapeSvgEl.removeChild(shapeSvgEl.firstChild);
+      Array.prototype.slice.call(cWrap.querySelectorAll(".shape-svg")).forEach(function(e){ e.remove(); });
+      var zrS = zRanks();
       var revealNow = getProgress(q.id).revealStep || 0;
+      function mkSvg(g){
+        var sv = document.createElementNS(SHAPE_NS, "svg"); sv.setAttribute("class", "shape-svg"); sv.setAttribute("preserveAspectRatio", "none");
+        sv.setAttribute("viewBox", "0 0 " + W + " " + H); sv.appendChild(g); return sv;
+      }
       shapes.forEach(function(sh){
         var hid = (sh.step || 0) > revealNow;
         if(hid && isStudent) return;
-        shapeSvgEl.appendChild(buildShapeSvgEl(sh, W, H, hid));
+        var sv = mkSvg(buildShapeSvgEl(sh, W, H, hid));
+        var rS = zrS.map[sh.id] || 0;
+        if(rS > zrS.minText){ sv.style.zIndex = String(rS + 1); textLayer.appendChild(sv); }
+        else { sv.style.zIndex = String(rS); imageLayer.appendChild(sv); }
       });
-      if(draft) shapeSvgEl.appendChild(buildShapeSvgEl(draft, W, H, false));
+      if(draft){ var dv = mkSvg(buildShapeSvgEl(draft, W, H, false)); dv.style.zIndex = "99999"; imageLayer.appendChild(dv); }
     }
     function selectShapeObj(id){
       activeSelectedTextId = null; activeSelectedImageId = null; activeSelectedShapeId = id;
@@ -8220,8 +8365,15 @@
       var sh = shapes.find(function(x){ return x.id === id; });
       var st = vToolbar.querySelector(".text-step-input");
       if(st && sh) st.value = String(sh.step || 0);
+      if(sh){
+        var osl = vToolbar.querySelector("#shape-opacity-slider"), ovl = vToolbar.querySelector("#shape-opacity-value");
+        var opPct = Math.round(((sh.op === undefined || sh.op === null) ? 1 : sh.op) * 100);
+        if(osl) osl.value = String(opPct); if(ovl) ovl.textContent = opPct + "%";
+        var fb = vToolbar.querySelector(".shape-fill-btn"); if(fb) fb.classList.toggle("active", !!sh.fill);
+      }
     }
     function renderShapeProxies(){
+      var zrP = zRanks();
       var revealNow = getProgress(q.id).revealStep || 0;
       shapes.forEach(function(sh, idx){
         var hid = (sh.step || 0) > revealNow;
@@ -8229,6 +8381,7 @@
         var px = document.createElement("div");
         px.className = "shape-proxy" + (sh.id === activeSelectedShapeId ? " active" : "");
         px.dataset.shapeId = sh.id;
+        px.style.zIndex = String((zrP.map[sh.id] || 0) + 1);
         function place(){
           px.style.left = sh.x + "%"; px.style.top = sh.y + "%";
           px.style.width = Math.max(sh.w, 1.5) + "%"; px.style.height = Math.max(sh.h, 2.5) + "%";
@@ -8283,7 +8436,7 @@
     function startShapeDraw(p0){
       var type = boardState.shapeType || "rect";
       var isLine = type === "line" || type === "arrow";
-      var draft = { type: type, x: p0.x, y: p0.y, w: 0, h: 0, fx: false, fy: false, color: boardState.color, sw: boardState.shapeSize || 3, fill: !!boardState.shapeFill && !isLine, step: boardState.step || 0 };
+      var draft = { type: type, x: p0.x, y: p0.y, w: 0, h: 0, fx: false, fy: false, color: boardState.color, sw: boardState.shapeSize || 3, fill: !!boardState.shapeFill && !isLine, op: boardState.shapeOpacity == null ? 1 : boardState.shapeOpacity, step: boardState.step || 0 };
       var moved = false;
       function mv(ev){
         var p = getPos(ev);
@@ -8302,6 +8455,7 @@
         draft.w = Math.round(draft.w * 10) / 10; draft.h = Math.round(draft.h * 10) / 10; draft.x = Math.round(draft.x * 10) / 10; draft.y = Math.round(draft.y * 10) / 10;
         draft.id = uid("sh");
         snapshotForUndo();
+        assignNewZ("shape", draft);
         shapes.push(draft);
         writeProgress(q.id, { shapes: shapes });
         renderTexts(); // 畫完不自動選取：接著換顏色／形狀是為了畫下一個；要改已經畫好的，點一下它再改
@@ -8310,6 +8464,7 @@
     }
     function renderImages(){
       imageLayer.innerHTML = "";
+      var zrI = zRanks();
       var revealNow = getProgress(q.id).revealStep || 0;
       images.forEach(function(im, idx){
         var stepHidden = (im.step || 0) > revealNow;
@@ -8318,13 +8473,16 @@
         el.className = "board-image" + (stepHidden ? " step-hidden" : "");
         el.dataset.imgId = im.id; el.draggable = false; el.src = im.src;
         el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
-        imageLayer.appendChild(el);
+        var rI = zrI.map[im.id] || 0;
+        if(rI > zrI.minText){ el.style.zIndex = String(rI + 1); textLayer.appendChild(el); } // 在某個文字上面：要畫在筆跡之上
+        else { el.style.zIndex = String(rI); imageLayer.appendChild(el); }
 
         var px = document.createElement("div");
         px.className = "image-proxy" + (im.id === activeSelectedImageId ? " active" : "");
         px.dataset.imgId = im.id;
         px.style.left = im.x + "%"; px.style.top = im.y + "%"; px.style.width = im.w + "%";
         px.style.aspectRatio = "1 / " + (im.ar || 1);
+        px.style.zIndex = String(rI + 1);
         px.innerHTML = ((!isStudent && (im.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + im.step + ' 次點擊出現">' + im.step + '</span>' : '') + '<div class="resize-handle" title="按住拖動縮放 Drag to resize"></div>';
 
         var handle = px.querySelector(".resize-handle");
@@ -8497,7 +8655,7 @@
         showInlineTextInput(cWrap, p, function(txt){
           if(txt && txt.trim()){
             snapshotForUndo();
-            texts.push({
+            var newTextObj = {
               id: uid("t"),
               text: txt.trim(),
               x: p.x,
@@ -8508,7 +8666,9 @@
               step: boardState.step || 0,
               align: boardState.align || "left",
               list: boardState.list || "none"
-            });
+            };
+            assignNewZ("text", newTextObj);
+            texts.push(newTextObj);
             writeProgress(q.id, { texts: texts });
           }
         }, undefined, undefined, true);
@@ -8711,6 +8871,16 @@
         var tb = vToolbar.querySelector('button[data-tool="shape"]'); if(tb && boardState.tool !== "shape") tb.click();
       };
     });
+    var shapeOpSlider = vToolbar.querySelector("#shape-opacity-slider"), shapeOpVal = vToolbar.querySelector("#shape-opacity-value");
+    if(shapeOpSlider){
+      shapeOpSlider.oninput = function(){
+        var v = Number(shapeOpSlider.value) / 100;
+        boardState.shapeOpacity = v; if(shapeOpVal) shapeOpVal.textContent = shapeOpSlider.value + "%";
+        var so = selectedShapeObj(); if(so){ so.op = v; renderShapeSvg(); }
+      };
+      shapeOpSlider.onchange = function(){ var so = selectedShapeObj(); if(so) writeProgress(q.id, { shapes: shapes }); };
+    }
+    vToolbar.querySelectorAll(".arrange-opt").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); arrangeSelected(b.dataset.arrange); }; });
     var shapeFillBtn = vToolbar.querySelector(".shape-fill-btn");
     if(shapeFillBtn) shapeFillBtn.onclick = function(e){
       e.stopPropagation();
