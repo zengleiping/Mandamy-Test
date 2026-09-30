@@ -858,6 +858,46 @@
   .media-audio-row .ma-time{ font-size:12px; font-variant-numeric:tabular-nums; flex:none; }
   .media-resize{ position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.85) 50%); z-index:3; touch-action:none; }
   .media-opt{ display:block; width:100%; text-align:left; }
+
+  /* 2026-10-01 上方工具列＋可自訂／可收合：老師自己決定每個工具放左側、上方或隱藏，順序也能調 */
+  .draw-toolbar-top{ display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 10px; background:var(--surface-2); border:1.5px solid rgba(28,33,30,0.16); border-radius:14px; box-shadow:var(--shadow); margin-bottom:8px; width:100%; box-sizing:border-box; }
+  :root:not([data-theme="light"]) .draw-toolbar-top{ border-color:rgba(255,255,255,0.16); }
+  .draw-toolbar-top .tool-btn-v{ width:54px; height:44px; }
+  .draw-toolbar-top .tool-btn-v-wrap{ width:auto; }
+  .draw-toolbar-top .slide-nav-row{ width:auto; }
+  .draw-toolbar-top .slide-nav-row .tool-btn-v{ width:40px; }
+  .draw-toolbar-top .slide-nav-counter{ width:auto; padding:0 6px; white-space:nowrap; }
+  .draw-toolbar-top .tool-v-sep{ width:1px; height:30px; margin:0 3px; }
+  .draw-toolbar-top .color-popover{ left:0; top:100%; margin:8px 0 0; transform:translateY(-6px); }
+  .draw-toolbar-top .tool-btn-v-wrap:hover .color-popover, .draw-toolbar-top .tool-btn-v-wrap:focus-within .color-popover{ transform:none; }
+  .board-area.canvas-fs-active .draw-toolbar-top .color-popover{ transform:none !important; }
+  .board-area.canvas-fs-active .draw-toolbar-top{ position:absolute; top:14px; left:104px; right:64px; width:auto; z-index:9001; margin:0; background:rgba(255,255,255,0.96); }
+  .draw-toolbar-top.student-locked > *:not(.tb-head):not(#btn-canvas-fs){ opacity:.42; filter:grayscale(.3); cursor:not-allowed; }
+  .draw-toolbar-vertical.student-locked > .tb-head{ opacity:1; filter:none; cursor:pointer; }
+  .tb-head{ display:flex; gap:4px; align-items:center; justify-content:center; width:100%; flex-shrink:0; }
+  .draw-toolbar-top .tb-head{ width:auto; margin-right:4px; }
+  .tb-head button{ height:24px; min-width:28px; padding:0 6px; border-radius:8px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); font-size:12px; font-weight:700; cursor:pointer; }
+  .tb-head button:hover{ border-color:var(--seal); color:var(--seal); }
+  .draw-toolbar-vertical.tb-collapsed{ width:auto; padding:6px; }
+  .draw-toolbar-vertical.tb-collapsed > *:not(.tb-head){ display:none !important; }
+  .draw-toolbar-vertical.tb-collapsed .tb-head{ flex-direction:column; }
+  .draw-toolbar-top.tb-collapsed{ width:auto; align-self:flex-start; padding:4px 8px; }
+  .draw-toolbar-top.tb-collapsed > *:not(.tb-head){ display:none !important; }
+  .draw-toolbar-top.tb-collapsed .tb-head{ margin-right:0; }
+  .board-area.canvas-fs-active .draw-toolbar-top.tb-collapsed{ right:auto; }
+  .tb-modal-back{ position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:20000; display:flex; align-items:center; justify-content:center; }
+  .tb-modal{ background:var(--surface); color:var(--ink); border-radius:16px; padding:18px 20px; width:min(460px,92vw); max-height:86vh; overflow:auto; box-shadow:0 20px 50px rgba(0,0,0,.35); }
+  .tb-modal h3{ margin:0 0 4px; font-size:17px; } .tb-modal .tb-hint{ font-size:12px; color:var(--ink-soft); margin-bottom:10px; }
+  .tb-sec-title{ font-size:12px; font-weight:800; color:var(--seal); margin:12px 0 4px; }
+  .tb-row{ display:flex; align-items:center; gap:6px; padding:5px 6px; border:1.5px solid rgba(28,33,30,0.12); border-radius:10px; margin-bottom:4px; background:var(--surface-2); }
+  .tb-row .tb-name{ flex:1; font-size:13px; font-weight:600; }
+  .tb-row button{ border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); border-radius:7px; height:26px; min-width:28px; cursor:pointer; font-size:12px; font-weight:700; }
+  .tb-row button.on{ background:var(--seal); color:#fff; border-color:var(--seal); }
+  .tb-row button:disabled{ opacity:.35; cursor:default; }
+  .tb-empty{ font-size:12px; color:var(--ink-soft); padding:4px 6px; }
+  .tb-foot{ display:flex; justify-content:space-between; gap:8px; margin-top:14px; }
+  .tb-foot button{ padding:8px 16px; border-radius:10px; border:1.5px solid rgba(28,33,30,0.16); background:var(--surface); color:var(--ink); font-weight:700; cursor:pointer; }
+  .tb-foot button.primary{ background:var(--seal); color:#fff; border-color:var(--seal); }
   /* 圖形（矩形／圓／三角形／線／箭頭）：SVG 畫在圖片上面、筆跡下面，另外疊透明的 .shape-proxy 負責選取／拖曳／縮放 */
   .shape-layer{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
   .shape-layer svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
@@ -3814,7 +3854,7 @@
   // 「點在哪個元素上」：只要落在工具列／色盤彈窗／全螢幕退出鈕這些浮動 UI 上，就不算是畫布內容
   // 座標，不送出、並清掉舊的游標，避免對方看到一個過時又容易誤導的位置。
   function isOverBoardChrome(target){
-    return !!(target && target.closest && target.closest(".draw-toolbar-vertical, .color-popover, .canvas-zoom-ctrl, .canvas-fs-exit-btn, .hanzi-side-panel"));
+    return !!(target && target.closest && target.closest(".draw-toolbar-vertical, .draw-toolbar-top, .color-popover, .canvas-zoom-ctrl, .canvas-fs-exit-btn, .hanzi-side-panel"));
   }
   var wasCursorOnBoard = false;
   function clearMyRoomCursor(){
@@ -5973,6 +6013,18 @@
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
   // 不用每題都重新加一次。
   var pinnedExtraTools = {};
+  // 2026-10-01 工具列自訂：哪些工具放左側／上方／隱藏、順序、收合狀態，存在這台裝置的 localStorage（每台裝置各自記，不同步）
+  var TB_STORE_KEY = "mandamy-toolbar-layout-v1";
+  var TB_DEFAULT = { left: ["fs", "pen", "text", "shape", "eraser"], top: ["nav", "transition", "media", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false };
+  var tbConfig = null;
+  function loadTbConfig(){
+    if(tbConfig) return tbConfig;
+    try{ var raw = localStorage.getItem(TB_STORE_KEY); if(raw){ var o = JSON.parse(raw); if(o && Array.isArray(o.left) && Array.isArray(o.top)){ o.hidden = Array.isArray(o.hidden) ? o.hidden : []; tbConfig = o; } } }catch(e){}
+    if(!tbConfig) tbConfig = JSON.parse(JSON.stringify(TB_DEFAULT));
+    return tbConfig;
+  }
+  function saveTbConfig(){ try{ localStorage.setItem(TB_STORE_KEY, JSON.stringify(tbConfig)); }catch(e){} }
+
 
   // ============ 全螢幕作答區（小白板／生字練習共用） ============
   // canvasFullscreen 記在這個模組層級的變數：換題目後如果原本開著全螢幕，新題目的畫布會自動
@@ -6225,6 +6277,14 @@
       </div>
     `;
 
+    // ===== 上方工具列（跟左側工具列共用同一批按鈕，依自訂設定搬來搬去；事件監聽綁在按鈕本身，搬動不受影響）=====
+    var topBar = document.createElement("div"); topBar.className = "draw-toolbar-top" + (studentLocked ? " student-locked" : "");
+    // 後面很多程式用 vToolbar.querySelector 找按鈕；按鈕可能被搬到上方工具列，所以讓 vToolbar 的查詢同時涵蓋兩條工具列。
+    (function(){
+      var qs = vToolbar.querySelector.bind(vToolbar), qsa = vToolbar.querySelectorAll.bind(vToolbar);
+      vToolbar.querySelector = function(sel){ return qs(sel) || topBar.querySelector(sel); };
+      vToolbar.querySelectorAll = function(sel){ return Array.prototype.slice.call(qsa(sel)).concat(Array.prototype.slice.call(topBar.querySelectorAll(sel))); };
+    })();
     // 全螢幕時色盤／更多工具選單改用 position:fixed（見上面 CSS 的 .board-area.canvas-fs-active
     // .color-popover），滑鼠移入的當下用 JS 現場量出正確的螢幕座標；非全螢幕時清空行內樣式，讓原本
     // 的 CSS 相對定位（left:100%／top:50%）繼續生效，兩種模式互不影響、也不用另外處理視窗縮放，
@@ -6234,8 +6294,13 @@
       if(!pop) return;
       if(container.classList.contains("canvas-fs-active")){
         var r = wrap.getBoundingClientRect();
-        pop.style.left = Math.round(r.right + 10) + "px";
-        pop.style.top = Math.round(r.top + r.height / 2) + "px";
+        if(topBar.contains(wrap)){
+          pop.style.left = Math.round(r.left) + "px";
+          pop.style.top = Math.round(r.bottom + 8) + "px";
+        } else {
+          pop.style.left = Math.round(r.right + 10) + "px";
+          pop.style.top = Math.round(r.top + r.height / 2) + "px";
+        }
       } else {
         pop.style.left = ""; pop.style.top = "";
       }
@@ -6464,6 +6529,119 @@
     layout.appendChild(stageArea);
     container.appendChild(layout);
 
+    // ===== 工具列自訂：分配到左側／上方／隱藏，並支援收合 =====
+    var TB_ITEM_DEFS = [
+      { key: "fs", label: "全螢幕", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
+      { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [vToolbar.querySelector(".slide-nav-row"), vToolbar.querySelector(".slide-nav-counter")]; } },
+      { key: "transition", label: "換頁效果", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "media", label: "媒體（YouTube／音檔）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-media"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "pen", label: "筆", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="pen"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "text", label: "文字", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="text"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "shape", label: "圖形", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="shape"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "eraser", label: "橡皮擦", cat: "b", find: function(){ var b = vToolbar.querySelector("#btn-eraser"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "undo", label: "上一步", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-undo")]; } },
+      { key: "redo", label: "下一步", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-redo")]; } },
+      { key: "clear", label: "清空", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-clear-draw")]; } }
+    ];
+    var tbItems = {};
+    TB_ITEM_DEFS.forEach(function(d){
+      var nodes = d.find().filter(function(n){ return !!n; });
+      if(nodes.length) tbItems[d.key] = { key: d.key, label: d.label, cat: d.cat, nodes: nodes };
+    });
+    // 兩條工具列各自的標題列（收合／自訂按鈕）
+    function makeTbHead(bar, which){
+      var head = document.createElement("div"); head.className = "tb-head";
+      var col = document.createElement("button"); col.type = "button";
+      var gear = document.createElement("button"); gear.type = "button"; gear.textContent = "⚙"; gear.title = "自訂工具列：決定哪些工具放左側／上方／隱藏、順序 Customize toolbars";
+      col.onclick = function(e){
+        e.stopPropagation();
+        var c = loadTbConfig(); var key = which === "left" ? "collapsedLeft" : "collapsedTop";
+        c[key] = !c[key]; saveTbConfig(); syncTbCollapse();
+        requestAnimationFrame(fitCanvasToViewport); setTimeout(fitCanvasToViewport, 60);
+      };
+      gear.onclick = function(e){ e.stopPropagation(); openToolbarCustomizer(); };
+      head.appendChild(col); head.appendChild(gear);
+      bar.insertBefore(head, bar.firstChild);
+      return col;
+    }
+    var tbColLeft = makeTbHead(vToolbar, "left"), tbColTop = makeTbHead(topBar, "top");
+    function syncTbCollapse(){
+      var c = loadTbConfig();
+      vToolbar.classList.toggle("tb-collapsed", !!c.collapsedLeft);
+      topBar.classList.toggle("tb-collapsed", !!c.collapsedTop);
+      tbColLeft.textContent = c.collapsedLeft ? "▶" : "◀"; tbColLeft.title = c.collapsedLeft ? "展開工具列 Expand" : "收合工具列 Collapse";
+      tbColTop.textContent = c.collapsedTop ? "▼ 工具列" : "▲"; tbColTop.title = c.collapsedTop ? "展開上方工具列 Expand" : "收合上方工具列 Collapse";
+    }
+    function applyToolbarLayout(){
+      var c = loadTbConfig();
+      // 補齊：設定裡沒出現的工具（例如日後新增的）放回預設位置；設定裡有但這一頁沒有的工具直接略過
+      var seen = {}; ["left", "top", "hidden"].forEach(function(k){ c[k].forEach(function(x){ seen[x] = true; }); });
+      TB_DEFAULT.left.concat(TB_DEFAULT.top).forEach(function(k){ if(!seen[k]){ (TB_DEFAULT.left.indexOf(k) !== -1 ? c.left : c.top).push(k); seen[k] = true; } });
+      Object.keys(tbItems).forEach(function(k){ if(!seen[k]){ c.top.push(k); seen[k] = true; } });
+      [vToolbar, topBar].forEach(function(bar){
+        Array.prototype.slice.call(bar.children).forEach(function(ch){ if(ch.classList.contains("tool-v-sep")) bar.removeChild(ch); });
+      });
+      // 隱藏的工具：暫時收進不可見的容器，不從 DOM 移除（事件監聽都還在）
+      if(!applyToolbarLayout.holder){ applyToolbarLayout.holder = document.createElement("div"); applyToolbarLayout.holder.style.display = "none"; container.appendChild(applyToolbarLayout.holder); }
+      var holder = applyToolbarLayout.holder;
+      c.hidden.forEach(function(k){ if(tbItems[k]) tbItems[k].nodes.forEach(function(n){ holder.appendChild(n); }); });
+      function sepEl(){ var d = document.createElement("div"); d.className = "tool-v-sep"; return d; }
+      function place(bar, keys, before){
+        var lastCat = null;
+        keys.forEach(function(k){
+          var it = tbItems[k]; if(!it) return;
+          if(lastCat && lastCat !== it.cat) bar.insertBefore(sepEl(), before || null);
+          lastCat = it.cat;
+          it.nodes.forEach(function(n){ bar.insertBefore(n, before || null); });
+        });
+      }
+      var firstExtra = null;
+      Array.prototype.slice.call(vToolbar.children).forEach(function(ch){ if(!firstExtra && (ch.classList.contains("extra-tool-group") || ch === moreToolsWrap || ch.id === "btn-personal-trace")) firstExtra = ch; });
+      place(vToolbar, c.left, firstExtra);
+      if(firstExtra && c.left.some(function(k){ return tbItems[k]; }) && !firstExtra.classList.contains("extra-tool-group")) vToolbar.insertBefore(sepEl(), firstExtra);
+      place(topBar, c.top, null);
+      topBar.style.display = "";
+      syncTbCollapse();
+    }
+    function openToolbarCustomizer(){
+      var c = loadTbConfig();
+      var back = document.createElement("div"); back.className = "tb-modal-back";
+      var modal = document.createElement("div"); modal.className = "tb-modal"; back.appendChild(modal);
+      function render(){
+        modal.innerHTML = '<h3>⚙ 自訂工具列 Customize toolbars</h3><div class="tb-hint">每個工具可以放「左側」、「上方」或「隱藏」；用 ↑ ↓ 調整順序。設定只記在這台裝置。</div>';
+        [["left", "左側工具列 Left"], ["top", "上方工具列 Top"], ["hidden", "隱藏 Hidden"]].forEach(function(sec){
+          var title = document.createElement("div"); title.className = "tb-sec-title"; title.textContent = sec[1]; modal.appendChild(title);
+          var keys = c[sec[0]].filter(function(k){ return tbItems[k]; });
+          if(!keys.length){ var em = document.createElement("div"); em.className = "tb-empty"; em.textContent = "（空的）"; modal.appendChild(em); }
+          keys.forEach(function(k, i){
+            var row = document.createElement("div"); row.className = "tb-row";
+            var nm = document.createElement("span"); nm.className = "tb-name"; nm.textContent = tbItems[k].label; row.appendChild(nm);
+            function mv(dir){ var arr = c[sec[0]]; var a = arr.indexOf(k); var keysVisible = arr.filter(function(x){ return tbItems[x]; }); var target = keysVisible[i + dir]; if(!target) return; var b = arr.indexOf(target); arr[a] = target; arr[b] = k; }
+            var up = document.createElement("button"); up.textContent = "↑"; up.disabled = i === 0; up.onclick = function(){ mv(-1); commit(); }; row.appendChild(up);
+            var dn = document.createElement("button"); dn.textContent = "↓"; dn.disabled = i === keys.length - 1; dn.onclick = function(){ mv(1); commit(); }; row.appendChild(dn);
+            [["left", "左"], ["top", "上"], ["hidden", "藏"]].forEach(function(sd){
+              var bt = document.createElement("button"); bt.textContent = sd[1]; bt.title = sd[0]; if(sd[0] === sec[0]) bt.className = "on";
+              bt.onclick = function(){ if(sd[0] === sec[0]) return; ["left", "top", "hidden"].forEach(function(kk){ c[kk] = c[kk].filter(function(x){ return x !== k; }); }); c[sd[0]].push(k); commit(); };
+              row.appendChild(bt);
+            });
+            modal.appendChild(row);
+          });
+        });
+        var foot = document.createElement("div"); foot.className = "tb-foot";
+        var reset = document.createElement("button"); reset.textContent = "恢復預設";
+        reset.onclick = function(){ var d = JSON.parse(JSON.stringify(TB_DEFAULT)); d.collapsedLeft = c.collapsedLeft; d.collapsedTop = c.collapsedTop; tbConfig = d; c = d; commit(); };
+        var done = document.createElement("button"); done.className = "primary"; done.textContent = "完成";
+        done.onclick = function(){ back.remove(); };
+        foot.appendChild(reset); foot.appendChild(done); modal.appendChild(foot);
+      }
+      function commit(){ saveTbConfig(); applyToolbarLayout(); render(); requestAnimationFrame(fitCanvasToViewport); setTimeout(fitCanvasToViewport, 60); }
+      back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
+      render(); document.body.appendChild(back);
+    }
+    container.insertBefore(topBar, layout);
+    applyToolbarLayout();
+    requestAnimationFrame(fitCanvasToViewport);
+
     // 2026-09-29：套用／更新「鎖定作答」的視覺狀態——工具列變暗＋游標變成禁止符號＋畫布正中央
     // 一個小提示牌。故意不用 pointer-events:none 整個擋掉：擋是擋住了，但事件連送都不會送過來，
     // 就沒辦法知道學生「試圖」點了什麼，也就沒辦法跳彈窗提醒學生、通知老師是誰在點。真正擋下
@@ -6473,7 +6651,7 @@
     // refreshFromProgress() 呼叫一次，狀態才能即時反映，不用等學生自己換題目。
     function applyStudentLockState(){
       studentLocked = isStudent && inRoom() && !isOpenForStudent();
-      vToolbar.classList.toggle("student-locked", studentLocked);
+      vToolbar.classList.toggle("student-locked", studentLocked); topBar.classList.toggle("student-locked", studentLocked);
       canvas.classList.toggle("student-locked-cursor", studentLocked);
       textLayer.classList.toggle("student-locked-cursor", studentLocked);
       var existingBadge = stageArea.querySelector(".student-locked-badge");
@@ -6519,12 +6697,14 @@
         if(!studentLocked) return;
         // 全螢幕開關、畫布縮放（＋／－／點擊歸零）都是學生自己看畫面的個人設定，不是在動老師的
         // 簡報內容，鎖定時還是要放行，不然學生想拉近看清楚黑板上的字都做不到。
-        if(e.target.closest && (e.target.closest("#btn-canvas-fs") || e.target.closest(".canvas-zoom-ctrl"))) return;
+        if(e.target.closest && (e.target.closest("#btn-canvas-fs") || e.target.closest(".canvas-zoom-ctrl") || e.target.closest(".tb-head"))) return;
         e.preventDefault(); e.stopPropagation();
         handleLockedAttempt();
       }
       vToolbar.addEventListener("pointerdown", guard, true);
       vToolbar.addEventListener("click", guard, true);
+      topBar.addEventListener("pointerdown", guard, true);
+      topBar.addEventListener("click", guard, true);
       stageArea.addEventListener("pointerdown", guard, true);
       stageArea.addEventListener("click", guard, true);
       stageArea.addEventListener("dblclick", guard, true);
@@ -7698,7 +7878,7 @@
     function buildMedia(m){
       var h = { m: m, lastSeq: -1, lastState: null, expPos: 0, expAt: 0, expPlaying: false, lastPubAt: 0, suppressUntil: 0 };
       var root = document.createElement("div");
-      root.className = "media-box " + (m.kind === "youtube" ? "media-yt" : "media-audio");
+      root.className = "media-box " + (m.kind === "youtube" ? "media-yt" : "media-au");
       root.dataset.mediaId = m.id;
       h.root = root;
       var barHtml = isStudent ? "" : '<div class="media-bar" title="拖曳移動位置"><span class="media-title"></span><button type="button" class="media-del" title="移除">✕</button></div>';
