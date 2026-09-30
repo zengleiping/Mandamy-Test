@@ -1011,6 +1011,9 @@
   .select-union-box{ position:absolute; border:2px solid var(--seal); border-radius:4px; pointer-events:none; box-shadow:0 0 0 1px rgba(255,255,255,.7); }
   .select-marquee{ position:absolute; border:1.5px dashed var(--seal); background:rgba(232,130,90,.12); pointer-events:none; }
   .select-bar{ position:absolute; display:flex; align-items:center; gap:6px; padding:4px 8px; background:var(--surface); border:1.5px solid var(--seal-ring); border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,.18); pointer-events:auto; white-space:nowrap; z-index:45; }
+  .select-bar .sb-sep{ width:1px; height:18px; background:rgba(28,33,30,.2); }
+  .select-bar .sb-al{ padding:4px 7px; min-width:26px; }
+  .select-guide{ position:absolute; background:#E0338A; pointer-events:none; z-index:41; }
   .select-bar .sb-count{ font-size:12px; font-weight:700; color:var(--ink-soft); }
   .select-bar button{ font-size:12px; font-weight:700; padding:4px 9px; border-radius:8px; border:1.5px solid rgba(28,33,30,.16); background:var(--surface); color:var(--ink); cursor:pointer; }
   .select-bar button:hover{ border-color:var(--seal); color:var(--seal); }
@@ -11674,7 +11677,12 @@
       bar.innerHTML = '<span class="sb-count">已選 ' + items.length + ' 個</span>' +
         (items.length >= 2 && !oneWholeGroup ? '<button type="button" data-act="group" title="組成群組（Ctrl/⌘+G）：之後點一下就整組一起選取、搬動">🔗 組成群組</button>' : '') +
         (inGroup ? '<button type="button" data-act="ungroup" title="解散群組（Ctrl/⌘+Shift+G）">解散群組</button>' : '') +
-        '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>';
+        '<button type="button" data-act="copy" title="複製（Ctrl/⌘+C）；貼上 Ctrl/⌘+V、重複製作 Ctrl/⌘+D">⧉ 複製</button>' +
+        '<button type="button" data-act="dup" title="重複製作（Ctrl/⌘+D）">重複製作</button>' +
+        '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>' +
+        (selUnits().length >= 2 ? '<span class="sb-sep"></span>' +
+          [["l","⇤","靠左對齊"],["c","⇔","水平置中"],["r","⇥","靠右對齊"],["t","⤒","靠上對齊"],["m","⇕","垂直置中"],["b","⤓","靠下對齊"]].map(function(a){ return '<button type="button" class="sb-al" data-act="al-' + a[0] + '" title="' + a[2] + '">' + a[1] + '</button>'; }).join("") +
+          (selUnits().length >= 3 ? '<button type="button" class="sb-al" data-act="al-dh" title="水平均分">⋯↔</button><button type="button" class="sb-al" data-act="al-dv" title="垂直均分">⋯↕</button>' : '') : '');
       var nearTop = u.t < 9;
       bar.style.left = u.l + "%";
       if(nearTop) bar.style.top = "calc(" + u.b + "% + 6px)"; else bar.style.top = "calc(" + u.t + "% - 38px)";
@@ -11682,6 +11690,9 @@
       bar.addEventListener("click", function(e){
         var bt = e.target.closest("button"); if(!bt) return; e.stopPropagation();
         if(bt.dataset.act === "group") groupSelection(); else if(bt.dataset.act === "ungroup") ungroupSelection(); else if(bt.dataset.act === "delete") deleteSelection();
+        else if(bt.dataset.act === "copy"){ copySelection(); bt.textContent = "✓ 已複製"; }
+        else if(bt.dataset.act === "dup") duplicateSelection();
+        else if(/^al-/.test(bt.dataset.act)) alignSelection(bt.dataset.act.slice(3));
       });
       selectLayer.appendChild(bar);
     }
@@ -11712,15 +11723,33 @@
         var st = strokes.find(function(x){ return x.id === it.id; }); return st ? { it: it, o: st, pts: st.points.map(function(pt){ return { x: pt.x, y: pt.y, t: pt.t }; }) } : null;
       }).filter(Boolean);
       var moved = false, raf = 0, last = null;
+      var u0 = unionBox(selSet), others = [], thr = 0.9;
+      allItems().forEach(function(it){ if(inSel(it)) return; var b = itemBox(it); if(b) others.push(b); });
+      var xT = [0, 50, 100], yT = [0, 50, 100];
+      others.forEach(function(b){ xT.push(b.l, (b.l + b.r) / 2, b.r); yT.push(b.t, (b.t + b.b) / 2, b.b); });
+      function snapAxis(a0, a1, targets, d){
+        var best = null, cand = [a0 + d, (a0 + a1) / 2 + d, a1 + d];
+        cand.forEach(function(c){ targets.forEach(function(t){ var df = t - c; if(Math.abs(df) <= thr && (best === null || Math.abs(df) < Math.abs(best.df))) best = { df: df, at: t }; }); });
+        return best;
+      }
+      function drawGuides(gx, gy){
+        selectLayer.querySelectorAll(".select-guide").forEach(function(n){ n.remove(); });
+        if(gx !== null){ var v = document.createElement("div"); v.className = "select-guide"; v.style.cssText = "left:" + gx + "%;top:0;width:1.5px;height:100%;"; selectLayer.appendChild(v); }
+        if(gy !== null){ var h = document.createElement("div"); h.className = "select-guide"; h.style.cssText = "top:" + gy + "%;left:0;height:1.5px;width:100%;"; selectLayer.appendChild(h); }
+      }
       function apply(){
         raf = 0; if(!last) return;
-        var dx = last.x - p0.x, dy = last.y - p0.y, hasStroke = false;
+        var dx = last.x - p0.x, dy = last.y - p0.y, hasStroke = false, gx = null, gy = null;
+        if(u0 && !(window.event && window.event.altKey)){
+          var sx = snapAxis(u0.l, u0.r, xT, dx), sy = snapAxis(u0.t, u0.b, yT, dy);
+          if(sx){ dx += sx.df; gx = sx.at; } if(sy){ dy += sy.df; gy = sy.at; }
+        }
         orig.forEach(function(g){
           if(g.it.k === "stroke"){ hasStroke = true; g.o.points.forEach(function(pt, i){ pt.x = g.pts[i].x + dx; pt.y = g.pts[i].y + dy; }); }
           else { g.o.x = Math.round((g.x + dx) * 100) / 100; g.o.y = Math.round((g.y + dy) * 100) / 100; }
         });
         if(hasStroke) redrawStrokes();
-        renderTexts(); renderSelection();
+        renderTexts(); renderSelection(); drawGuides(gx, gy);
       }
       function mv(ev){
         var p = getPos(ev);
@@ -11730,6 +11759,7 @@
       function up(){
         window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
         if(raf){ cancelAnimationFrame(raf); apply(); }
+        drawGuides(null, null);
         if(!moved) return;
         var patch = {}, kinds = {};
         orig.forEach(function(g){ kinds[g.it.k] = true; });
@@ -11766,11 +11796,113 @@
       }
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     }
+    // ===== 複製／貼上／重複製作、對齊與均分、智慧參考線 =====
+    function selItemObj(it){
+      if(it.k === "text") return texts.find(function(x){ return x.id === it.id; });
+      if(it.k === "image") return images.find(function(x){ return x.id === it.id; });
+      if(it.k === "shape") return shapes.find(function(x){ return x.id === it.id; });
+      return strokes.find(function(x){ return x.id === it.id; });
+    }
+    function shiftItems(items, dx, dy){
+      var kinds = {};
+      items.forEach(function(it){
+        var o = selItemObj(it); if(!o) return; kinds[it.k] = true;
+        if(it.k === "stroke") o.points.forEach(function(pt){ pt.x += dx; pt.y += dy; });
+        else { o.x = Math.round((o.x + dx) * 100) / 100; o.y = Math.round((o.y + dy) * 100) / 100; }
+      });
+      return kinds;
+    }
+    function commitKinds(kinds){
+      var patch = {};
+      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+      if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; redrawStrokes(); }
+      writeProgress(q.id, patch); renderTexts(); renderSelection();
+    }
+    function copySelection(){
+      var items = expandGroups(selSet); if(!items.length) return false;
+      var clip = { items: [], groups: [] };
+      items.forEach(function(it){ var o = selItemObj(it); if(o) clip.items.push({ k: it.k, data: JSON.parse(JSON.stringify(o)), oldId: it.id }); });
+      groups.forEach(function(g){ if(g.members.every(function(m){ return items.some(function(x){ return sameItem(x, m); }); })) clip.groups.push(g.members.map(function(m){ return m.id; })); });
+      window.__mmSelClip = clip; window.__mmSelClipN = 0; return true;
+    }
+    function pasteSelClip(offsetPct){
+      var clip = window.__mmSelClip; if(!clip || !clip.items.length) return false;
+      window.__mmSelClipN = (window.__mmSelClipN || 0) + 1;
+      var off = offsetPct != null ? offsetPct : Math.min(window.__mmSelClipN, 8) * 2.5;
+      snapshotForUndo();
+      var idMap = {}, made = [], kinds = {};
+      clip.items.forEach(function(ci){
+        var d = JSON.parse(JSON.stringify(ci.data)), nid = uid(ci.k === "image" ? "im" : ci.k === "shape" ? "sh" : ci.k === "stroke" ? "s" : "t");
+        idMap[ci.oldId] = nid; d.id = nid;
+        if(ci.k === "stroke"){ d.points.forEach(function(pt){ pt.x += off; pt.y += off; }); strokes.push(d); }
+        else {
+          d.x = Math.round((d.x + off) * 100) / 100; d.y = Math.round((d.y + off) * 100) / 100;
+          d.z = undefined; delete d.z;
+          assignNewZ(ci.k, d);
+          (ci.k === "image" ? images : ci.k === "shape" ? shapes : texts).push(d);
+        }
+        kinds[ci.k] = true; made.push({ k: ci.k, id: nid });
+      });
+      clip.groups.forEach(function(ids){ groups.push({ id: uid("g"), members: ids.filter(function(i){ return idMap[i]; }).map(function(i){ var k = clip.items.find(function(c){ return c.oldId === i; }).k; return { k: k, id: idMap[i] }; }) }); });
+      groups = groups.filter(function(g){ return g.members.length >= 2; });
+      var patch = { groups: groups };
+      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+      if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; redrawStrokes(); }
+      writeProgress(q.id, patch);
+      if(boardState.tool !== "select") switchToSelectTool();
+      selSet = made; renderTexts(); renderSelection();
+      return true;
+    }
+    function duplicateSelection(){ if(copySelection()) pasteSelClip(3); }
+    // 對齊：以「單位」（整個群組算一個）為單位，對齊到選取範圍的邊或中線；均分：中間的單位等距
+    function selUnits(){
+      var items = expandGroups(selSet), used = {}, units = [];
+      items.forEach(function(it){
+        var key = it.k + ":" + it.id; if(used[key]) return;
+        var g = findGroupOf(it.k, it.id), members = g ? g.members : [it];
+        members.forEach(function(m){ used[m.k + ":" + m.id] = true; });
+        var box = unionBox(members); if(box) units.push({ members: members, box: box });
+      });
+      return units;
+    }
+    function alignSelection(mode){
+      var units = selUnits(); if(units.length < 2) return;
+      var u = unionBox(expandGroups(selSet)); if(!u) return;
+      snapshotForUndo();
+      var kinds = {};
+      function mv(un, dx, dy){ var k = shiftItems(un.members, dx, dy); Object.keys(k).forEach(function(x){ kinds[x] = true; }); }
+      if(mode === "dh" || mode === "dv"){
+        if(units.length < 3) return;
+        var H = mode === "dh", key0 = H ? "l" : "t", key1 = H ? "r" : "b";
+        units.sort(function(a, b){ return (a.box[key0] + a.box[key1]) - (b.box[key0] + b.box[key1]); });
+        var total = 0; units.forEach(function(x){ total += x.box[key1] - x.box[key0]; });
+        var gap = ((H ? u.r - u.l : u.b - u.t) - total) / (units.length - 1), pos = u[key0];
+        units.forEach(function(x){ var d = pos - x.box[key0]; mv(x, H ? d : 0, H ? 0 : d); pos += (x.box[key1] - x.box[key0]) + gap; });
+      } else {
+        units.forEach(function(x){
+          var b = x.box, dx = 0, dy = 0;
+          if(mode === "l") dx = u.l - b.l; else if(mode === "r") dx = u.r - b.r; else if(mode === "c") dx = (u.l + u.r) / 2 - (b.l + b.r) / 2;
+          else if(mode === "t") dy = u.t - b.t; else if(mode === "b") dy = u.b - b.b; else if(mode === "m") dy = (u.t + u.b) / 2 - (b.t + b.b) / 2;
+          if(dx || dy) mv(x, dx, dy);
+        });
+      }
+      commitKinds(kinds);
+    }
     document.addEventListener("keydown", function selectKeys(e){
       if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", selectKeys); return; }
-      if(boardState.tool !== "select" || editableTarget(e.target)) return;
+      if(editableTarget(e.target)) return;
       var mod = e.ctrlKey || e.metaKey;
+      if(mod && (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y")){
+        var ub = vToolbar.querySelector((e.shiftKey || e.key === "y" || e.key === "Y") ? "#btn-redo" : "#btn-undo");
+        if(ub){ e.preventDefault(); ub.click(); } return;
+      }
+      if(boardState.tool !== "select") return;
       if(mod && (e.key === "g" || e.key === "G")){ e.preventDefault(); if(e.shiftKey) ungroupSelection(); else groupSelection(); }
+      else if(mod && (e.key === "c" || e.key === "C") && selSet.length){ e.preventDefault(); copySelection(); }
+      else if(mod && (e.key === "x" || e.key === "X") && selSet.length){ e.preventDefault(); copySelection(); deleteSelection(); }
+      else if(mod && (e.key === "v" || e.key === "V") && window.__mmSelClip){ e.preventDefault(); pasteSelClip(); }
+      else if(mod && (e.key === "d" || e.key === "D") && selSet.length){ e.preventDefault(); duplicateSelection(); }
+      else if(selSet.length && /^Arrow(Left|Right|Up|Down)$/.test(e.key)){ e.preventDefault(); var st1 = e.shiftKey ? 2 : 0.3; snapshotForUndo(); commitKinds(shiftItems(expandGroups(selSet), e.key === "ArrowLeft" ? -st1 : e.key === "ArrowRight" ? st1 : 0, e.key === "ArrowUp" ? -st1 : e.key === "ArrowDown" ? st1 : 0)); }
       else if(mod && (e.key === "a" || e.key === "A")){ e.preventDefault(); selSet = expandGroups(allItems().filter(function(it){ return !!itemBox(it); })); renderSelection(); }
       else if((e.key === "Delete" || e.key === "Backspace") && selSet.length){ e.preventDefault(); deleteSelection(); }
       else if(e.key === "Escape" && selSet.length){ selSet = []; renderSelection(); }
