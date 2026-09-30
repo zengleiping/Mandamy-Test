@@ -721,7 +721,7 @@
   /* 橡皮擦模式選單／「➕更多」加入工具選單：跟顏色選盤共用同一個 hover 彈出機制（.color-popover），
      裡面放的是直排的文字按鈕，不是色點，另外加寬、改直排 */
   .more-tools-popover{ min-width:150px; display:flex; flex-direction:column; gap:4px; }
-  .eraser-mode-opt, .more-tool-opt{
+  .eraser-mode-opt, .more-tool-opt, .trans-opt{
     width:100%; padding:8px 10px; font-size:12px; font-weight:600; text-align:left; white-space:nowrap;
     border-radius:8px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); cursor:pointer;
     display:flex; align-items:center; gap:8px;
@@ -731,9 +731,9 @@
   .more-tool-opt-icon{ width:17px; flex:none; }
   .more-tool-opt img.more-tool-opt-icon{ height:17px; object-fit:contain; }
   .more-tool-opt-icon-emoji{ display:inline-flex; align-items:center; justify-content:center; height:17px; font-size:15px; line-height:1; }
-  :root:not([data-theme="light"]) .eraser-mode-opt, :root:not([data-theme="light"]) .more-tool-opt{ border-color:rgba(255,255,255,0.14); }
-  .eraser-mode-opt:hover, .more-tool-opt:hover{ border-color:var(--seal); background:var(--seal-soft); }
-  .eraser-mode-opt.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
+  :root:not([data-theme="light"]) .eraser-mode-opt, :root:not([data-theme="light"]) .more-tool-opt, :root:not([data-theme="light"]) .trans-opt{ border-color:rgba(255,255,255,0.14); }
+  .eraser-mode-opt:hover, .more-tool-opt:hover, .trans-opt:hover{ border-color:var(--seal); background:var(--seal-soft); }
+  .eraser-mode-opt.active, .trans-opt.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
 
   /* 非核心工具（格線／底圖／移動畫面／錄示範）預設收合在 extraToolsPool 裡，
      從「➕更多」點了才搬進工具列——外面包一層 .extra-tool-group，要跟 vToolbar 一樣撐滿寬度，
@@ -857,6 +857,14 @@
     background:var(--surface); border:1px solid var(--grid-line); border-radius:8px; padding:2px; opacity:1;
   }
   .question-item-btn[data-slide-row]:hover .q-action-btns, .question-item-btn[data-slide-row]:focus-within .q-action-btns{ display:flex; }
+  /* 換頁效果：新的一頁進來時，整塊畫布淡入或從側邊滑入。用個別的 translate 屬性（不用 transform），
+     這樣不會跟畫布縮放／平移用的行內 transform 打架。 */
+  @keyframes slideFadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes slideSlideNext{ from{ opacity:0.15; translate:70px 0; } to{ opacity:1; translate:0 0; } }
+  @keyframes slideSlidePrev{ from{ opacity:0.15; translate:-70px 0; } to{ opacity:1; translate:0 0; } }
+  .canvas-stage-wrap.trans-fade{ animation:slideFadeIn .4s ease both; }
+  .canvas-stage-wrap.trans-slide-next{ animation:slideSlideNext .38s ease both; }
+  .canvas-stage-wrap.trans-slide-prev{ animation:slideSlidePrev .38s ease both; }
   .slide-add-row{
     display:flex; align-items:center; justify-content:center; gap:6px; width:100%; margin-top:4px; padding:8px 0;
     font:700 13px/1 "Plus Jakarta Sans",sans-serif; color:var(--seal); background:transparent;
@@ -3927,6 +3935,52 @@
     }, 350);
   }
 
+  // 複製投影片：小題本身（底圖、講者備註…）跟這一頁的內容（筆跡／文字／圖片／媒體）一起複製，
+  // 貼在目前這一張的後面；可以跨簡報貼。逐步出現的進度、示範同步用的欄位不複製，從頭開始。
+  var slideClipboard = null; // { token, q, prog }
+  function insertSlideCopy(secId, afterQId, qData, progData){
+    var secs = getSections(); var sec = secs[secId]; if(!sec) return;
+    var clone = JSON.parse(JSON.stringify(qData)); var newId = uid("q"); clone.id = newId;
+    var prog = JSON.parse(JSON.stringify(progData || {}));
+    ["revealStep", "strokesRevSeq", "strokesRevBy", "lastEvent", "wrongFlash", "mediaState"].forEach(function(k){ delete prog[k]; });
+    var keys = getSortedQuestionKeys(sec);
+    var idx = afterQId ? keys.indexOf(afterQId) : keys.length - 1;
+    keys.splice(idx + 1, 0, newId);
+    if(!sec.questions) sec.questions = {};
+    sec.questions[newId] = clone;
+    keys.forEach(function(k, i){ sec.questions[k].order = i; });
+    if(Object.keys(prog).length) writeProgress(newId, prog);
+    slideListArmed = true;
+    writeSections(secs, newId);
+  }
+  function duplicateSlide(secId, qId){
+    var secs = getSections(); var sec = secs[secId];
+    if(!sec || !sec.questions || !sec.questions[qId]) return;
+    insertSlideCopy(secId, qId, sec.questions[qId], getProgress(qId) || {});
+  }
+  document.addEventListener("copy", function(e){
+    if(isStudent || !slideListArmed || isEditableEl(e.target)) return;
+    var info = getCurrentQInfo(); if(!info) return;
+    var found = findSectionForQuestion(info.question.id);
+    if(!found || found.sec.type !== "board") return;
+    e.preventDefault();
+    var tok = uid("slideclip");
+    slideClipboard = { token: tok, q: JSON.parse(JSON.stringify(info.question)), prog: JSON.parse(JSON.stringify(getProgress(info.question.id) || {})) };
+    if(e.clipboardData){
+      e.clipboardData.setData("application/x-mandamy-slide", tok);
+      e.clipboardData.setData("text/plain", info.question.title || "");
+    }
+  });
+  document.addEventListener("paste", function(e){
+    if(isStudent || !slideListArmed || isEditableEl(e.target) || !e.clipboardData) return;
+    var tok = e.clipboardData.getData("application/x-mandamy-slide");
+    if(!tok || !slideClipboard || slideClipboard.token !== tok) return;
+    var info = getCurrentQInfo(); if(!info) return;
+    var found = findSectionForQuestion(info.question.id);
+    if(!found || found.sec.type !== "board") return;
+    e.preventDefault();
+    insertSlideCopy(found.secId, info.question.id, slideClipboard.q, slideClipboard.prog);
+  });
   function addBlankSlideToSection(secId){
     var secs = getSections(); var sec = secs[secId]; if(!sec) return;
     var keys = getSortedQuestionKeys(sec);
@@ -4087,6 +4141,7 @@
                 ${(sec.type !== "board" && sec.type !== "hanzi" && q.weight && q.weight !== 1) ? `<span class="q-weight-tag" title="配分權重 Weight ×${q.weight}">×${q.weight}</span>` : ""}
               </span>
               <span class="q-action-btns">
+                ${sec.type === "board" ? `<span class="row-del btn-dup-q" title="複製這張投影片（貼在後面）Duplicate slide" style="font-size:11px; font-weight:700; padding:2px 6px; color:var(--ink-soft); white-space:nowrap;">複製</span>` : ""}
                 <span class="row-del btn-edit-q" title="編輯 Edit" style="font-size:11px; font-weight:700; padding:2px 6px; color:var(--ink-soft); white-space:nowrap;">編輯</span>
                 <span class="row-del btn-del-q" title="刪除 Delete" style="font-size:11px; font-weight:700; padding:2px 6px; white-space:nowrap;">刪除</span>
               </span>
@@ -4136,6 +4191,8 @@
               setCurrentQ(qId);
             };
 
+            var dupBtn = qBtn.querySelector(".btn-dup-q");
+            if(dupBtn) dupBtn.onclick = function(e){ e.stopPropagation(); duplicateSlide(secId, qId); };
             qBtn.querySelector(".btn-edit-q").onclick = function(e){
               e.stopPropagation();
               openQuestionDialog(secId, qId);
@@ -4533,13 +4590,14 @@
 
   /* 頁面內文字輸入框（避免依賴瀏覽器原生 prompt()，某些預覽環境會封鎖原生彈窗） */
   // multiline=true（文字工具用）：改用 textarea，Enter 確認、Shift+Enter 換行（做段落／清單用）。
+  var inlineInputClosedAt = 0;
   function showInlineTextInput(container, pos, onCommit, initialValue, placeholder, multiline){
     var existing = container.querySelector(".inline-text-input");
     if(existing) existing.remove();
     var input = document.createElement(multiline ? "textarea" : "input");
     if(!multiline) input.type = "text"; else input.rows = 1;
     input.className = "inline-text-input";
-    input.placeholder = placeholder || (multiline ? "輸入文字，Enter 確認、Shift+Enter 換行" : "輸入文字，Enter 確認");
+    input.placeholder = placeholder || (multiline ? "輸入文字，Enter 換行，點一下別處就確認" : "輸入文字，Enter 確認");
     if(initialValue) input.value = initialValue;
     function autosize(){
       if(!multiline) return;
@@ -4551,24 +4609,38 @@
     setTimeout(function(){ input.focus(); input.select(); autosize(); }, 0);
     if(multiline) input.addEventListener("input", autosize);
     var done = false;
+    // 點輸入框以外的任何地方（畫布、工具列、側欄…）＝確定；在 capture 階段先處理，這樣即使被點到的東西自己會
+    // stopPropagation 也一樣能收到。inlineInputClosedAt 讓畫布知道「這一下點擊只是用來確認文字，不要順便又開一個新輸入框」。
+    function outsidePointer(ev){
+      if(input.contains(ev.target)) return;
+      commit();
+    }
+    function finish(){
+      done = true; inlineInputClosedAt = Date.now();
+      document.removeEventListener("pointerdown", outsidePointer, true);
+    }
     function commit(){
-      if(done) return; done = true;
+      if(done) return; finish();
       var val = input.value;
       if(input.parentNode) input.remove();
       onCommit(val);
     }
     function cancel(){
-      if(done) return; done = true;
+      if(done) return; finish();
       if(input.parentNode) input.remove();
     }
+    input._commit = commit;
+    setTimeout(function(){ if(!done) document.addEventListener("pointerdown", outsidePointer, true); }, 0);
     input.addEventListener("keydown", function(ev){
       ev.stopPropagation();
       if(ev.isComposing || ev.keyCode === 229) return; // 中文輸入法選字時按 Enter 是「選定文字」，不是「確認送出」
       if(ev.key === "Enter"){
-        if(multiline && ev.shiftKey) return; // Shift+Enter：換行
+        // 跟 PPT 一樣：多行文字框裡 Enter＝換行；要結束編輯就點一下別處（或按 Esc、Ctrl/⌘+Enter）。
+        // 單行的（改注音／讀音）輸入框仍然是 Enter＝確認。
+        if(multiline && !(ev.ctrlKey || ev.metaKey)) return;
         ev.preventDefault(); commit();
       }
-      else if(ev.key === "Escape"){ ev.preventDefault(); cancel(); }
+      else if(ev.key === "Escape"){ ev.preventDefault(); if(multiline) commit(); else cancel(); } // PPT：Esc＝結束編輯並保留文字
     });
     input.addEventListener("mousedown", function(ev){ ev.stopPropagation(); });
     input.addEventListener("blur", function(){ commit(); });
@@ -5838,6 +5910,7 @@
   var objClipboard = null;    // 應用程式內部的複製：{ token, kind:"text"|"image", data }，跟系統剪貼簿用 token 對應
   var objKeyHandlers = null;  // 複製／剪下／貼上／Delete 的 document 監聽器，換題目前先移除
   var slideListArmed = false; // 最後一次點擊是不是在左側投影片列表（是的話 Backspace／Delete 刪除目前這張投影片）
+  var lastBoardQId = null, lastBoardSecId = null, lastBoardIdx = -1; // 換頁效果要知道「上一頁」是哪一頁、往前還是往後翻
   var lastTextTap = { id: null, at: 0 }; // 文字方塊「連點兩下＝編輯」的計時（要跨重畫保留，所以放在外層）
   var slideKeyHandler = null; // 老師鍵盤翻頁／翻步驟的監聽器，換題目前先移除
   var canvasFsKeyHandler = null; // 記住上一次掛的 Escape 鍵監聽器，換題目前先移除，避免累積重複監聽
@@ -5967,6 +6040,16 @@
         <button type="button" class="tool-btn-v slide-nav-btn" id="btn-slide-next" ${slideIndex >= slideSiblingIds.length - 1 ? 'disabled' : ''} title="下一步／下一頁 Next step or slide（鍵盤 → 或空白鍵）"><span class="tool-btn-v-icon">▶</span></button>
       </div>
       <div class="slide-nav-counter">${slideIndex + 1} / ${slideSiblingIds.length}</div>` : ''}
+      ${(isMultiSlideDeck && !isStudent) ? `
+      <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v" id="btn-transition" title="換頁效果（套用到整份簡報）Slide transition"><span class="tool-btn-v-icon">✨</span><span class="tool-btn-v-label">效果</span></button>
+        <div class="color-popover">
+          <div class="color-popover-title">換頁效果 Transition</div>
+          <button type="button" class="trans-opt ${(slideSecInfo.sec.transition || 'none') === 'none' ? 'active' : ''}" data-trans="none">無 None</button>
+          <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'fade' ? 'active' : ''}" data-trans="fade">淡入 Fade</button>
+          <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'slide' ? 'active' : ''}" data-trans="slide">滑動 Slide</button>
+        </div>
+      </div>` : ''}
       <div class="tool-v-sep"></div>
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v ${boardState.tool==='pen'?'active':''}" data-tool="pen" title="筆 Pen（滑鼠移入可選顏色／粗細／濃淡 hover for color, size &amp; opacity）"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_PENCIL}" alt=""><span class="tool-btn-v-label">筆</span></button>
@@ -6190,6 +6273,14 @@
 
     var cWrap = document.createElement("div");
     cWrap.className = "canvas-stage-wrap";
+    // 換頁效果：只有「同一份簡報裡從別頁翻過來」才播（第一次打開、重新整理都不播）。
+    var transMode = (slideSecInfo && slideSecInfo.sec.transition) || "none";
+    if(transMode !== "none" && lastBoardQId && lastBoardQId !== q.id && slideSecInfo && lastBoardSecId === slideSecInfo.secId){
+      var transCls = transMode === "fade" ? "trans-fade" : (slideIndex >= lastBoardIdx ? "trans-slide-next" : "trans-slide-prev");
+      cWrap.classList.add(transCls);
+      cWrap.addEventListener("animationend", function(){ cWrap.classList.remove("trans-fade", "trans-slide-next", "trans-slide-prev"); });
+    }
+    lastBoardQId = q.id; lastBoardSecId = slideSecInfo ? slideSecInfo.secId : null; lastBoardIdx = slideIndex;
     // 圖片還沒載入完成、BOARD_ASPECT_RATIO 還沒校正成底圖真正比例之前，先蓋住畫布不讓人下筆
     // （見下面 .bg-loading-guard 的說明與 CSS 註解）；沒有底圖的話不需要等待，一開始就是 null。
     var bgLoadingGuard = null;
@@ -6416,7 +6507,7 @@
     }
     // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next"];
+    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition"];
 
     // 目前選定工具「本來該有」的游標樣式——跟放大縮小/自動拖曳無關，單純工具本身的樣子。
     // 抽成函式是因為畫布縮放後的「靠近墨跡才恢復成工具游標」也要用到同一份邏輯（見下面
@@ -6523,6 +6614,16 @@
         counterEl.textContent = txt;
       }
     }
+    vToolbar.querySelectorAll(".trans-opt").forEach(function(b){
+      b.onclick = function(e){
+        e.stopPropagation();
+        var secsT = getSections(); var st = slideSecInfo && secsT[slideSecInfo.secId];
+        if(!st) return;
+        st.transition = b.dataset.trans;
+        vToolbar.querySelectorAll(".trans-opt").forEach(function(x){ x.classList.toggle("active", x === b); });
+        writeSections(secsT);
+      };
+    });
     if(btnSlidePrev) btnSlidePrev.onclick = slideStepPrev;
     if(btnSlideNext) btnSlideNext.onclick = slideStepNext;
     updateSlideNavUi();
@@ -6675,7 +6776,7 @@
     }
     function onCopyOrCut(isCut){
       return function(e){
-        if(!document.body.contains(cWrap) || editableTarget(e.target) || liveLocked()) return;
+        if(!document.body.contains(cWrap) || editableTarget(e.target) || liveLocked() || slideListArmed) return;
         var sel = currentSelectedObj(); if(!sel) return;
         e.preventDefault();
         var tok = uid("clip");
@@ -6691,7 +6792,7 @@
       copy: onCopyOrCut(false),
       cut: onCopyOrCut(true),
       paste: function(e){
-        if(!document.body.contains(cWrap) || editableTarget(e.target) || liveLocked()) return;
+        if(!document.body.contains(cWrap) || editableTarget(e.target) || liveLocked() || slideListArmed) return;
         var cd = e.clipboardData; if(!cd) return;
         var tok = cd.getData("application/x-mandamy-obj");
         if(tok && objClipboard && objClipboard.token === tok){ e.preventDefault(); pasteInternalObj(); return; }
@@ -6728,7 +6829,7 @@
         clearObjSelection(); // 改完文字＝編輯結束，框框消失
         writeProgress(q.id, { texts: texts });
         renderTexts();
-      }, cur.text, "修改文字，Enter 確認、Shift+Enter 換行、Esc 取消", true);
+      }, cur.text, "修改文字，Enter 換行，點一下別處就確認", true);
     }
 
     // 對齊（靠左／置中／靠右，作用在多行文字每一行之間）與清單（項目符號／編號，每一行一個）。
@@ -7575,6 +7676,7 @@
     // 都不會被系統手勢（例如捲動／縮放）打斷這一筆的繪製。
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
+      if(Date.now() - inlineInputClosedAt < 150){ e.preventDefault(); return; } // 這一下點擊只是「確認剛打的文字」，不要順便畫線／開新輸入框
       if(e.pointerType === "pen") stylusEverUsed = true;
 
       if(e.pointerType === "touch"){
