@@ -2224,6 +2224,15 @@
   var myName = urlName || (isStudent ? "" : "老師");
   var myId = isStudent ? (localStorage.getItem("hanyu_my_id") || uid("stu")) : "teacher";
   localStorage.setItem("hanyu_my_id", myId);
+  // 2026-09-29 修正：白板同步要能分辨「這筆資料是不是我自己這一台裝置剛剛寫的回音」，之前是拿
+  // Date.now()（每台裝置自己的系統時間）來比大小，但老師常常同時用好幾台裝置開同一個房間
+  // （例如電腦＋iPad，帳號都是同一個「teacher」，myId 分不出是哪一台），不同裝置的時鐘不保證
+  // 完全同步，只要有一點誤差，其中一台寫進去的內容在另一台眼裡可能會被誤判成「比較舊」而整批
+  // 忽略，甚至被另一台之後的寫入蓋掉——這正是「老師 iPad 跟電腦兩邊看到的畫面不一樣」的成因。
+  // deviceInstanceId 改成每次「重新整理網頁」才重新產生一個的隨機編號（不存 localStorage，
+  // 刻意不要跨裝置共用），只拿來判斷「這份資料的作者編號是不是剛好就是我自己這個瀏覽器分頁」，
+  // 不同裝置的編號本來就不會相等，也就不會被拿來互相比大小，不會再受時鐘誤差影響。
+  var deviceInstanceId = uid("dev");
 
   var roomData = null; var cursorOn = true; var currentFolderId = null; var activeProjectId = null;
   var editingFolderId = null; var editingProjectId = null; var activeSectionForAdd = null; var editingSectionId = null;
@@ -5535,10 +5544,14 @@
     var progress = getProgress(q.id);
     var strokes = progress.strokes || [];
     var texts = progress.texts || [];
-    // 2026-09-29：strokesRev 是每次寫入 strokes 時一起存的「時間戳記版本號」，只用來擋掉「明明
-    // 已經比較新的本機內容，卻被一份比較舊、還在路上（雲端還沒同步完）的畫面蓋回去」這種情況——
-    // 細節見下面 refreshFromProgress() 裡的說明。
-    var localStrokesRev = progress.strokesRev || 0;
+    // 2026-09-29 修正：localSelfSeq 是「這台裝置這次打開這一題以來，自己寫入 strokes 的次數」，
+    // 純粹是本機自己記的計數，從 0 開始，只用來擋掉「自己剛剛才寫入的內容，卻被一份還在追上進度、
+    // 比較舊的雲端回音蓋回去」這種情況——細節見下面 refreshFromProgress() 裡的說明。改版之前這裡
+    // 用的是 Date.now()（不同裝置各自的系統時間），會在「老師同時用好幾台裝置開同一個房間」時，
+    // 因為裝置間時鐘沒有完全同步，把別人（其實是自己另一台裝置）真正寫入的新內容誤判成「比較舊」
+    // 而忽略掉，兩邊畫面就會看起來不一樣、甚至互相覆蓋掉對方寫的東西。現在改成純粹本機計數
+    // （不比較別台裝置的任何數字，只跟自己比對），就不會再有這個問題。
+    var localSelfSeq = 0;
     // 沒有特別設定格線的話，預設是「無格」：整個空白處都可以直接書寫，不侷限成一個固定大小的方格區域。
     // 老師需要田字格／九宮格時再自己點選，格線只會是畫面正中央一塊參考用的浮層，格線以外一樣能寫字。
     var currentGrid = progress.gridType || q.gridType || "none";
@@ -6694,8 +6707,8 @@
           if(dist < 3.5){
             snapshotForUndo();
             strokes.splice(i, 1);
-            localStrokesRev = Date.now();
-            writeProgress(q.id, { strokes: strokes, strokesRev: localStrokesRev });
+            localSelfSeq++;
+            writeProgress(q.id, { strokes: strokes, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
             // 2026-09-29 修正：畫布是點陣圖，陣列裡刪掉這一筆不會自動讓畫面上的線條消失，一定要
             // 自己重畫一次才看得出來被擦掉了。以前這裡沒有呼叫 redrawStrokes()，本機（自己）的畫面
             // 完全要等房間同步（Firebase 回寫）才會更新，在真實網路（不像本機測試環境幾乎零延遲）
@@ -6905,8 +6918,8 @@
           isEraser: boardState.tool === "pixel-eraser"
         };
         strokes.push(newStroke);
-        localStrokesRev = Date.now();
-        writeProgress(q.id, { strokes: strokes, strokesRev: localStrokesRev });
+        localSelfSeq++;
+        writeProgress(q.id, { strokes: strokes, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
         // 2026-09-29 效能：redrawStrokes() 是把「目前這一題全部的筆跡」整個清掉重畫一次，成本
         // 會隨著這一題累積的筆跡數量一起往上疊加——上課越久、這頁寫得越多，每寫完一筆到能再畫
         // 下一筆之間的延遲就越明顯，在 iPad 這種效能相對弱的裝置上特別容易感覺到「寫字不連貫」。
@@ -7027,8 +7040,8 @@
       var obj = JSON.parse(snapText);
       strokes = obj.strokes; texts = obj.texts;
       redrawStrokes(); renderTexts();
-      localStrokesRev = Date.now();
-      writeProgress(q.id, { strokes: strokes, texts: texts, strokesRev: localStrokesRev });
+      localSelfSeq++;
+      writeProgress(q.id, { strokes: strokes, texts: texts, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
       updateUndoRedoBtns();
     }
     if(btnUndo) btnUndo.onclick = function(){
@@ -7058,8 +7071,8 @@
           // 清空了。修法跟橡皮擦（checkStrokeHit）、上一步/下一步（applyUndoRedoSnapshot）一樣：
           // 自己這邊就地重畫，不要依賴、也不要等雲端回音才更新畫面。
           redrawStrokes(); renderTexts();
-          localStrokesRev = Date.now();
-          writeProgress(q.id, { strokes: strokes, texts: texts, strokesRev: localStrokesRev });
+          localSelfSeq++;
+          writeProgress(q.id, { strokes: strokes, texts: texts, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
         }
       };
     }
@@ -7140,20 +7153,29 @@
       // 輪詢，雲端才剛收到第一筆、還沒收到第二筆，這裡收到的 freshStrokes 會是「只有第一筆」，
       // 筆畫數量比本機（已經有兩筆）少，上面（一）的「內容沒變」判斷抓不出這種情況（數量真的不一樣），
       // 就會誤把這份「雲端還沒跟上」的舊資料當成新的，蓋掉本機已經畫好的第二筆，看起來像剛畫的
-      // 東西突然消失、等一下又出現。用 strokesRev（每次寫入 strokes 時一起存的時間戳記版本號）
-      // 擋掉這種情況：只要收到的版本號比「本機自己最後一次寫入的版本號」還舊，一定是還在追上進度
-      // 的過時資料（不管是自己的回音，還是雲端輪詢剛好卡到中間狀態），整批直接忽略，繼續顯示本機
-      // 已經有的內容就好，不會平白無故蓋掉、閃爍。真的是別人（或自己）更新的內容，版本號一定會
-      // 比本機記錄的新，才會正常套用。
-      var freshStrokesRev = freshProgress.strokesRev;
-      var strokesRevIsStale = freshStrokesRev !== undefined && freshStrokesRev !== null && freshStrokesRev < localStrokesRev;
-      var strokesLooksUnchanged = strokesRevIsStale || (strokes.length === freshStrokes.length &&
+      // 東西突然消失、等一下又出現。
+      //
+      // 2026-09-29 修正（三，修正（二）的翻車）：原本這裡是用 strokesRevSeq 配 Date.now()（不同
+      // 裝置各自的系統時間）判斷「收到的版本是不是比較舊」，結果老師同時用電腦＋iPad（都是同一個
+      // 「teacher」帳號）開同一個房間時，只要兩台裝置的時鐘沒有完全同步，其中一台寫進去的內容在
+      // 另一台眼裡就可能被永遠判定成「比較舊」而整批忽略，甚至被另一台後續的寫入直接蓋掉——這正是
+      // 老師反應「iPad 跟電腦兩邊畫面看起來不一樣」的成因，比原本想解決的「延遲閃爍」還嚴重。修法：
+      // 版本序號只跟「自己這台裝置」比較——每份寫入都會標記是哪一台裝置（deviceInstanceId，每次
+      // 重新整理網頁才重新產生，不同裝置一定不一樣）寫的，只有當收到的資料的作者編號剛好就是自己
+      // 的時候，才能拿它的序號（localSelfSeq，純粹是本機自己數到第幾次寫入，不比較任何時間）跟自己
+      // 記錄的序號比大小，判斷是不是自己還在追上進度的舊回音；只要作者編號不是自己（不管是別人，
+      // 還是自己另一台裝置），一律照單全收，不會被序號擋掉，才不會漏收/蓋掉真正的新內容。
+      var freshStrokesRevSeq = freshProgress.strokesRevSeq;
+      var freshStrokesRevBy = freshProgress.strokesRevBy;
+      var isOwnEcho = freshStrokesRevBy !== undefined && freshStrokesRevBy === deviceInstanceId;
+      var strokesRevIsStaleSelfEcho = isOwnEcho && freshStrokesRevSeq !== undefined && freshStrokesRevSeq !== null && freshStrokesRevSeq < localSelfSeq;
+      var strokesLooksUnchanged = strokesRevIsStaleSelfEcho || (strokes.length === freshStrokes.length &&
         (strokes.length === 0 ||
           (strokes[strokes.length - 1] && freshStrokes[freshStrokes.length - 1] &&
            strokes[strokes.length - 1].id === freshStrokes[freshStrokes.length - 1].id)));
       if(!strokesLooksUnchanged){
         strokes = freshStrokes;
-        if(freshStrokesRev !== undefined && freshStrokesRev !== null) localStrokesRev = freshStrokesRev;
+        if(isOwnEcho && freshStrokesRevSeq !== undefined && freshStrokesRevSeq !== null) localSelfSeq = freshStrokesRevSeq;
       }
       texts = freshProgress.texts || [];
       var freshGrid = freshProgress.gridType || q.gridType || "none";
