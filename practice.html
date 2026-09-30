@@ -782,6 +782,39 @@
   }
   :root:not([data-theme="light"]) .popover-field-row select{ border-color:rgba(255,255,255,0.14); }
 
+  /* 2026-09-30：像 PPT 的「可以自己輸入、也可以下拉選」數字欄位（筆刷粗細／文字字級共用）。
+     輸入框在左、▾ 在右，點 ▾ 展開常用數字清單；清單是 position:absolute 浮在欄位下方，不會把面板撐高。 */
+  .size-combo{ position:relative; display:flex; align-items:stretch; width:100%; }
+  .size-combo-input{
+    flex:1; min-width:0; width:100%; padding:6px 4px; font-size:12.5px; font-weight:700; text-align:center;
+    background:var(--surface); color:var(--ink); border:1.5px solid rgba(28,33,30,0.14);
+    border-right:none; border-radius:8px 0 0 8px; -moz-appearance:textfield; appearance:textfield;
+  }
+  .size-combo-input::-webkit-outer-spin-button, .size-combo-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .size-combo-toggle{
+    width:26px; padding:0; cursor:pointer; font-size:11px; color:var(--ink-soft);
+    background:var(--surface); border:1.5px solid rgba(28,33,30,0.14); border-radius:0 8px 8px 0;
+  }
+  .size-combo-toggle:hover{ color:var(--seal); border-color:var(--seal); }
+  .size-combo-list{
+    display:none; position:absolute; left:0; right:0; top:100%; margin-top:3px; z-index:70;
+    max-height:170px; overflow-y:auto; background:var(--surface); border:1.5px solid var(--grid-line);
+    border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.18); padding:3px;
+  }
+  .size-combo.open .size-combo-list{ display:block; }
+  .size-combo-opt{
+    display:block; width:100%; padding:5px 0; font-size:12.5px; font-weight:700; text-align:center;
+    background:transparent; color:var(--ink); border:none; border-radius:6px; cursor:pointer;
+  }
+  .size-combo-opt:hover, .size-combo-opt.current{ background:rgba(178,59,50,0.12); color:var(--seal); }
+  :root:not([data-theme="light"]) .size-combo-input, :root:not([data-theme="light"]) .size-combo-toggle{ border-color:rgba(255,255,255,0.14); }
+  .text-size-row{ display:flex; gap:6px; align-items:stretch; }
+  .text-bold-btn{
+    width:34px; flex:none; font-size:15px; font-weight:900; font-family:serif; cursor:pointer;
+    background:var(--surface); color:var(--ink); border:1.5px solid rgba(28,33,30,0.14); border-radius:8px;
+  }
+  .text-bold-btn.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
+
   /* 筆刷顏色：色點之外再加一顆原生色盤（挑任意顏色）跟一顆滴管（從螢幕上任何地方，包括其他
      圖片，吸取顏色），畫筆／文字兩個顏色面板共用同一份 HTML（colorPickerRowHtml），選色會同步
      套用到 boardState.color，也會同步回另一份面板的色點／色盤（跟原本的色點同步邏輯一樣）。
@@ -4295,6 +4328,60 @@
     input.addEventListener("blur", function(){ commit(); });
   }
 
+  // 2026-09-30：「可以自己輸入、也可以下拉選」的數字欄位（像 PPT 的字級欄位）。
+  // sizeComboHtml 產生 HTML（輸入框 + ▾ + 常用數字清單）；bindSizeCombo 綁事件：
+  // 輸入完按 Enter／離開欄位、或從清單點一個數字，都會夾在 min~max 範圍內，然後呼叫 onCommit(數字)。
+  // 輸入框保留原本的 class（例如 board-font-select），這樣舊程式碼用 .value 讀寫也繼續能用。
+  function sizeComboHtml(inputClass, value, min, max, options){
+    return '<div class="size-combo" data-min="' + min + '" data-max="' + max + '">' +
+      '<input type="number" inputmode="numeric" class="size-combo-input ' + inputClass + '" min="' + min + '" max="' + max + '" step="1" value="' + value + '">' +
+      '<button type="button" class="size-combo-toggle" tabindex="-1" title="常用大小 Presets">▾</button>' +
+      '<div class="size-combo-list">' +
+        options.map(function(o){ return '<button type="button" class="size-combo-opt" data-v="' + o + '">' + o + '</button>'; }).join("") +
+      '</div></div>';
+  }
+  function bindSizeCombo(comboEl, onCommit){
+    if(!comboEl) return;
+    var input = comboEl.querySelector(".size-combo-input");
+    var toggle = comboEl.querySelector(".size-combo-toggle");
+    var min = Number(comboEl.dataset.min), max = Number(comboEl.dataset.max);
+    var lastGood = Number(input.value);
+    function close(){ comboEl.classList.remove("open"); }
+    function commit(raw){
+      var n = Math.round(Number(raw));
+      if(!isFinite(n) || String(raw).trim() === ""){ input.value = String(lastGood); return; } // 空白／亂打：退回上一個有效數字
+      n = Math.max(min, Math.min(max, n));
+      lastGood = n;
+      input.value = String(n);
+      onCommit(n);
+    }
+    input.addEventListener("change", function(){ commit(input.value); });
+    input.addEventListener("keydown", function(ev){
+      ev.stopPropagation(); // 打數字時不要被全螢幕快捷鍵等全域按鍵處理攔走
+      if(ev.key === "Enter"){ ev.preventDefault(); commit(input.value); input.blur(); }
+      else if(ev.key === "Escape"){ input.value = String(lastGood); close(); input.blur(); }
+    });
+    input.addEventListener("focus", function(){
+      var cur = Number(input.value); if(isFinite(cur) && cur > 0) lastGood = cur; // 外部程式（選取文字方塊）可能改過欄位值
+      try{ input.select(); }catch(e){}
+    });
+    toggle.addEventListener("click", function(ev){
+      ev.preventDefault();
+      var willOpen = !comboEl.classList.contains("open");
+      if(willOpen){
+        var cur = Number(input.value);
+        comboEl.querySelectorAll(".size-combo-opt").forEach(function(b){ b.classList.toggle("current", Number(b.dataset.v) === cur); });
+      }
+      comboEl.classList.toggle("open", willOpen);
+    });
+    comboEl.querySelectorAll(".size-combo-opt").forEach(function(b){
+      b.addEventListener("click", function(){ commit(b.dataset.v); close(); });
+    });
+    document.addEventListener("pointerdown", function(ev){ if(!comboEl.contains(ev.target)) close(); });
+    var pop = comboEl.closest(".color-popover");
+    if(pop) pop.addEventListener("mouseleave", close);
+  }
+
   var editorDialog = document.getElementById("editor-dialog");
   var pairRowsEl = document.getElementById("pair-rows");
   var choiceOptRowsEl = document.getElementById("choice-opt-rows");
@@ -5489,7 +5576,8 @@
   // 預設 stroke（筆畫擦），使用者說多數情況優先用這個，局部擦要自己到橡皮擦按鈕裡切換。
   // opacity：畫筆濃淡（1 = 全不透明／最濃，數字越小越淡）——老師點重點時可以調淡一點，
   // 學生跟著描的時候才看得出來哪些是老師畫的、哪些是自己描上去的，兩者疊在一起也不會完全分不出來。
-  var boardState = { tool: "pen", color: "#B23B32", size: 6, opacity: 1, fontSize: 36, eraserMode: "stroke" };
+  // 2026-09-30：筆刷粗細預設改成 2（使用者要求）；文字新增 bold（加粗）開關，預設不加粗。
+  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, eraserMode: "stroke" };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
   // pinnedExtraTools：工具列精簡後，格線／底圖／移動畫面／錄示範這些非核心工具預設收合，
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
@@ -5635,8 +5723,8 @@
           <div class="color-dot-grid">${colorDotsHtml}</div>
           ${colorPickerRowHtml}
           <div class="popover-field-row">
-            <div class="popover-field-row-label"><span>粗細 Size</span><b id="pen-size-value">${boardState.size}</b></div>
-            <input type="range" id="pen-size-slider" min="2" max="24" step="1" value="${boardState.size}">
+            <div class="popover-field-row-label"><span>粗細 Size</span></div>
+            ${sizeComboHtml("pen-size-input", boardState.size, 1, 60, [1,2,3,4,6,8,10,12,16,20,24,32,40])}
           </div>
           <div class="popover-field-row">
             <div class="popover-field-row-label"><span>濃淡 Opacity</span><b id="pen-opacity-value">${Math.round((boardState.opacity==null?1:boardState.opacity)*100)}%</b></div>
@@ -5652,14 +5740,10 @@
           ${colorPickerRowHtml}
           <div class="popover-field-row">
             <div class="popover-field-row-label"><span>字級 Size</span></div>
-            <select class="board-font-select" title="文字大小 Text size">
-              <option value="24" ${boardState.fontSize===24?'selected':''}>24</option>
-              <option value="32" ${boardState.fontSize===32?'selected':''}>32</option>
-              <option value="40" ${boardState.fontSize===40?'selected':''}>40</option>
-              <option value="52" ${boardState.fontSize===52?'selected':''}>52</option>
-              <option value="68" ${boardState.fontSize===68?'selected':''}>68</option>
-              <option value="84" ${boardState.fontSize===84?'selected':''}>84</option>
-            </select>
+            <div class="text-size-row">
+              ${sizeComboHtml("board-font-select", boardState.fontSize, 8, 200, [12,14,16,18,20,24,28,32,36,40,48,52,60,68,72,84,96,120])}
+              <button type="button" class="text-bold-btn ${boardState.bold?'active':''}" title="加粗 Bold（選取文字方塊後按，可以改已經打好的字）"><b>B</b></button>
+            </div>
           </div>
         </div>
       </div>
@@ -6606,6 +6690,10 @@
       });
     }
 
+    // 2026-09-30：文字加粗。舊資料沒有 bold 欄位，一律當成加粗（跟這個功能上線前的樣子一樣，文字方塊
+    // 本來就是 font-weight:700）；新打的字用工具列的「B」開關決定（boardState.bold，預設不加粗）。
+    function isTextBold(t){ return t.bold === undefined ? true : !!t.bold; }
+
     function renderTexts(){
       textLayer.innerHTML = "";
       var scale = getScaleRatio();
@@ -6619,6 +6707,7 @@
 
         var baseSize = t.fontSize || 36;
         div.style.fontSize = Math.round(baseSize * scale) + "px";
+        div.style.fontWeight = isTextBold(t) ? "700" : "400";
 
         div.innerHTML = `
           <span class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</span>
@@ -6708,6 +6797,8 @@
           activeSelectedTextId = t.id;
           div.classList.add("active");
           if(fontSelect) fontSelect.value = String(t.fontSize || 36);
+          var boldBtnSync = vToolbar.querySelector(".text-bold-btn");
+          if(boldBtnSync) boldBtnSync.classList.toggle("active", isTextBold(t)); // 選到哪個文字方塊，B 就顯示那個的狀態
           snapshotForUndo(); // 在拖動開始「之前」存一份快照，上一步就能整個復原成拖動前的位置
 
           var startX = e.clientX, startY = e.clientY;
@@ -6854,7 +6945,8 @@
               x: p.x,
               y: p.y,
               color: boardState.color,
-              fontSize: boardState.fontSize || 36
+              fontSize: boardState.fontSize || 36,
+              bold: !!boardState.bold
             });
             writeProgress(q.id, { texts: texts });
           }
@@ -6915,7 +7007,7 @@
       ctx.save();
       if(boardState.tool === "pixel-eraser"){
         ctx.globalCompositeOperation = "destination-out";
-        ctx.lineWidth = Math.max(2, boardState.size * 2.5 * scale);
+        ctx.lineWidth = Math.max(2, Math.max(boardState.size, 6) * 2.5 * scale);
       } else {
         ctx.globalCompositeOperation = "source-over";
         ctx.strokeStyle = boardState.color;
@@ -6964,7 +7056,8 @@
           id: uid("st"),
           points: currentPath,
           color: boardState.color,
-          size: boardState.size,
+          // 局部橡皮擦大小固定不低於原本預設（6），不跟著筆刷粗細（預設現在是 2）變得太小擦不乾淨
+          size: boardState.tool === "pixel-eraser" ? Math.max(boardState.size, 6) : boardState.size,
           opacity: boardState.opacity,
           isEraser: boardState.tool === "pixel-eraser"
         };
@@ -6995,18 +7088,40 @@
     // 跟上面 .canvas-stage-wrap 的 user-select:none 一起徹底避免反藍/選單蓋住畫筆操作。
     canvas.oncontextmenu = function(e){ e.preventDefault(); };
 
+    // 字級：可以直接輸入數字，也可以從 ▾ 清單選（bindSizeCombo 會先夾在 8~200 再呼叫這裡）。
+    // fontSelect 仍然是那個輸入框本身，下面拖曳縮放／選取文字方塊時用 fontSelect.value 同步顯示的舊程式碼不用改。
     var fontSelect = vToolbar.querySelector(".board-font-select");
     if(fontSelect){
-      fontSelect.onchange = function(){
-        boardState.fontSize = Number(fontSelect.value);
+      bindSizeCombo(fontSelect.closest(".size-combo"), function(n){
+        boardState.fontSize = n;
         if(activeSelectedTextId){
           var selObj = texts.find(function(item){ return item.id === activeSelectedTextId; });
           if(selObj){
             snapshotForUndo();
             selObj.fontSize = boardState.fontSize;
             writeProgress(q.id, { texts: texts });
+            renderTexts();
           }
         }
+      });
+    }
+
+    // 加粗：按下切換 boardState.bold（之後新打的字套用）；如果目前有選取的文字方塊，也同步改那一個。
+    var boldBtn = vToolbar.querySelector(".text-bold-btn");
+    if(boldBtn){
+      boldBtn.onclick = function(){
+        var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
+        if(selObj){
+          var nextBold = !isTextBold(selObj);
+          snapshotForUndo();
+          selObj.bold = nextBold;
+          boardState.bold = nextBold;
+          writeProgress(q.id, { texts: texts });
+          renderTexts();
+        } else {
+          boardState.bold = !boardState.bold;
+        }
+        boldBtn.classList.toggle("active", !!boardState.bold);
       };
     }
 
@@ -7014,13 +7129,10 @@
     // gridGroupEl 裡，不一定在 vToolbar 底下）；筆刷粗細／濃淡已經併入「筆」按鈕的 hover 面板，
     // 用橫向拉桿即時調整（不用再點固定的細/中/粗選項），拖動當下就直接更新 boardState，
     // 下一筆畫下去馬上套用，跟橡皮擦共用同一個 boardState.size（維持原本的行為）。
-    var penSizeSlider = vToolbar.querySelector("#pen-size-slider");
-    var penSizeValueEl = vToolbar.querySelector("#pen-size-value");
-    if(penSizeSlider){
-      penSizeSlider.oninput = function(){
-        boardState.size = Number(penSizeSlider.value);
-        if(penSizeValueEl) penSizeValueEl.textContent = penSizeSlider.value;
-      };
+    // 2026-09-30：粗細改成「可以自己輸入、也可以從 ▾ 清單選」（1~60），預設 2。
+    var penSizeInput = vToolbar.querySelector(".pen-size-input");
+    if(penSizeInput){
+      bindSizeCombo(penSizeInput.closest(".size-combo"), function(n){ boardState.size = n; });
     }
     var penOpacitySlider = vToolbar.querySelector("#pen-opacity-slider");
     var penOpacityValueEl = vToolbar.querySelector("#pen-opacity-value");
