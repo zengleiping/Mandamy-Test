@@ -817,7 +817,7 @@
   }
   /* 文字多行／對齊／清單（項目符號、編號）。white-space:pre 讓換行照原樣顯示；每一行是一個 .tl，
      清單的符號用 CSS ::before 產生（不是真的字元），所以不會被編輯、註音或複製到，切換清單樣式也不用改文字內容。 */
-  .movable-text{ white-space:pre !important; }
+  .movable-text .tl{ white-space:pre; } /* 只讓「一行行文字」保留換行；外層維持 nowrap，不然模板裡的縮排空白會被當成空行撐高方框 */
   .movable-text .text-content{ display:block; }
   .movable-text .tl{ min-height:1em; }
   .movable-text:has(.tl + .tl){ line-height:1.35; }           /* 多行時行距鬆一點，不然上下行會黏在一起 */
@@ -835,6 +835,34 @@
   }
   .text-fmt-btn:hover{ border-color:var(--seal); color:var(--seal); }
   .text-fmt-btn.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
+  /* 物件（文字／圖片）只有在「文字」或「橡皮擦」工具時才可以點、拖、選取；用筆／移動畫面等其他工具時完全穿透，
+     不會不小心點到或拖動它們。 */
+  .text-layer:not(.objs-interactive) .movable-text, .text-layer:not(.objs-interactive) .image-proxy{ pointer-events:none; }
+  /* 貼上的圖片：圖片本身畫在筆跡下面（可以在圖上寫字圈重點），上面另外疊一個透明的 .image-proxy 負責點選／拖曳／縮放。 */
+  .image-layer{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
+  .board-image{ position:absolute; transform:translate(-50%,-50%); height:auto; max-width:none; user-select:none; -webkit-user-drag:none; }
+  .board-image.step-hidden{ opacity:0.35; }
+  .image-proxy{
+    position:absolute; transform:translate(-50%,-50%); pointer-events:auto; box-sizing:border-box;
+    border:1.5px dashed transparent; cursor:grab; touch-action:none;
+  }
+  .image-proxy:hover{ border-color:#1E88E5; }
+  .image-proxy.active{ border-color:var(--seal); cursor:grabbing; }
+  .image-proxy:hover .resize-handle, .image-proxy.active .resize-handle{ display:block; }
+  /* 左側投影片縮圖／新增按鈕 */
+  .q-thumb{ width:64px; height:auto; min-height:32px; max-height:48px; object-fit:contain; flex:none; border:1px solid var(--grid-line); border-radius:4px; background:#FFFCF7; }
+  /* 投影片列：縮圖佔了位置，「編輯／刪除」平常收起來，滑鼠移到那一列才浮現，標題才有地方顯示 */
+  .question-item-btn[data-slide-row] .q-action-btns{
+    display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    background:var(--surface); border:1px solid var(--grid-line); border-radius:8px; padding:2px; opacity:1;
+  }
+  .question-item-btn[data-slide-row]:hover .q-action-btns, .question-item-btn[data-slide-row]:focus-within .q-action-btns{ display:flex; }
+  .slide-add-row{
+    display:flex; align-items:center; justify-content:center; gap:6px; width:100%; margin-top:4px; padding:8px 0;
+    font:700 13px/1 "Plus Jakarta Sans",sans-serif; color:var(--seal); background:transparent;
+    border:1.5px dashed var(--seal); border-radius:10px; cursor:pointer;
+  }
+  .slide-add-row:hover{ background:var(--seal-soft); }
   .text-size-row{ display:flex; gap:6px; align-items:stretch; }
   .text-bold-btn{
     width:34px; flex:none; font-size:15px; font-weight:900; font-family:serif; cursor:pointer;
@@ -3785,6 +3813,161 @@
 
   /* ================== 側欄渲染 ================== */
   var sectionTreeListEl = document.getElementById("section-tree-list");
+  /* ================== 左側投影片列表：縮圖、＋新增空白投影片、鍵盤刪除 ================== */
+  // 縮圖用小 canvas 依這一頁目前的內容（底圖＋貼上的圖片＋筆跡＋文字）現場畫出來，存成 dataURL 快取；
+  // 內容沒變就直接用快取，內容變了才重畫（畫的動作排隊、一次一張，不會卡住畫面）。
+  var slideThumbCache = {};   // qId -> { sig, url }
+  var slideThumbTimers = {};
+  var slideThumbQueue = [];
+  var slideThumbBusy = false;
+  var thumbImgCache = {};     // src -> 已載入的 Image
+  var THUMB_BLANK = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  function isEditableEl(t){
+    var tag = t && t.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable);
+  }
+  function slideThumbSig(q, prog){
+    var bg = prog.bgImage || q.bgImage || "";
+    var st = prog.strokes || [];
+    return [bg.length, bg.slice(-24), st.length, (st[st.length - 1] || {}).id || "",
+      JSON.stringify(prog.texts || []),
+      (prog.images || []).map(function(i){ return [i.id, i.x, i.y, i.w, (i.src || "").length].join(","); }).join("|")].join("#");
+  }
+  function loadThumbImg(src){
+    return new Promise(function(resolve){
+      if(!src){ resolve(null); return; }
+      if(thumbImgCache[src]){ resolve(thumbImgCache[src]); return; }
+      var im = new Image();
+      im.onload = function(){
+        if(Object.keys(thumbImgCache).length > 60) thumbImgCache = {};
+        thumbImgCache[src] = im; resolve(im);
+      };
+      im.onerror = function(){ resolve(null); };
+      im.src = src;
+    });
+  }
+  function drawSlideThumb(q, cb){
+    var prog = getProgress(q.id) || {};
+    var bg = prog.bgImage || q.bgImage || "";
+    var imgs = prog.images || [];
+    Promise.all([loadThumbImg(bg)].concat(imgs.map(function(im){ return loadThumbImg(im.src); }))).then(function(loaded){
+      var bgImg = loaded[0];
+      var ratio = bgImg ? Math.max(0.4, Math.min(3, bgImg.naturalWidth / bgImg.naturalHeight)) : 1.5;
+      var W = 192, H = Math.max(40, Math.round(W / ratio));
+      var c = document.createElement("canvas"); c.width = W; c.height = H;
+      var x = c.getContext("2d");
+      x.fillStyle = "#FFFCF7"; x.fillRect(0, 0, W, H);
+      if(bgImg){
+        var s0 = Math.min(W / bgImg.naturalWidth, H / bgImg.naturalHeight);
+        var bw0 = bgImg.naturalWidth * s0, bh0 = bgImg.naturalHeight * s0;
+        x.drawImage(bgImg, (W - bw0) / 2, (H - bh0) / 2, bw0, bh0);
+      }
+      imgs.forEach(function(im, i){
+        var el = loaded[i + 1]; if(!el) return;
+        var w = im.w / 100 * W, h = w * (im.ar || 1);
+        x.drawImage(el, im.x / 100 * W - w / 2, im.y / 100 * H - h / 2, w, h);
+      });
+      var sc = W / 640;
+      var lc = document.createElement("canvas"); lc.width = W; lc.height = H;
+      var l = lc.getContext("2d");
+      (prog.strokes || []).forEach(function(st){
+        if(!st.points || st.points.length < 2) return;
+        l.save();
+        if(st.isEraser){ l.globalCompositeOperation = "destination-out"; l.lineWidth = Math.max(1, st.size * 2.5 * sc); }
+        else { l.strokeStyle = st.color; l.lineWidth = Math.max(0.8, st.size * sc); l.globalAlpha = (st.opacity == null) ? 1 : st.opacity; }
+        l.lineCap = "round"; l.lineJoin = "round"; l.beginPath();
+        l.moveTo(st.points[0].x * W / 100, st.points[0].y * H / 100);
+        for(var k = 1; k < st.points.length; k++) l.lineTo(st.points[k].x * W / 100, st.points[k].y * H / 100);
+        l.stroke(); l.restore();
+      });
+      x.drawImage(lc, 0, 0);
+      (prog.texts || []).forEach(function(t){
+        var fs = (t.fontSize || 36) * sc;
+        x.font = ((t.bold === undefined || t.bold) ? "700 " : "400 ") + fs + 'px "LXGW WenKai TC", serif';
+        x.fillStyle = (t.color && t.color.charAt(0) === "#") ? t.color : "#2B2320";
+        x.textBaseline = "top";
+        var lines = String(t.text || "").split("\n"), lh = fs * 1.25;
+        var widths = lines.map(function(ln){ return x.measureText(ln).width; });
+        var bw = Math.max.apply(null, widths.concat([1]));
+        var left = t.x / 100 * W - bw / 2, top = t.y / 100 * H - lines.length * lh / 2;
+        lines.forEach(function(ln, i){
+          var ax = left;
+          if(t.align === "center") ax = left + (bw - widths[i]) / 2; else if(t.align === "right") ax = left + bw - widths[i];
+          x.fillText(ln, ax, top + i * lh);
+        });
+      });
+      var url; try{ url = c.toDataURL("image/jpeg", 0.7); }catch(e){ url = THUMB_BLANK; }
+      cb(url);
+    });
+  }
+  function applySlideThumb(qId, url){
+    document.querySelectorAll('img.q-thumb[data-thumb-qid="' + qId + '"]').forEach(function(im){ im.src = url; });
+  }
+  function pumpSlideThumbQueue(){
+    if(slideThumbBusy) return;
+    var qId = slideThumbQueue.shift(); if(!qId) return;
+    var item = getAllQuestionsList().find(function(it){ return it.question.id === qId; });
+    if(!item){ pumpSlideThumbQueue(); return; }
+    var sig = slideThumbSig(item.question, getProgress(qId) || {});
+    var cached = slideThumbCache[qId];
+    if(cached && cached.sig === sig){ applySlideThumb(qId, cached.url); pumpSlideThumbQueue(); return; }
+    slideThumbBusy = true;
+    drawSlideThumb(item.question, function(url){
+      slideThumbCache[qId] = { sig: sig, url: url };
+      applySlideThumb(qId, url);
+      slideThumbBusy = false;
+      pumpSlideThumbQueue();
+    });
+  }
+  function scheduleSlideThumb(qId){
+    clearTimeout(slideThumbTimers[qId]);
+    slideThumbTimers[qId] = setTimeout(function(){
+      if(slideThumbQueue.indexOf(qId) === -1) slideThumbQueue.push(qId);
+      pumpSlideThumbQueue();
+    }, 350);
+  }
+
+  function addBlankSlideToSection(secId){
+    var secs = getSections(); var sec = secs[secId]; if(!sec) return;
+    var keys = getSortedQuestionKeys(sec);
+    var maxOrder = keys.reduce(function(m, k){ var o = sec.questions[k].order; return (o !== undefined && o > m) ? o : m; }, -1);
+    var qId = uid("q");
+    if(!sec.questions) sec.questions = {};
+    sec.questions[qId] = { id: qId, order: maxOrder + 1, title: "投影片 " + (keys.length + 1), desc: "", bgImage: "", gridType: "none", media: [], teacherNote: "", weight: 1 };
+    slideListArmed = true;
+    writeSections(secs, qId);
+  }
+  // 刪除一題（按鈕、鍵盤 Backspace／Delete 共用）。刪掉之後自動跳到同一份簡報裡相鄰的那一張。
+  function deleteQuestionById(secId, qId){
+    var secs = getSections(); var sec = secs[secId];
+    if(!sec || !sec.questions || !sec.questions[qId]) return;
+    var q = sec.questions[qId];
+    var qKeys = getSortedQuestionKeys(sec);
+    if(qKeys.length <= 1 && Object.keys(secs).length <= 1){ alert("至少保留一題！Keep at least one question."); return; }
+    if(!confirm("確定刪除「" + q.title + "」？Delete this question?")) return;
+    var idx = qKeys.indexOf(qId);
+    var neighbor = qKeys[idx + 1] || qKeys[idx - 1] || null;
+    delete sec.questions[qId];
+    delete slideThumbCache[qId];
+    var nextList = getAllQuestionsList();
+    writeSections(secs, neighbor || (nextList.length ? nextList[0].question.id : null));
+  }
+  // 最後一次點擊在左側投影片列表（或＋按鈕）時，Backspace／Delete 才會刪除目前這張投影片；
+  // 點到畫布或其他地方就解除，避免在畫布上按倒退鍵誤刪整張投影片。刪除前一定會跳確認視窗。
+  document.addEventListener("pointerdown", function(e){
+    slideListArmed = !!(e.target.closest && e.target.closest("[data-slide-row], .slide-add-row"));
+  }, true);
+  document.addEventListener("keydown", function(e){
+    if(isStudent || !slideListArmed) return;
+    if(e.key !== "Backspace" && e.key !== "Delete") return;
+    if(isEditableEl(e.target)) return;
+    var info = getCurrentQInfo(); if(!info) return;
+    var found = findSectionForQuestion(info.question.id);
+    if(!found || found.sec.type !== "board") return;
+    e.preventDefault();
+    deleteQuestionById(found.secId, info.question.id);
+  });
+
   function renderSidebar(){
     if(isStudent) return;
     sectionTreeListEl.innerHTML = "";
@@ -3793,6 +3976,13 @@
     var currentInfo = getCurrentQInfo();
     var currentQId = currentInfo ? currentInfo.question.id : null;
 
+    // 縮圖：內容沒變就用快取；沒有快取或內容變了，先用舊圖（或空白）頂著，排隊在背景重畫。
+    function thumbSrcFor(q){
+      var cached = slideThumbCache[q.id];
+      var sigNow = slideThumbSig(q, getProgress(q.id) || {});
+      if(!cached || cached.sig !== sigNow) scheduleSlideThumb(q.id);
+      return cached ? cached.url : THUMB_BLANK;
+    }
     var SEC_TYPE_META = {
       match:   { label: "連連看 Match",   color: "#4C7A5E" },
       choice:  { label: "選擇題 Choice",  color: "#B8763D" },
@@ -3887,10 +4077,12 @@
             qBtn.className = "question-item-btn" + (qId === currentQId ? " active" : "");
             qBtn.setAttribute("draggable", "true");
             qBtn.title = q.title;
+            if(sec.type === "board") qBtn.setAttribute("data-slide-row", "1");
             qBtn.innerHTML = `
               <span class="q-item-left">
                 <span class="drag-handle-icon" title="按住拖曳小題重排 Drag to reorder">⋮⋮</span>
                 <span class="q-index-badge">${idx + 1}</span>
+                ${sec.type === "board" ? `<img class="q-thumb" data-thumb-qid="${qId}" src="${thumbSrcFor(q)}" alt="">` : ""}
                 <span class="q-item-title">${escapeHtml(q.title)}</span>
                 ${(sec.type !== "board" && sec.type !== "hanzi" && q.weight && q.weight !== 1) ? `<span class="q-weight-tag" title="配分權重 Weight ×${q.weight}">×${q.weight}</span>` : ""}
               </span>
@@ -3951,13 +4143,17 @@
 
             qBtn.querySelector(".btn-del-q").onclick = function(e){
               e.stopPropagation();
-              if(qKeys.length <= 1 && Object.keys(secs).length <= 1){ alert("至少保留一題！Keep at least one question."); return; }
-              if(confirm(`確定刪除「${q.title}」？Delete this question?`)){
-                delete sec.questions[qId]; var nextList = getAllQuestionsList(); writeSections(secs, nextList.length ? nextList[0].question.id : null);
-              }
+              deleteQuestionById(secId, qId);
             };
             body.appendChild(qBtn);
           });
+        }
+        if(sec.type === "board"){
+          var addRow = document.createElement("button"); addRow.type = "button"; addRow.className = "slide-add-row";
+          addRow.title = "在這份簡報最後新增一張空白投影片 Add a blank slide";
+          addRow.textContent = "＋ 新增空白投影片";
+          addRow.onclick = function(e){ e.stopPropagation(); addBlankSlideToSection(secId); };
+          body.appendChild(addRow);
         }
         block.appendChild(body);
       }
@@ -5639,6 +5835,9 @@
   // 接著維持全螢幕，不用每換一題都重新點一次。實際「搬到 body 底下蓋滿視窗」的邏輯統一寫在
   // setupCanvasFullscreen() 這個共用函式，renderDrawBoard／renderHanziBoard 各自呼叫一次。
   var canvasFullscreen = false;
+  var objClipboard = null;    // 應用程式內部的複製：{ token, kind:"text"|"image", data }，跟系統剪貼簿用 token 對應
+  var objKeyHandlers = null;  // 複製／剪下／貼上／Delete 的 document 監聽器，換題目前先移除
+  var slideListArmed = false; // 最後一次點擊是不是在左側投影片列表（是的話 Backspace／Delete 刪除目前這張投影片）
   var lastTextTap = { id: null, at: 0 }; // 文字方塊「連點兩下＝編輯」的計時（要跨重畫保留，所以放在外層）
   var slideKeyHandler = null; // 老師鍵盤翻頁／翻步驟的監聽器，換題目前先移除
   var canvasFsKeyHandler = null; // 記住上一次掛的 Escape 鍵監聽器，換題目前先移除，避免累積重複監聽
@@ -5696,6 +5895,7 @@
     var progress = getProgress(q.id);
     var strokes = progress.strokes || [];
     var texts = progress.texts || [];
+    var images = progress.images || []; // 2026-09-30 貼上的圖片物件：{ id, src, x, y, w, ar, step }（x／y＝中心點百分比、w＝寬度佔畫布寬百分比、ar＝高／寬）
     // 2026-09-29 修正：localSelfSeq 是「這台裝置這次打開這一題以來，自己寫入 strokes 的次數」，
     // 純粹是本機自己記的計數，從 0 開始，只用來擋掉「自己剛剛才寫入的內容，卻被一份還在追上進度、
     // 比較舊的雲端回音蓋回去」這種情況——細節見下面 refreshFromProgress() 裡的說明。改版之前這裡
@@ -6016,6 +6216,8 @@
       cWrap.appendChild(img);
       cWrap.appendChild(bgLoadingGuard);
     }
+    var imageLayer = document.createElement("div"); imageLayer.className = "image-layer";
+    cWrap.appendChild(imageLayer);
     // 格線浮層：pointer-events:none，只是畫面正中央一塊參考用的方框，不會擋住下面 canvas 的書寫範圍
     var gridOverlay = document.createElement("div");
     gridOverlay.className = "grid-overlay" + (currentGrid === 'tian' ? ' grid-tian' : (currentGrid === 'jiu' ? ' grid-jiu' : ''));
@@ -6188,6 +6390,7 @@
     var isDrawing = false;
     var currentPath = [];
     var activeSelectedTextId = null;
+    var activeSelectedImageId = null;
     var isPanning = false, panStartClientX = 0, panStartClientY = 0, panStartX = 0, panStartY = 0;
     // 2026-09-29：iPad 等純觸控裝置的雙指縮放（pinch-to-zoom）——瀏覽器的雙指縮放手勢在滑鼠/觸控板
     // 才會轉成 wheel+ctrlKey 事件（見下面 stageArea 的 wheel 監聽），觸控螢幕的雙指縮放完全走不到
@@ -6235,6 +6438,8 @@
           b.classList.add("active");
           boardState.tool = b.dataset.tool;
           canvas.style.cursor = toolCursor();
+          if(boardState.tool !== "text") clearObjSelection(); // 換去別的工具＝不編輯了，選取框消失
+          syncObjInteractive();
         }
         // 「文字」工具第一次被點的時候，先問一次要不要打字加拼音／注音（只問一次，見
         // maybeAskPhoneticModeThenRun），問完才真的切換成文字工具；已經問過的話就直接切換。
@@ -6254,6 +6459,8 @@
       });
       if(btnEraser) btnEraser.classList.add("active");
       canvas.style.cursor = toolCursor();
+      clearObjSelection();
+      syncObjInteractive();
     }
     if(btnEraser) btnEraser.onclick = function(){ selectEraserTool(); };
     vToolbar.querySelectorAll(".eraser-mode-opt").forEach(function(opt){
@@ -6279,7 +6486,9 @@
     // 學生端維持原本的行為（只翻頁，不會動到老師控制的步驟）。revealStep 存在這一頁的 progress 裡，
     // 用既有的 sharedProgress 自動同步給全班。
     function maxStepOf(qId){
-      return (getProgress(qId).texts || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, 0);
+      var pr = getProgress(qId);
+      var mx = (pr.texts || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, 0);
+      return (pr.images || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
     }
     function slideStepNext(){
       if(isStudent){ if(slideIndex < slideSiblingIds.length - 1) setCurrentQ(slideSiblingIds[slideIndex + 1]); return; }
@@ -6334,6 +6543,176 @@
       document.addEventListener("keydown", slideKeyHandler);
     }
 
+    // ===== 選取／互動狀態 =====
+    function clearObjSelection(){
+      activeSelectedTextId = null; activeSelectedImageId = null;
+      textLayer.querySelectorAll(".movable-text.active, .image-proxy.active").forEach(function(d){ d.classList.remove("active"); });
+    }
+    function syncObjInteractive(){
+      textLayer.classList.toggle("objs-interactive", boardState.tool === "text" || boardState.tool === "stroke-eraser");
+    }
+    syncObjInteractive();
+    function activateTextToolQuietly(){
+      // 貼上物件後自動切到「文字」工具，這樣馬上就能拖、縮放、選取（不走 maybeAskPhoneticModeThenRun，不要跳詢問視窗）
+      if(boardState.tool === "text"){ syncObjInteractive(); return; }
+      boardState.tool = "text";
+      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
+        if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
+      });
+      var tb = vToolbar.querySelector('button[data-tool="text"]'); if(tb) tb.classList.add("active");
+      canvas.style.cursor = toolCursor();
+      syncObjInteractive();
+    }
+    document.addEventListener("keydown", function escDeselect(e){
+      if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", escDeselect); return; }
+      if(e.key === "Escape" && (activeSelectedTextId || activeSelectedImageId)) clearObjSelection();
+    });
+
+    // ===== 複製／剪下／貼上／Delete =====
+    // 圖片：從別處複製圖片（網頁、截圖、其他 App）直接 Ctrl+V／⌘V 貼到這一頁；貼上前先縮到最長邊 900px，
+    // 不然一張手機照片好幾 MB，會拖慢整個房間的同步。文字方塊／圖片：選取後 Ctrl+C／Ctrl+V 複製到這一頁或別頁。
+    function editableTarget(t){
+      var tag = t && t.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable);
+    }
+    function liveLocked(){ return isStudent && inRoom() && !isOpenForStudent(); }
+    function currentSelectedObj(){
+      if(activeSelectedTextId){ var t = texts.find(function(x){ return x.id === activeSelectedTextId; }); if(t) return { kind: "text", obj: t }; }
+      if(activeSelectedImageId){ var im = images.find(function(x){ return x.id === activeSelectedImageId; }); if(im) return { kind: "image", obj: im }; }
+      return null;
+    }
+    function deleteSelectedObj(){
+      var sel = currentSelectedObj(); if(!sel) return false;
+      snapshotForUndo();
+      if(sel.kind === "text"){
+        texts = texts.filter(function(x){ return x.id !== sel.obj.id; });
+        writeProgress(q.id, { texts: texts });
+      } else {
+        images = images.filter(function(x){ return x.id !== sel.obj.id; });
+        writeProgress(q.id, { images: images });
+      }
+      clearObjSelection(); renderTexts();
+      return true;
+    }
+    function downscaleImageFile(file, cb){
+      var fr = new FileReader();
+      fr.onerror = function(){ cb(null); };
+      fr.onload = function(){
+        var im = new Image();
+        im.onerror = function(){ cb(null); };
+        im.onload = function(){
+          if(!im.naturalWidth || !im.naturalHeight){ cb(null); return; }
+          var sc = Math.min(1, 900 / Math.max(im.naturalWidth, im.naturalHeight));
+          var w = Math.max(1, Math.round(im.naturalWidth * sc)), h = Math.max(1, Math.round(im.naturalHeight * sc));
+          var c = document.createElement("canvas"); c.width = w; c.height = h;
+          var cx = c.getContext("2d"); cx.drawImage(im, 0, 0, w, h);
+          var url = c.toDataURL("image/png");
+          if(url.length > 300000){ // 太大：改存 JPEG（透明處補白底）
+            cx.globalCompositeOperation = "destination-over"; cx.fillStyle = "#FFFFFF"; cx.fillRect(0, 0, w, h);
+            url = c.toDataURL("image/jpeg", 0.82);
+          }
+          cb({ src: url, ar: h / w });
+        };
+        im.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    }
+    var pasteOffsetN = 0;
+    function addImageObj(res){
+      var r = cWrap.getBoundingClientRect();
+      var cw = r.width || 600, ch = r.height || 400;
+      var w = Math.min(50, 60 * ch / (Math.max(0.05, res.ar) * cw)); // 寬最多佔 50%、高最多佔 60%
+      w = Math.max(5, Math.round(w * 10) / 10);
+      var off = (pasteOffsetN++ % 6) * 3;
+      var obj = { id: uid("im"), src: res.src, ar: res.ar, x: Math.min(95, 50 + off), y: Math.min(95, 50 + off), w: w, step: 0 };
+      snapshotForUndo();
+      images.push(obj);
+      writeProgress(q.id, { images: images });
+      activateTextToolQuietly();
+      renderTexts();
+      selectImageObj(obj.id);
+    }
+    function pasteImageFiles(files){
+      files.forEach(function(f){
+        downscaleImageFile(f, function(res){
+          if(!res){ alert("這張圖片讀不進來（格式不支援或檔案壞掉）。\nCouldn't read this image."); return; }
+          if(!document.body.contains(cWrap)) return;
+          addImageObj(res);
+        });
+      });
+    }
+    function pasteInternalObj(){
+      if(!objClipboard) return;
+      var off = (pasteOffsetN++ % 6 + 1) * 3;
+      var copy = JSON.parse(JSON.stringify(objClipboard.data));
+      copy.id = uid(objClipboard.kind === "image" ? "im" : "t");
+      copy.x = Math.min(95, copy.x + off); copy.y = Math.min(95, copy.y + off);
+      snapshotForUndo();
+      if(objClipboard.kind === "image"){
+        images.push(copy); writeProgress(q.id, { images: images });
+        activateTextToolQuietly(); renderTexts(); selectImageObj(copy.id);
+      } else {
+        texts.push(copy); writeProgress(q.id, { texts: texts });
+        activateTextToolQuietly(); activeSelectedTextId = copy.id; activeSelectedImageId = null; renderTexts();
+      }
+    }
+    function pasteTextBox(txt){
+      var t = {
+        id: uid("t"), text: txt.replace(/\r\n?/g, "\n").trim(), x: 50, y: 50,
+        color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: 0,
+        align: boardState.align || "left", list: boardState.list || "none"
+      };
+      if(!t.text) return;
+      snapshotForUndo();
+      texts.push(t); writeProgress(q.id, { texts: texts });
+      activateTextToolQuietly(); activeSelectedTextId = t.id; activeSelectedImageId = null; renderTexts();
+    }
+    if(objKeyHandlers){
+      document.removeEventListener("copy", objKeyHandlers.copy);
+      document.removeEventListener("cut", objKeyHandlers.cut);
+      document.removeEventListener("paste", objKeyHandlers.paste);
+      document.removeEventListener("keydown", objKeyHandlers.key);
+    }
+    function onCopyOrCut(isCut){
+      return function(e){
+        if(!document.body.contains(cWrap) || editableTarget(e.target) || liveLocked()) return;
+        var sel = currentSelectedObj(); if(!sel) return;
+        e.preventDefault();
+        var tok = uid("clip");
+        objClipboard = { token: tok, kind: sel.kind, data: JSON.parse(JSON.stringify(sel.obj)) };
+        if(e.clipboardData){
+          e.clipboardData.setData("application/x-mandamy-obj", tok);
+          e.clipboardData.setData("text/plain", sel.kind === "text" ? sel.obj.text : "");
+        }
+        if(isCut) deleteSelectedObj();
+      };
+    }
+    objKeyHandlers = {
+      copy: onCopyOrCut(false),
+      cut: onCopyOrCut(true),
+      paste: function(e){
+        if(!document.body.contains(cWrap) || editableTarget(e.target) || liveLocked()) return;
+        var cd = e.clipboardData; if(!cd) return;
+        var tok = cd.getData("application/x-mandamy-obj");
+        if(tok && objClipboard && objClipboard.token === tok){ e.preventDefault(); pasteInternalObj(); return; }
+        var files = [];
+        if(cd.files && cd.files.length) files = Array.prototype.slice.call(cd.files);
+        else if(cd.items){ for(var i = 0; i < cd.items.length; i++){ if(cd.items[i].kind === "file"){ var f = cd.items[i].getAsFile(); if(f) files.push(f); } } }
+        files = files.filter(function(f){ return /^image\//.test(f.type); });
+        if(files.length){ e.preventDefault(); pasteImageFiles(files); return; }
+        var txt = cd.getData("text/plain");
+        if(txt && txt.trim()){ e.preventDefault(); pasteTextBox(txt); }
+      },
+      key: function(e){
+        if(!document.body.contains(cWrap) || editableTarget(e.target) || liveLocked() || slideListArmed) return;
+        if((e.key === "Delete" || e.key === "Backspace") && currentSelectedObj()){ e.preventDefault(); deleteSelectedObj(); }
+      }
+    };
+    document.addEventListener("copy", objKeyHandlers.copy);
+    document.addEventListener("cut", objKeyHandlers.cut);
+    document.addEventListener("paste", objKeyHandlers.paste);
+    document.addEventListener("keydown", objKeyHandlers.key);
+
     // 修改已經打好的文字：用 id 重新找一次（編輯期間房間同步可能已經把 texts 換成新的一批物件，
     // 直接改舊的物件會白改）。內容清空或沒變＝不動；文字有改就清掉舊的注音修正（字元位置對不上了）。
     function openTextEditor(textId){
@@ -6346,6 +6725,7 @@
         snapshotForUndo();
         target.text = v;
         delete target.phoneticOverride;
+        clearObjSelection(); // 改完文字＝編輯結束，框框消失
         writeProgress(q.id, { texts: texts });
         renderTexts();
       }, cur.text, "修改文字，Enter 確認、Shift+Enter 換行、Esc 取消", true);
@@ -6383,10 +6763,17 @@
       bindSizeCombo(stepInputEl.closest(".size-combo"), function(n){
         boardState.step = n;
         var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
+        var selImg = activeSelectedImageId ? images.find(function(item){ return item.id === activeSelectedImageId; }) : null;
         if(selObj){
           snapshotForUndo();
           selObj.step = n;
           writeProgress(q.id, { texts: texts });
+          renderTexts();
+          updateSlideNavUi();
+        } else if(selImg){
+          snapshotForUndo();
+          selImg.step = n;
+          writeProgress(q.id, { images: images });
           renderTexts();
           updateSlideNavUi();
         }
@@ -6988,13 +7375,14 @@
           var tapNow = Date.now();
           if(lastTextTap.id === t.id && tapNow - lastTextTap.at < 400){
             lastTextTap = { id: null, at: 0 };
-            activeSelectedTextId = t.id;
+            activeSelectedTextId = t.id; activeSelectedImageId = null;
             openTextEditor(t.id);
             return;
           }
           lastTextTap = { id: t.id, at: tapNow };
           try{ div.setPointerCapture(e.pointerId); }catch(err){}
-          activeSelectedTextId = t.id;
+          activeSelectedTextId = t.id; activeSelectedImageId = null;
+          textLayer.querySelectorAll(".image-proxy.active").forEach(function(d){ d.classList.remove("active"); });
           div.classList.add("active");
           if(fontSelect) fontSelect.value = String(t.fontSize || 36);
           var boldBtnSync = vToolbar.querySelector(".text-bold-btn");
@@ -7031,6 +7419,95 @@
         };
 
         textLayer.appendChild(div);
+      });
+      renderImages();
+    }
+
+    // ===== 貼上的圖片物件 =====
+    function selectImageObj(id){
+      activeSelectedTextId = null; activeSelectedImageId = id;
+      textLayer.querySelectorAll(".movable-text.active").forEach(function(d){ d.classList.remove("active"); });
+      textLayer.querySelectorAll(".image-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.imgId === id); });
+      var im = images.find(function(x){ return x.id === id; });
+      var stepInputSync2 = vToolbar.querySelector(".text-step-input");
+      if(stepInputSync2 && im) stepInputSync2.value = String(im.step || 0);
+    }
+    function renderImages(){
+      imageLayer.innerHTML = "";
+      var revealNow = getProgress(q.id).revealStep || 0;
+      images.forEach(function(im, idx){
+        var stepHidden = (im.step || 0) > revealNow;
+        if(stepHidden && isStudent) return;
+        var el = document.createElement("img");
+        el.className = "board-image" + (stepHidden ? " step-hidden" : "");
+        el.dataset.imgId = im.id; el.draggable = false; el.src = im.src;
+        el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
+        imageLayer.appendChild(el);
+
+        var px = document.createElement("div");
+        px.className = "image-proxy" + (im.id === activeSelectedImageId ? " active" : "");
+        px.dataset.imgId = im.id;
+        px.style.left = im.x + "%"; px.style.top = im.y + "%"; px.style.width = im.w + "%";
+        px.style.aspectRatio = "1 / " + (im.ar || 1);
+        px.innerHTML = ((!isStudent && (im.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + im.step + ' 次點擊出現">' + im.step + '</span>' : '') + '<div class="resize-handle" title="按住拖動縮放 Drag to resize"></div>';
+
+        var handle = px.querySelector(".resize-handle");
+        handle.onpointerdown = function(e){
+          e.stopPropagation(); e.preventDefault();
+          try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+          selectImageObj(im.id);
+          var startW = im.w;
+          var r0 = px.getBoundingClientRect();
+          var cx0 = r0.left + r0.width / 2, cy0 = r0.top + r0.height / 2;
+          var startDist = Math.hypot(e.clientX - cx0, e.clientY - cy0) || 1;
+          function onMove(ev){
+            var d = Math.hypot(ev.clientX - cx0, ev.clientY - cy0);
+            im.w = Math.max(3, Math.min(100, Math.round(startW * d / startDist * 10) / 10));
+            px.style.width = im.w + "%"; el.style.width = im.w + "%";
+          }
+          function onUp(){
+            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener("pointerup", onUp);
+            handle.removeEventListener("pointercancel", onUp);
+            writeProgress(q.id, { images: images });
+          }
+          snapshotForUndo();
+          handle.addEventListener("pointermove", onMove);
+          handle.addEventListener("pointerup", onUp);
+          handle.addEventListener("pointercancel", onUp);
+        };
+
+        px.onpointerdown = function(e){
+          e.stopPropagation();
+          if(boardState.tool === "stroke-eraser"){
+            snapshotForUndo();
+            images.splice(idx, 1);
+            writeProgress(q.id, { images: images });
+            renderTexts();
+            return;
+          }
+          try{ px.setPointerCapture(e.pointerId); }catch(err){}
+          selectImageObj(im.id);
+          snapshotForUndo();
+          var startX = e.clientX, startY = e.clientY, origX = im.x, origY = im.y;
+          var rect = cWrap.getBoundingClientRect();
+          function onMove(ev){
+            im.x = Math.max(0, Math.min(100, origX + (ev.clientX - startX) / rect.width * 100));
+            im.y = Math.max(0, Math.min(100, origY + (ev.clientY - startY) / rect.height * 100));
+            px.style.left = im.x + "%"; px.style.top = im.y + "%";
+            el.style.left = im.x + "%"; el.style.top = im.y + "%";
+          }
+          function onUp(){
+            px.removeEventListener("pointermove", onMove);
+            px.removeEventListener("pointerup", onUp);
+            px.removeEventListener("pointercancel", onUp);
+            writeProgress(q.id, { images: images });
+          }
+          px.addEventListener("pointermove", onMove);
+          px.addEventListener("pointerup", onUp);
+          px.addEventListener("pointercancel", onUp);
+        };
+        textLayer.appendChild(px);
       });
     }
 
@@ -7132,7 +7609,7 @@
         return;
       }
 
-      activeSelectedTextId = null;
+      clearObjSelection(); // 點畫布空白處＝取消選取，文字／圖片的框框消失
 
       if(boardState.tool === "stroke-eraser"){
         checkStrokeHit(p);
@@ -7400,27 +7877,28 @@
       if(btnRedo){ btnRedo.disabled = !redoStack.length; btnRedo.style.opacity = redoStack.length ? "1" : "0.4"; }
     }
     function snapshotForUndo(){
-      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts }));
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images }));
       if(undoStack.length > 60) undoStack.shift();
       redoStack.length = 0; // 有新的操作，「下一步」的歷史就作廢了，跟一般軟體的 undo/redo 行為一致
       updateUndoRedoBtns();
     }
     function applyUndoRedoSnapshot(snapText){
       var obj = JSON.parse(snapText);
-      strokes = obj.strokes; texts = obj.texts;
+      strokes = obj.strokes; texts = obj.texts; images = obj.images || [];
+      clearObjSelection();
       redrawStrokes(); renderTexts();
       localSelfSeq++;
-      writeProgress(q.id, { strokes: strokes, texts: texts, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+      writeProgress(q.id, { strokes: strokes, texts: texts, images: images, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
       updateUndoRedoBtns();
     }
     if(btnUndo) btnUndo.onclick = function(){
       if(!undoStack.length) return;
-      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts }));
+      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images }));
       applyUndoRedoSnapshot(undoStack.pop());
     };
     if(btnRedo) btnRedo.onclick = function(){
       if(!redoStack.length) return;
-      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts }));
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images }));
       applyUndoRedoSnapshot(redoStack.pop());
     };
     updateUndoRedoBtns();
@@ -7430,7 +7908,7 @@
       clearBtn.onclick = function(){
         if(confirm("確定要清空畫布上的所有內容嗎？（可以按「上一步」復原）")){
           snapshotForUndo();
-          strokes = []; texts = [];
+          strokes = []; texts = []; images = []; clearObjSelection();
           // 2026-09-29 修正：清空只是把陣列設空、寫回雲端，並沒有真的把畫布這張點陣圖擦乾淨——
           // 以前是靠 refreshFromProgress() 收到雲端回音時「整個重畫」順便清空畫面，但那個函式現在
           // 已經改成「內容看起來沒變就跳過重畫」（見上面 strokesRev／同步節流的說明）：清空之後本機
@@ -7441,7 +7919,7 @@
           // 自己這邊就地重畫，不要依賴、也不要等雲端回音才更新畫面。
           redrawStrokes(); renderTexts();
           localSelfSeq++;
-          writeProgress(q.id, { strokes: strokes, texts: texts, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+          writeProgress(q.id, { strokes: strokes, texts: texts, images: images, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
         }
       };
     }
@@ -7547,6 +8025,7 @@
         if(isOwnEcho && freshStrokesRevSeq !== undefined && freshStrokesRevSeq !== null) localSelfSeq = freshStrokesRevSeq;
       }
       texts = freshProgress.texts || [];
+      images = freshProgress.images || [];
       var freshGrid = freshProgress.gridType || q.gridType || "none";
       var freshBg = freshProgress.bgImage || q.bgImage || "";
 
@@ -7589,6 +8068,7 @@
       if(!strokesLooksUnchanged) redrawStrokes();
       renderTexts();
       updateSlideNavUi();
+      scheduleSlideThumb(q.id);
       return true;
     }
     liveBoardQId = q.id;
