@@ -891,6 +891,10 @@
   .anim-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
   .anim-row select{ font-size:12px; padding:3px 4px; border-radius:6px; border:1.5px solid rgba(28,33,30,.2); background:var(--surface); color:var(--ink); }
   .anim-row button{ font-size:12px; padding:3px 8px; border-radius:6px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; font-weight:700; }
+  .laser-layer{ position:absolute; inset:0; z-index:60; cursor:none; touch-action:none; }
+  .laser-dot{ position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:radial-gradient(circle,#fff 0 12%,#ff1e1e 30%,rgba(255,30,30,.55) 60%,rgba(255,30,30,0) 75%); box-shadow:0 0 14px 4px rgba(255,30,30,.55); pointer-events:none; }
+  .laser-trail{ position:absolute; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%; background:rgba(255,40,40,.6); pointer-events:none; animation:laserFade .42s ease-out forwards; }
+  @keyframes laserFade{ to{ opacity:0; transform:scale(.3); } }
   .text-step-badge{
     position:absolute; left:-10px; top:-12px; min-width:18px; height:18px; padding:0 4px; box-sizing:border-box;
     border-radius:9px; background:#F59E0B; color:#fff; font:700 11px/18px "Plus Jakarta Sans",sans-serif;
@@ -6467,6 +6471,39 @@
     }, 700);
   }
 
+  /* ===== 簡報者檢視：另開視窗（備忘稿／下一張／計時器／遠端翻頁），用 BroadcastChannel 跟放映視窗同步 ===== */
+  var presenterWin = null, presenterBC = null;
+  function pvPost(){
+    if(!presenterBC || !presenterWin || presenterWin.closed) return;
+    var info = getCurrentQInfo(); if(!info) return;
+    var found = findSectionForQuestion(info.question.id); if(!found) return;
+    var keys = getSortedQuestionKeys(found.sec), idx = keys.indexOf(info.question.id);
+    var nq = keys[idx + 1] ? found.sec.questions[keys[idx + 1]] : null;
+    var pr = getProgress(info.question.id) || {};
+    var mx = 0; ["texts", "images", "shapes"].forEach(function(k){ (pr[k] || []).forEach(function(o){ mx = Math.max(mx, o.step || 0); }); });
+    var nc = nq ? slideThumbCache[nq.id] : null; if(nq && !nc) scheduleSlideThumb(nq.id);
+    var cc = slideThumbCache[info.question.id];
+    presenterBC.postMessage({ type: "state", title: info.question.title || "", note: info.question.teacherNote || "", idx: idx + 1, total: keys.length, step: pr.revealStep || 0, maxStep: mx, nextTitle: nq ? nq.title : "", nextThumb: nc ? nc.url : "", curThumb: cc ? cc.url : "" });
+  }
+  function openPresenterView(){
+    if(presenterWin && !presenterWin.closed){ presenterWin.focus(); pvPost(); return; }
+    var w = window.open("", "mandamy-presenter", "width=560,height=780");
+    if(!w){ alert("瀏覽器擋住了新視窗，請允許這個網站的彈出視窗後再試一次。\nPop-up blocked — please allow pop-ups for this site."); return; }
+    presenterWin = w;
+    if(!presenterBC){
+      presenterBC = new BroadcastChannel("mandamy-presenter");
+      presenterBC.onmessage = function(e){
+        var m = e.data || {};
+        if(m.type === "hello") pvPost();
+        else if(m.type === "next"){ var nb = document.querySelector("#btn-slide-next"); if(nb && !nb.disabled) nb.click(); }
+        else if(m.type === "prev"){ var pb = document.querySelector("#btn-slide-prev"); if(pb && !pb.disabled) pb.click(); }
+      };
+    }
+    w.document.open();
+    w.document.write('<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>簡報者檢視</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:system-ui,"Noto Sans TC",sans-serif;background:#1c211e;color:#f4efe6;display:flex;flex-direction:column;height:100vh}header{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#2a312d}header b{flex:1;font-size:15px}#timer{font-size:26px;font-variant-numeric:tabular-nums;font-weight:800}button{font:inherit;font-weight:700;padding:8px 14px;border-radius:10px;border:1.5px solid #8a9a90;background:#3a443e;color:#fff;cursor:pointer}button:hover{border-color:#e8825a}main{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}.cur{font-size:15px;color:#c9d4cc}#note{white-space:pre-wrap;font-size:22px;line-height:1.6;background:#fff8e6;color:#2b2b2b;border-radius:12px;padding:14px;min-height:140px}.nx{display:flex;gap:12px;align-items:center}.nx img{width:200px;border-radius:8px;background:#fff}.nav{display:flex;gap:10px;padding:12px 14px;background:#2a312d}.nav button{flex:1;font-size:20px;padding:12px}small{color:#9fb0a5}</style></head><body><header><b id="t">簡報者檢視</b><span id="timer">00:00</span><button id="tp">暫停</button><button id="tr">歸零</button></header><main><div class="cur" id="pos"></div><div id="note"></div><div><small>下一張 Next</small><div class="nx"><img id="nimg" alt=""><span id="ntitle"></span></div></div></main><div class="nav"><button id="pv">◀ 上一步</button><button id="nx">下一步 ▶</button></div><script>var bc=new BroadcastChannel("mandamy-presenter"),sec=0,run=true;function f(n){return String(n).padStart(2,"0")}setInterval(function(){if(run){sec++;document.getElementById("timer").textContent=f(Math.floor(sec/60))+":"+f(sec%60)}},1000);document.getElementById("tp").onclick=function(){run=!run;this.textContent=run?"暫停":"繼續"};document.getElementById("tr").onclick=function(){sec=0;document.getElementById("timer").textContent="00:00"};document.getElementById("nx").onclick=function(){bc.postMessage({type:"next"})};document.getElementById("pv").onclick=function(){bc.postMessage({type:"prev"})};document.addEventListener("keydown",function(e){if(e.key==="ArrowRight"||e.key===" "||e.key==="PageDown"){e.preventDefault();bc.postMessage({type:"next"})}else if(e.key==="ArrowLeft"||e.key==="PageUp"){e.preventDefault();bc.postMessage({type:"prev"})}});bc.onmessage=function(e){var m=e.data;if(!m||m.type!=="state")return;document.getElementById("t").textContent=m.title||"簡報者檢視";document.getElementById("pos").textContent="第 "+m.idx+" / "+m.total+" 張"+(m.maxStep?"　・　步驟 "+m.step+"/"+m.maxStep:"");var n=document.getElementById("note");n.textContent=m.note||"（這一頁沒有備忘稿）";n.style.opacity=m.note?1:.5;var im=document.getElementById("nimg");im.style.display=m.nextThumb?"block":"none";if(m.nextThumb)im.src=m.nextThumb;document.getElementById("ntitle").textContent=m.nextTitle||"（最後一張）"};bc.postMessage({type:"hello"});setInterval(function(){bc.postMessage({type:"hello"})},4000);<\/script></body></html>');
+    w.document.close();
+    setTimeout(pvPost, 400);
+  }
   function renderSidebar(){
     if(isStudent) return;
     sectionTreeListEl.innerHTML = "";
@@ -8428,7 +8465,7 @@
   var pinnedExtraTools = {};
   // 2026-10-01 工具列自訂：哪些工具放左側／上方／隱藏、順序、收合狀態，存在這台裝置的 localStorage（每台裝置各自記，不同步）
   var TB_STORE_KEY = "mandamy-toolbar-layout-v1";
-  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "transition", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
+  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "transition", "present", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
   var tbConfig = null;
   function loadTbConfig(){
     if(tbConfig) return tbConfig;
@@ -8591,6 +8628,16 @@
           <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'fade' ? 'active' : ''}" data-trans="fade">淡出 Fade</button>
           <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'slide' ? 'active' : ''}" data-trans="slide">推入 Push</button>
           <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'book' ? 'active' : ''}" data-trans="book">翻書 Page turn</button>
+        </div>
+      </div>` : ''}
+      ${!isStudent ? `
+      <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v" id="btn-present" title="放映工具：雷射筆、螢光筆、簡報者檢視 Slide show tools"><span class="tool-btn-v-icon">🔴</span><span class="tool-btn-v-label">放映工具</span></button>
+        <div class="color-popover">
+          <div class="color-popover-title">放映工具 Show tools</div>
+          <button type="button" class="trans-opt pt-laser" title="雷射筆（快速鍵 L）：紅色游標跟著滑鼠／手指，不會留下痕跡；再按一次或 Esc 關閉">🔴 雷射筆 Laser pointer</button>
+          <button type="button" class="trans-opt pt-hl" title="螢光筆：半透明黃色粗筆">🖍 螢光筆 Highlighter</button>
+          <button type="button" class="trans-opt pt-presenter" title="另開一個視窗：看備忘稿、下一張、計時器，並可遠端翻頁（放映視窗分享給學生，這個視窗自己看）">🖥 簡報者檢視 Presenter view</button>
         </div>
       </div>` : ''}
       ${!isStudent ? `
@@ -9009,6 +9056,7 @@
     var TB_ITEM_DEFS = [
       { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
       { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [vToolbar.querySelector(".slide-nav-row"), vToolbar.querySelector(".slide-nav-counter")]; } },
+      { key: "present", label: "放映工具（雷射筆／螢光筆／簡報者檢視）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-present"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "transition", label: "轉場", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "media", label: "媒體（YouTube／音檔）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-media"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "select", label: "選取（框選／群組）", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="select"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
@@ -9635,6 +9683,7 @@
       }
     }
     function updateSlideNavUi(){
+      pvPost();
       var cur = getProgress(q.id).revealStep || 0;
       var mx = maxStepOf(q.id);
       var last = slideSiblingIds.length - 1;
@@ -12301,6 +12350,48 @@
         if(penOpacityValueEl) penOpacityValueEl.textContent = penOpacitySlider.value + "%";
       };
     }
+
+    // ===== 放映工具：雷射筆／螢光筆／簡報者檢視 =====
+    var laserOn = false, laserLayer = null;
+    function setLaser(on){
+      laserOn = on;
+      var lb = vToolbar.querySelector(".pt-laser"); if(lb) lb.classList.toggle("active", on);
+      if(laserLayer){ laserLayer.remove(); laserLayer = null; }
+      if(!on) return;
+      laserLayer = document.createElement("div"); laserLayer.className = "laser-layer";
+      var dot = document.createElement("div"); dot.className = "laser-dot"; dot.style.display = "none"; laserLayer.appendChild(dot);
+      var lastT = 0;
+      function at(e){
+        var r = cWrap.getBoundingClientRect();
+        dot.style.display = "block"; dot.style.left = (e.clientX - r.left) + "px"; dot.style.top = (e.clientY - r.top) + "px";
+        var now = Date.now(); if(now - lastT < 28) return; lastT = now;
+        var tr = document.createElement("div"); tr.className = "laser-trail"; tr.style.left = dot.style.left; tr.style.top = dot.style.top; laserLayer.appendChild(tr);
+        setTimeout(function(){ tr.remove(); }, 420);
+      }
+      laserLayer.addEventListener("pointermove", at);
+      laserLayer.addEventListener("pointerdown", function(e){ e.preventDefault(); at(e); try{ laserLayer.setPointerCapture(e.pointerId); }catch(_){} });
+      laserLayer.addEventListener("pointerleave", function(){ dot.style.display = "none"; });
+      cWrap.appendChild(laserLayer);
+    }
+    function useHighlighter(){
+      setLaser(false);
+      var pb = vToolbar.querySelector('button[data-tool="pen"]'); if(pb) pb.click();
+      if(typeof applyBrushColor === "function") applyBrushColor("#FFE23B");
+      boardState.size = 16; boardState.opacity = 0.4;
+      var si = vToolbar.querySelector(".pen-size-input"); if(si) si.value = "16";
+      var os = vToolbar.querySelector("#pen-opacity-slider"); if(os){ os.value = "40"; var ov = vToolbar.querySelector("#pen-opacity-value"); if(ov) ov.textContent = "40%"; }
+    }
+    var ptLaser = vToolbar.querySelector(".pt-laser"), ptHl = vToolbar.querySelector(".pt-hl"), ptPv = vToolbar.querySelector(".pt-presenter");
+    if(ptLaser) ptLaser.onclick = function(e){ e.stopPropagation(); setLaser(!laserOn); };
+    if(ptHl) ptHl.onclick = function(e){ e.stopPropagation(); useHighlighter(); };
+    if(ptPv) ptPv.onclick = function(e){ e.stopPropagation(); openPresenterView(); };
+    vToolbar.addEventListener("click", function(e){ var tb = e.target.closest && e.target.closest("button[data-tool]"); if(tb && laserOn) setLaser(false); });
+    document.addEventListener("keydown", function laserKeys(e){
+      if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", laserKeys); return; }
+      if(isStudent || editableTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if(e.key === "l" || e.key === "L"){ setLaser(!laserOn); }
+      else if(e.key === "Escape" && laserOn){ setLaser(false); }
+    });
 
     // 選好顏色之後，要同步更新畫筆／文字兩份面板裡的所有 UI：色點的 active 狀態、原生色盤目前
     // 顯示的顏色——不管顏色是從色點、原生色盤、還是滴管挑出來的，統一都走這個函式。
