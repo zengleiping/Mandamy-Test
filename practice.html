@@ -1156,7 +1156,7 @@
     display:flex; align-items:center; justify-content:center; min-width:0; min-height:0;
     /* 2026-10-01：舞台區整塊都可以書寫（頁面外圍也行），超出舞台區的部分在這裡裁掉；頁面本身（cWrap）
        不再自己裁切，外圍的筆跡才看得到。 */
-    overflow:hidden; border-radius:18px; background:var(--surface-2);
+    overflow:hidden; background:var(--surface-2);
   }
   /* 寫字板畫布：固定長寬比（BOARD_ASPECT_RATIO，有底圖時是底圖比例），在舞台區裡置中撐到最大，
      小畫面與全螢幕內容完全一致、只差大小（見 JS 的 fitCanvasToViewport）。
@@ -1541,6 +1541,7 @@
     <div class="auth-card">
       <div id="auth-connecting-section">
         <p class="auth-hint" style="margin-top:0;">⏳ 正在連線雲端服務…Connecting to cloud service…</p>
+        <p class="auth-hint" id="auth-connect-step" style="margin:6px 0 0;font-size:12.5px;"></p>
         <!-- 2026-10-01：連線慢（例如連著 Wi-Fi 但其實沒有對外網路）時不用乾等逾時，幾秒後出現這顆按鈕可以直接跳過 -->
         <button type="button" class="btn" id="btn-auth-skip-wait" style="display:none; width:100%; justify-content:center; margin-top:14px; padding:12px; text-align:center;">⏭ 不等了，直接離線使用 Skip &amp; Use Offline</button>
       </div>
@@ -2577,32 +2578,62 @@
   }
 
   /* ---------- 文字 ---------- */
-  var EA_RE = /[⺀-鿿豈-﫿＀-￯　-〿぀-ヿ가-힯]/;
-  function charEm(ch){
-    if(EA_RE.test(ch)) return 1.0;
-    if(ch === " ") return 0.3;
-    if(/[A-Z0-9]/.test(ch)) return 0.62;
-    if(/[il.,;:'|!]/.test(ch)) return 0.3;
-    return 0.55;
+  var EA_RE = /[⺀-鿿豈-﫿＀-￯　-〿぀-ヿ가-힯฀-๿]/;
+  // 文字寬度：用瀏覽器實際量（跟畫布上顯示文字同一個字型），量不到時退回粗估
+  var measureCtx = null, measureCache = {};
+  function measureEm(text, bold){
+    if(!text) return 0;
+    var key = (bold ? "b" : "n") + "|" + text;
+    if(measureCache[key] !== undefined) return measureCache[key];
+    var w;
+    try{
+      if(!measureCtx){ measureCtx = document.createElement("canvas").getContext("2d"); }
+      measureCtx.font = (bold ? "700 " : "400 ") + '100px "LXGW WenKai TC", "Noto Sans TC", serif';
+      w = measureCtx.measureText(text).width / 100;
+    }catch(e){ w = 0; for(var i = 0; i < text.length; i++){ var ch = text.charAt(i); w += EA_RE.test(ch) ? 1 : (ch === " " ? 0.3 : 0.55); } }
+    if(Object.keys(measureCache).length > 4000) measureCache = {};
+    measureCache[key] = w; return w;
   }
-  function measureEm(s){ var w = 0; for(var i = 0; i < s.length; i++) w += charEm(s.charAt(i)); return w; }
-  function wrapLine(text, maxEm){
+  function ensureFontReady(){
+    try{
+      if(document.fonts && document.fonts.load){
+        return Promise.race([document.fonts.load('400 40px "LXGW WenKai TC"', "我A"), new Promise(function(r){ setTimeout(r, 2500); })]).catch(function(){});
+      }
+    }catch(e){}
+    return Promise.resolve();
+  }
+  // 斷行：英文照單字（空白）斷，中日泰文逐字斷；超過一行寬的單字才硬切。maxEm 以「字級的倍數」為單位。
+  function wrapLine(text, maxEm, bold){
+    if(!text) return [""];
     if(!(maxEm > 0.5)) return [text];
-    var out = [], cur = "", curW = 0, chars = Array.from(text);
-    chars.forEach(function(ch){
-      var w = charEm(ch);
-      if(curW + w > maxEm && cur){ out.push(cur); cur = ""; curW = 0; }
-      cur += ch; curW += w;
+    var tokens = [], cur = "";
+    Array.from(text).forEach(function(ch){
+      if(EA_RE.test(ch)){ if(cur){ tokens.push(cur); cur = ""; } tokens.push(ch); }
+      else { cur += ch; if(ch === " "){ tokens.push(cur); cur = ""; } }
     });
-    out.push(cur);
+    if(cur) tokens.push(cur);
+    var out = [], line = "";
+    tokens.forEach(function(tk){
+      var trial = line + tk;
+      if(line && measureEm(trial.replace(/\s+$/, ""), bold) > maxEm){ out.push(line.replace(/\s+$/, "")); line = tk; }
+      else line = trial;
+      // 單一「字」太長（超長英文單字）：硬切
+      while(measureEm(line.replace(/\s+$/, ""), bold) > maxEm && Array.from(line).length > 1){
+        var chars = Array.from(line), k = chars.length - 1;
+        while(k > 1 && measureEm(chars.slice(0, k).join(""), bold) > maxEm) k--;
+        out.push(chars.slice(0, k).join("")); line = chars.slice(k).join("");
+      }
+    });
+    out.push(line.replace(/\s+$/, ""));
     return out;
   }
   function defRPrOf(node){ return node ? kid(node, "a:defRPr") : null; }
   // 在一串 list-style 容器（lstStyle 或 txStyles 的 *Style）裡找某個層級的預設 rPr／pPr
   function lvlNode(styleNode, lvl){ return styleNode ? kid(styleNode, "a:lvl" + (lvl + 1) + "pPr") : null; }
 
-  function paragraphsOf(sp, ctxChain, isTitleLike){
-    // 回傳 [{ text, pt, bold, color, align, list, lvl, marL, indent }]
+  // 回傳每一段：{ lines:[{ text, rPr }], pPr, lvl, align, list, marL, indent, resolve(rPr)->{pt,bold}, spcBefPct/Pts, lnSpcPct }
+  // 一段裡用 <a:br/> 換行的每一行各自有自己的字級／顏色（例如中文 60pt、下面英文 40pt），所以「行」才是樣式的最小單位。
+  function paragraphsOf(sp, ctxChain){
     var tb = kid(sp, "p:txBody"); if(!tb) return [];
     var bodyPr = kid(tb, "a:bodyPr");
     var fontScale = 1;
@@ -2611,61 +2642,66 @@
     var out = [];
     kids(tb, "a:p").forEach(function(p){
       var pPr = kid(p, "a:pPr"), lvl = num(pPr, "lvl", 0);
-      var text = "", firstRun = null, anyBold = false, allBold = true, runCount = 0;
+      var endRPr = kid(p, "a:endParaRPr");
+      var lines = [{ segs: [] }];
       kids(p).forEach(function(n){
         if(n.nodeName === "a:r" || n.nodeName === "a:fld"){
           var t = kid(n, "a:t"); var s = t ? t.textContent : "";
           if(s === "") return;
-          text += s;
-          var rPr = kid(n, "a:rPr");
-          if(!firstRun) firstRun = rPr || {};
-          var b = rPr ? attr(rPr, "b", null) : null;
-          if(b === "1") anyBold = true; else if(b === "0") allBold = false;
-          runCount++;
-        } else if(n.nodeName === "a:br"){ text += "\n"; }
+          lines[lines.length - 1].segs.push({ text: s, rPr: kid(n, "a:rPr") });
+        } else if(n.nodeName === "a:br"){ lines.push({ segs: [], brRPr: kid(n, "a:rPr") }); }
       });
-      var rPr0 = (firstRun && firstRun.nodeType === 1) ? firstRun : null;
-      var endRPr = kid(p, "a:endParaRPr");
-      // 字級：run → 段落 defRPr → shape lstStyle → layout／master placeholder lstStyle → master txStyles → 18pt
-      var sz = rPr0 ? num(rPr0, "sz", null) : null;
+      var outLines = lines.map(function(ln){
+        var text = ln.segs.map(function(sg){ return sg.text; }).join("");
+        var dom = null, best = -1; ln.segs.forEach(function(sg){ if(sg.text.length > best){ best = sg.text.length; dom = sg.rPr; } });
+        return { text: text, rPr: dom || ln.brRPr || null };
+      });
       function firstDefined(getter){
         var v = null;
         for(var i = 0; i < ctxChain.length && v === null; i++){ var ln = lvlNode(ctxChain[i], lvl); var d = defRPrOf(ln); v = getter(d, ln); }
         return v;
       }
-      if(sz === null && pPr){ var dp = defRPrOf(pPr); if(dp) sz = num(dp, "sz", null); }
-      if(sz === null && lst){ var dl = defRPrOf(lvlNode(lst, lvl)); if(dl) sz = num(dl, "sz", null); }
-      if(sz === null) sz = firstDefined(function(d){ return d ? num(d, "sz", null) : null; });
-      if(sz === null && endRPr) sz = num(endRPr, "sz", null);
-      if(sz === null) sz = 1800;
-      var bold = rPr0 && attr(rPr0, "b", null) !== null ? attr(rPr0, "b", "0") === "1" : null;
-      if(bold === null) bold = firstDefined(function(d){ return d && attr(d, "b", null) !== null ? attr(d, "b", "0") === "1" : null; });
+      function resolve(rPr){
+        // 字級：run → 段落 defRPr → shape lstStyle → layout／master placeholder lstStyle → master txStyles → endParaRPr → 18pt
+        var sz = rPr ? num(rPr, "sz", null) : null;
+        if(sz === null && pPr){ var dp = defRPrOf(pPr); if(dp) sz = num(dp, "sz", null); }
+        if(sz === null && lst){ var dl = defRPrOf(lvlNode(lst, lvl)); if(dl) sz = num(dl, "sz", null); }
+        if(sz === null) sz = firstDefined(function(d){ return d ? num(d, "sz", null) : null; });
+        if(sz === null && endRPr) sz = num(endRPr, "sz", null);
+        if(sz === null) sz = 1800;
+        var bold = rPr && attr(rPr, "b", null) !== null ? attr(rPr, "b", "0") === "1" : null;
+        if(bold === null && lst){ var dlb = defRPrOf(lvlNode(lst, lvl)); if(dlb && attr(dlb, "b", null) !== null) bold = attr(dlb, "b", "0") === "1"; }
+        if(bold === null) bold = firstDefined(function(d){ return d && attr(d, "b", null) !== null ? attr(d, "b", "0") === "1" : null; });
+        return { pt: (sz / 100) * fontScale, bold: bold === null ? false : bold };
+      }
+      function colorOf(rPr){
+        var fill = null;
+        if(rPr) fill = resolveColor(kid(rPr, "a:solidFill"), ctx0);
+        if(!fill && pPr){ var d = defRPrOf(pPr); if(d) fill = resolveColor(kid(d, "a:solidFill"), ctx0); }
+        if(!fill && lst){ var dl = defRPrOf(lvlNode(lst, lvl)); if(dl) fill = resolveColor(kid(dl, "a:solidFill"), ctx0); }
+        for(var i = 0; i < ctxChain.length && !fill; i++){ var dd = defRPrOf(lvlNode(ctxChain[i], lvl)); if(dd) fill = resolveColor(kid(dd, "a:solidFill"), ctx0); }
+        return fill ? fill.color : null;
+      }
       var algn = pPr ? attr(pPr, "algn", null) : null;
       if(algn === null && lst){ var lp = lvlNode(lst, lvl); if(lp) algn = attr(lp, "algn", null); }
       if(algn === null) algn = firstDefined(function(d, ln){ return ln ? attr(ln, "algn", null) : null; });
-      var list = "none";
-      var buSrc = pPr && (kid(pPr, "a:buNone") ? "none" : (kid(pPr, "a:buChar") ? "bullet" : (kid(pPr, "a:buAutoNum") ? "number" : null)));
-      if(buSrc === null || buSrc === undefined){
-        var ln0 = lst && lvlNode(lst, lvl);
-        if(ln0) buSrc = kid(ln0, "a:buNone") ? "none" : (kid(ln0, "a:buChar") ? "bullet" : (kid(ln0, "a:buAutoNum") ? "number" : null));
+      function buOf(node){ return !node ? null : (kid(node, "a:buNone") ? "none" : (kid(node, "a:buChar") ? "bullet" : (kid(node, "a:buAutoNum") ? "number" : null))); }
+      var buSrc = buOf(pPr);
+      if(buSrc === null && lst) buSrc = buOf(lvlNode(lst, lvl));
+      if(buSrc === null) buSrc = firstDefined(function(d, ln){ return buOf(ln); });
+      function spcOf(tag){ // 回傳 { pts, pct } 或 null：先看段落，再看 shape lstStyle，再看繼承鏈
+        function rd(node){ var sn = node && kid(node, tag); if(!sn) return null; var pts = kid(sn, "a:spcPts"), pct = kid(sn, "a:spcPct"); return pts ? { pts: num(pts, "val", 0) / 100 } : (pct ? { pct: num(pct, "val", 0) / 100000 } : null); }
+        var v = rd(pPr); if(v) return v;
+        if(lst){ v = rd(lvlNode(lst, lvl)); if(v) return v; }
+        for(var i = 0; i < ctxChain.length; i++){ v = rd(lvlNode(ctxChain[i], lvl)); if(v) return v; }
+        return null;
       }
-      if(buSrc === null || buSrc === undefined){
-        buSrc = firstDefined(function(d, ln){ if(!ln) return null; return kid(ln, "a:buNone") ? "none" : (kid(ln, "a:buChar") ? "bullet" : (kid(ln, "a:buAutoNum") ? "number" : null)); });
-      }
-      if(buSrc === "bullet" || buSrc === "number") list = buSrc;
-      out.push({ text: text, pt: (sz / 100) * fontScale, bold: bold === null ? false : bold, rPr: rPr0, endRPr: endRPr, pPr: pPr, lvl: lvl, align: algn || "l", list: list, marL: pPr ? num(pPr, "marL", 0) : 0, indent: pPr ? num(pPr, "indent", 0) : 0 });
+      out.push({ lines: outLines, pPr: pPr, lvl: lvl, endRPr: endRPr, align: algn || "l", list: (buSrc === "bullet" || buSrc === "number") ? buSrc : "none",
+        marL: pPr ? num(pPr, "marL", 0) : 0, resolve: resolve, colorOf: colorOf, spcBef: spcOf("a:spcBef"), lnSpc: spcOf("a:lnSpc") });
     });
     return out;
   }
-
-  function runColor(par, ctx, ctxChain, lst){
-    var fill = null;
-    if(par.rPr){ fill = resolveColor(kid(par.rPr, "a:solidFill"), ctx); }
-    if(!fill && par.pPr){ var d = defRPrOf(par.pPr); if(d) fill = resolveColor(kid(d, "a:solidFill"), ctx); }
-    if(!fill && lst){ var dl = defRPrOf(lvlNode(lst, par.lvl)); if(dl) fill = resolveColor(kid(dl, "a:solidFill"), ctx); }
-    for(var i = 0; i < ctxChain.length && !fill; i++){ var dd = defRPrOf(lvlNode(ctxChain[i], par.lvl)); if(dd) fill = resolveColor(kid(dd, "a:solidFill"), ctx); }
-    return fill ? fill.color : null;
-  }
+  var ctx0 = null; // 目前這一頁的顏色解析環境（parseSlide 進來時設定；單執行緒序列處理，安全）
 
   /* ---------- 投影片內容 ---------- */
   function shapeTypeOf(geom){
@@ -2716,6 +2752,7 @@
     var mInfo = layout && cache.layouts[layoutPath].master;
     var ctx = { theme: (mInfo && mInfo.theme) || {}, clrMap: (mInfo && mInfo.clrMap) || {} };
     // 版面上可能覆寫 clrMap（a:clrMapOvr/a:overrideClrMapping）
+    ctx0 = ctx;
     var lo = layout && layout.getElementsByTagName("a:overrideClrMapping")[0];
     if(lo){ var cm2 = {}; for(var bi = 0; bi < lo.attributes.length; bi++) cm2[lo.attributes[bi].name] = lo.attributes[bi].value; ctx.clrMap = cm2; }
     var so = doc.getElementsByTagName("a:overrideClrMapping")[0];
@@ -2878,7 +2915,6 @@
       }
       if(!hasText) return;
       var pars = paragraphsOf(n, chain.styles);
-      var lstS = tb ? kid(tb, "a:lstStyle") : null;
       var bodyPr = kid(tb, "a:bodyPr");
       var lIns = num(bodyPr, "lIns", 91440), rIns = num(bodyPr, "rIns", 91440), tIns = num(bodyPr, "tIns", 45720), bIns = num(bodyPr, "bIns", 45720);
       var anchor = attr(bodyPr, "anchor", null);
@@ -2886,48 +2922,52 @@
       if(anchor === null){ var mphB = ph && findPlaceholder(masterTree, ph); var mb = mphB && path(mphB, "p:txBody", "a:bodyPr"); if(mb) anchor = attr(mb, "anchor", null); }
       if(anchor === null) anchor = "t";
       var wrapNone = attr(bodyPr, "wrap", "square") === "none";
-      var ptToEmu = 12700;
-      // 逐段排版
       var availW = Math.max(1, box.cx - lIns - rIns);
-      var items = [], totalH = 0;
-      pars.forEach(function(par){
-        var fsEmu = par.pt * ptToEmu; if(!(fsEmu > 0)) return;
-        var textLines = [];
-        String(par.text).split("\n").forEach(function(line){
-          var availForPar = availW - Math.max(0, par.marL) - (par.list !== "none" ? fsEmu * 1.1 : 0);
-          if(wrapNone) textLines.push(line);
-          else wrapLine(line, availForPar / fsEmu).forEach(function(l){ textLines.push(l); });
+      // 1) 每一「行」各自量字級、顏色、斷行，算出高度（PowerPoint 行高約 1.2 倍字級，再乘行距）
+      var L = [], totalH = 0;
+      pars.forEach(function(par, pi){
+        var bullet = par.list !== "none";
+        var lnMul = par.lnSpc && par.lnSpc.pct ? par.lnSpc.pct : 1;
+        var first = true;
+        par.lines.forEach(function(ln){
+          var st = par.resolve(ln.rPr || par.endRPr), fsEmu = st.pt * 12700; if(!(fsEmu > 0)) return;
+          var color = par.colorOf(ln.rPr) || styleFontColor || "#1C1C1C";
+          var bulletEm = bullet ? 1.1 : 0, availEm = (availW - Math.max(0, par.marL)) / fsEmu - bulletEm;
+          var pieces = wrapNone ? [ln.text] : wrapLine(ln.text, availEm, st.bold);
+          pieces.forEach(function(piece){
+            var before = 0;
+            if(first && pi > 0 && par.spcBef){ before = par.spcBef.pts ? par.spcBef.pts * 12700 : (par.spcBef.pct || 0) * fsEmu * 1.2; }
+            first = false;
+            var h = (par.lnSpc && par.lnSpc.pts ? par.lnSpc.pts * 12700 : fsEmu * 1.2 * lnMul);
+            var wEmu = Math.min((measureEm(piece, st.bold) + bulletEm) * fsEmu, availW);
+            L.push({ par: par, pi: pi, text: piece, pt: st.pt, bold: st.bold, color: color, fsEmu: fsEmu, before: before, h: h, w: wEmu, empty: !/\S/.test(piece) });
+            totalH += before + h;
+          });
         });
-        var hEmu = Math.max(1, textLines.length) * fsEmu * 1.2;
-        var wEm = 0; textLines.forEach(function(l){ wEm = Math.max(wEm, measureEm(l)); });
-        var wEmu = wEm * fsEmu + (par.list !== "none" ? fsEmu * 1.1 : 0);
-        items.push({ par: par, lines: textLines, hEmu: hEmu, wEmu: Math.min(wEmu, availW), fsEmu: fsEmu });
-        totalH += hEmu;
       });
       var y0;
       if(anchor === "ctr") y0 = box.y + box.cy / 2 - totalH / 2; else if(anchor === "b") y0 = box.y + box.cy - bIns - totalH; else y0 = box.y + tIns;
       var cursor = y0;
-      // 連續、樣式一樣的段落合成同一個文字物件（方便之後整塊編輯）；空段落只佔位置
-      var groups = [], lastKey = null;
-      items.forEach(function(it){
-        var hasTxt = /\S/.test(it.par.text);
-        var color = runColor(it.par, ctx, chain.styles, lstS) || styleFontColor || "#1C1C1C";
-        var key = [it.par.pt.toFixed(1), it.par.bold, color, it.par.align, it.par.list, it.par.marL].join("|");
-        if(hasTxt && lastKey === key && groups.length && groups[groups.length - 1].contiguous){
-          var g = groups[groups.length - 1]; g.lines = g.lines.concat(it.lines); g.h += it.hEmu; g.w = Math.max(g.w, it.wEmu);
-        } else if(hasTxt){
-          groups.push({ par: it.par, lines: it.lines.slice(), y: cursor, h: it.hEmu, w: it.wEmu, color: color, fsEmu: it.fsEmu, contiguous: true });
-          lastKey = key;
-        } else { lastKey = null; if(groups.length) groups[groups.length - 1].contiguous = false; }
-        cursor += it.hEmu;
+      // 2) 同一段裡樣式一樣的相鄰行、或樣式一樣的項目清單，合成一個文字物件（方便整塊編輯）；空行只佔位置
+      var groups = [], prevKey = null, prevPi = -1;
+      L.forEach(function(it){
+        cursor += it.before;
+        var key = [it.pt.toFixed(1), it.bold, it.color, it.par.align, it.par.list, it.par.marL].join("|");
+        var g = groups.length ? groups[groups.length - 1] : null;
+        if(!it.empty && g && !g.closed && prevKey === key && (it.pi === prevPi || it.par.list !== "none") && !it.before){
+          g.lines.push(it.text); g.h += it.h; g.w = Math.max(g.w, it.w);
+        } else if(!it.empty){
+          groups.push({ par: it.par, lines: [it.text], y: cursor, h: it.h, w: it.w, color: it.color, pt: it.pt, bold: it.bold });
+        } else if(g){ g.closed = true; }
+        prevKey = it.empty ? null : key; prevPi = it.pi;
+        cursor += it.h;
       });
       groups.forEach(function(g){
-        var par = g.par, cxEmu;
-        var indent = Math.max(0, par.marL);
+        var par = g.par, cxEmu, indent = Math.max(0, par.marL);
         if(par.align === "ctr") cxEmu = box.x + box.cx / 2 + (indent / 2);
         else if(par.align === "r") cxEmu = box.x + box.cx - rIns - g.w / 2;
         else cxEmu = box.x + lIns + indent + g.w / 2;
-        out.texts.push({ text: g.lines.join("\n"), pt: par.pt, bold: par.bold, color: g.color, align: par.align === "ctr" ? "center" : (par.align === "r" ? "right" : "left"), list: par.list, cx: cxEmu, cy: g.y + g.h / 2, estW: g.w, estH: g.h });
+        out.texts.push({ text: g.lines.join("\n"), pt: g.pt, bold: g.bold, color: g.color, align: par.align === "ctr" ? "center" : (par.align === "r" ? "right" : "left"), list: par.list, cx: cxEmu, cy: g.y + g.h / 2, estW: g.w, estH: g.h });
         out.plainText.push(g.lines.join("\n"));
       });
     }
@@ -2940,6 +2980,7 @@
     var e = (p.split(".").pop() || "").toLowerCase();
     return { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp", wav: "audio/wav", mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", ogg: "audio/ogg", wma: "audio/x-ms-wma", mp4: "video/mp4", emf: "image/emf", wmf: "image/wmf", tif: "image/tiff", tiff: "image/tiff" }[e] || "application/octet-stream";
   }
+  function canvasToBlob(c, type, q){ return new Promise(function(res){ try{ c.toBlob(function(b){ res(b); }, type, q); }catch(e){ res(null); } }); }
   async function fileBlob(zip, p){ var f = zip.file(p); if(!f) return null; var data = await f.async("uint8array"); return new Blob([data], { type: mimeOf(p) }); }
   function blobToImage(blob){
     return new Promise(function(resolve){
@@ -2966,9 +3007,9 @@
           var w = Math.max(1, Math.round(cw * sc)), h = Math.max(1, Math.round(ch * sc));
           var c = document.createElement("canvas"); c.width = w; c.height = h;
           var cx = c.getContext("2d"); cx.drawImage(im, sx, sy, cw, ch, 0, 0, w, h);
-          var url = c.toDataURL("image/png");
-          if(url.length > 300000){ cx.globalCompositeOperation = "destination-over"; cx.fillStyle = "#FFFFFF"; cx.fillRect(0, 0, w, h); url = c.toDataURL("image/jpeg", 0.85); }
-          res = { src: url, ar: h / w, w: w, h: h, sw: sw, sh: sh };
+          var outBlob = await canvasToBlob(c, "image/png");
+          if(!outBlob || outBlob.size > 220000){ cx.globalCompositeOperation = "destination-over"; cx.fillStyle = "#FFFFFF"; cx.fillRect(0, 0, w, h); outBlob = await canvasToBlob(c, "image/jpeg", 0.82); }
+          res = outBlob ? { blob: outBlob, ar: h / w, w: w, h: h, sw: sw, sh: sh } : null;
         }
         URL.revokeObjectURL(loaded.url);
       }
@@ -3006,7 +3047,7 @@
         }
       }
     }catch(e){ /* 背景畫不出來就只剩底色 */ }
-    return c.toDataURL("image/jpeg", 0.85);
+    return await canvasToBlob(c, "image/jpeg", 0.85);
   }
 
   /* ---------- 主流程 ---------- */
@@ -3024,6 +3065,7 @@
     var ids = presDoc.getElementsByTagName("p:sldId"), slidePaths = [];
     for(var i = 0; i < ids.length; i++){ var rid = attr(ids[i], "r:id", null); if(rid && presRels[rid] && presRels[rid].target) slidePaths.push(presRels[rid].target); }
     if(!slidePaths.length) throw new Error("這份簡報裡沒有任何投影片");
+    await ensureFontReady();
     var cache = { layouts: {}, masters: {} }, slides = [];
     for(var si = 0; si < slidePaths.length; si++){
       if(onProgress) onProgress("parse", si + 1, slidePaths.length);
@@ -3049,7 +3091,7 @@
     for(var i = 0; i < parsed.slides.length; i++){
       if(onProgress) onProgress("convert", i + 1, parsed.slides.length);
       var s = parsed.slides[i], page = { bgImage: "", texts: [], images: [], shapes: [], audios: [], warnings: s.warnings.slice(), srcIndex: i, notes: s.notes || "" };
-      page.bgImage = await renderBackground(zip, s, pres, imgCache);
+      page.bgBlob = await renderBackground(zip, s, pres, imgCache);
       s.texts.forEach(function(t){
         var fs = Math.round(t.pt * 640 / slideWpt * 10) / 10;
         var al = t.align === "center" || t.align === "ctr" ? "center" : (t.align === "right" || t.align === "r" ? "right" : "left");
@@ -3059,7 +3101,7 @@
       for(var k = 0; k < s.images.length; k++){
         var im = s.images[k], sc = await loadScaledImage(zip, im.path, 1000, im.crop, imgCache);
         if(!sc){ page.warnings.push("有一張圖片格式瀏覽器無法顯示（" + im.path.split("/").pop() + "），已略過"); continue; }
-        page.images.push({ src: sc.src, ar: sc.ar, x: pctX(im.box.x + im.box.cx / 2), y: pctY(im.box.y + im.box.cy / 2), w: pctX(im.box.cx), h: pctY(im.box.cy) });
+        page.images.push({ blob: sc.blob, ar: sc.ar, x: pctX(im.box.x + im.box.cx / 2), y: pctY(im.box.y + im.box.cy / 2), w: pctX(im.box.cx), h: pctY(im.box.cy) });
       }
       s.shapes.forEach(function(sh){
         var b = sh.box;
@@ -3789,45 +3831,94 @@
       return null;
     }).catch(function(){ return ref0.url || null; });
   }
-  function eachMediaRef(lib, fn){ // 走訪課程庫裡所有 progress.mediaData 的參照
+  // 課程庫裡所有「大型媒體欄位」：題目底圖（q.bgImage）、progress.bgImage、progress.images[].src（圖片）、progress.mediaData[id]（音檔）。
+  // 每個欄位 { kind:'img'|'audio', get(), set(v) }——同步雲端、備份匯出入、自動瘦身都走這一份清單。
+  function collectMediaSlots(lib){
+    var slots = [];
+    function slot(kind, obj, key, isMap){
+      var v = obj[key]; if(typeof v !== "string" || !v) return;
+      slots.push({ kind: kind, get: function(){ return obj[key]; }, set: function(nv){ if(nv === null || nv === undefined) delete obj[key]; else obj[key] = nv; } });
+    }
     Object.keys((lib && lib.projects) || {}).forEach(function(pid){
-      var pr = lib.projects[pid], prog = pr.progress || {};
+      var pr = lib.projects[pid];
+      Object.keys(pr.sections || {}).forEach(function(sid){ var qs = pr.sections[sid].questions || {}; Object.keys(qs).forEach(function(qid){ slot("img", qs[qid], "bgImage"); }); });
+      var prog = pr.progress || {};
       Object.keys(prog).forEach(function(qid){
-        var md = prog[qid] && prog[qid].mediaData; if(!md) return;
-        Object.keys(md).forEach(function(mid){ fn(md, mid, prog[qid], pr); });
+        var pp = prog[qid]; if(!pp) return;
+        slot("img", pp, "bgImage");
+        (pp.images || []).forEach(function(im){ slot("img", im, "src"); });
+        if(pp.mediaData) Object.keys(pp.mediaData).forEach(function(mid){ slot("audio", pp.mediaData, mid); });
       });
     });
+    return slots;
+  }
+  function eachMediaRef(lib, fn){ // 相容舊呼叫：只走音檔欄位（fn(map, id)）
+    Object.keys((lib && lib.projects) || {}).forEach(function(pid){
+      var prog = lib.projects[pid].progress || {};
+      Object.keys(prog).forEach(function(qid){ var md = prog[qid] && prog[qid].mediaData; if(md) Object.keys(md).forEach(function(mid){ fn(md, mid); }); });
+    });
+  }
+  // 圖片欄位（可能是資料網址、雲端網址、或 mm: 參照）→ 要放進 <img src> 的網址（參照會去 IndexedDB 找）
+  function imgRefKey(v){ v = v || ""; return v.length > 200 ? (v.length + ":" + v.slice(0, 60) + v.slice(-30)) : v; }
+  function setImgSrc(el, val){
+    var key = imgRefKey(val); el.dataset.ref = key;
+    if(!val){ return; }
+    if(val.indexOf("mm:") !== 0){ el.src = val; return; }
+    resolveMediaSrc(val, "").then(function(u){
+      if(el.dataset.ref !== key) return; // 這段時間內已經換成別張了
+      if(u) el.src = u; else if(typeof el.onerror === "function") el.onerror(); // 找不到（本機沒有、也沒有雲端網址）
+    });
+  }
+  // 匯出／備份用：任何圖片欄位 → 資料網址（data:）
+  async function refToDataUrl(val){
+    if(!val) return "";
+    if(val.indexOf("data:") === 0) return val;
+    var u = await resolveMediaSrc(val, "");
+    if(!u) return "";
+    try{ var resp = await fetch(u); var bl = await resp.blob(); return await blobToDataUrl(bl); }catch(e){ return ""; }
   }
   var mediaSyncing = false;
-  // 把還沒上傳的音檔傳到 Firebase Storage（登入且有網路、Storage 可用時）。成功的參照會加上 @網址，再存回課程庫。
+  // 把還沒上傳的媒體（音檔、圖片）傳到 Firebase Storage（登入且有網路、Storage 可用時）。成功的參照會加上 @網址，再存回課程庫。
   async function syncMediaToCloud(){
     if(mediaSyncing || !currentTeacher || !MO || !MO.ok || !window.storageApi || navigator.onLine === false) return { uploaded: 0, pending: 0 };
     mediaSyncing = true;
-    var uploaded = 0, pending = 0, changed = false;
+    var uploaded = 0, pending = 0, changed = false, done = {};
     try{
       var jobs = [];
-      eachMediaRef(fsData, function(md, mid){ var r = parseMediaRef(md[mid]); if(r && !r.url) jobs.push({ md: md, mid: mid, key: r.key }); });
+      collectMediaSlots(fsData).forEach(function(sl){ var r = parseMediaRef(sl.get()); if(r && !r.url) jobs.push({ sl: sl, key: r.key }); });
       for(var i = 0; i < jobs.length; i++){
         var j = jobs[i];
         try{
-          var rec = await MO.getMedia(j.key);
-          if(!rec || !rec.blob){ pending++; continue; }
-          var sr = window.storageApi.ref(window.storageApi.storage, "teacherMedia/" + currentTeacher.id + "/" + j.key);
-          await window.storageApi.uploadBytes(sr, rec.blob, { contentType: rec.type || "application/octet-stream" });
-          var url = await window.storageApi.getDownloadURL(sr);
-          j.md[j.mid] = "mm:" + j.key + "@" + url; uploaded++; changed = true;
-        }catch(e){ console.warn("音檔上傳失敗（先保留在這台裝置）", e); pending++; }
+          if(done[j.key] === undefined){
+            var rec = await MO.getMedia(j.key);
+            if(!rec || !rec.blob){ done[j.key] = null; }
+            else {
+              var sr = window.storageApi.ref(window.storageApi.storage, "teacherMedia/" + currentTeacher.id + "/" + j.key);
+              await window.storageApi.uploadBytes(sr, rec.blob, { contentType: rec.type || "application/octet-stream" });
+              done[j.key] = await window.storageApi.getDownloadURL(sr);
+            }
+          }
+          if(done[j.key]){ j.sl.set("mm:" + j.key + "@" + done[j.key]); uploaded++; changed = true; } else pending++;
+        }catch(e){ console.warn("媒體上傳失敗（先保留在這台裝置）", e); pending++; }
       }
       if(changed) saveFS();
     } finally { mediaSyncing = false; }
     return { uploaded: uploaded, pending: pending };
   }
-  function countUnsyncedMedia(lib){ var n = 0; eachMediaRef(lib, function(md, mid){ var r = parseMediaRef(md[mid]); if(r && !r.url) n++; }); return n; }
+  function countUnsyncedMedia(lib){ var n = 0; collectMediaSlots(lib).forEach(function(sl){ var r = parseMediaRef(sl.get()); if(r && !r.url) n++; }); return n; }
   window.addEventListener("firebase-storage-ready", function(){ setTimeout(function(){ syncMediaToCloud(); }, 3000); });
 
   /* ================== 匯入 PowerPoint（.pptx） ================== */
   // 直接解析 .pptx（見上面 MandamyPptx）：每一頁變成一張投影片——底圖＝該頁背景（含母片上每頁都有的 logo），
   // 文字方塊／圖片／圖案／音檔變成可以直接編輯的物件；講者備註變成老師備註。動畫、換頁效果、影片不匯入。
+  // 把一個 Blob（圖片）存進本機 IndexedDB，回傳 "mm:<key>" 參照；沒有 IndexedDB 時退回資料網址（比較小的才行）
+  async function storeMediaBlob(blob){
+    if(!blob) return "";
+    try{
+      if(MO && MO.ok) return "mm:" + (await MO.putMedia(blob, ""));
+      return await blobToDataUrl(blob);
+    }catch(e){ console.warn("圖片存入失敗", e); return ""; }
+  }
   async function importSlidesFromPptx(file){
     if(isImportingSlides) return;
     if(!window.MandamyPptx || typeof JSZip === "undefined"){
@@ -3856,11 +3947,17 @@
         var pg = conv.pages[i];
         toast.textContent = "儲存音檔與內容… " + (i + 1) + "/" + conv.pages.length;
         var qId = uid("q"); if(!firstQ) firstQ = qId;
-        sec.questions[qId] = { id: qId, order: i, title: "投影片 " + (i + 1) + " Slide " + (i + 1), desc: "", bgImage: pg.bgImage, gridType: "none", media: [], teacherNote: pg.notes || "", weight: 1 };
+        // 背景圖、圖片、音檔的本體都放進這台裝置的 IndexedDB（相同的圖只存一份），課程資料裡只放 mm: 參照——
+        // 不然 78 頁的簡報會把整份課程庫撐到十幾 MB，每寫一筆都卡、也超過雲端資料庫單次寫入的上限。
+        var bgRef = await storeMediaBlob(pg.bgBlob);
+        sec.questions[qId] = { id: qId, order: i, title: "投影片 " + (i + 1) + " Slide " + (i + 1), desc: "", bgImage: bgRef, gridType: "none", media: [], teacherNote: pg.notes || "", weight: 1, canvasRatio: Math.round(conv.pres.cx / conv.pres.cy * 10000) / 10000 };
         if(pg.notes) notes++;
         var prog = { texts: [], images: [], shapes: [], medias: [], mediaData: {} };
         pg.texts.forEach(function(t){ prog.texts.push({ id: uid("t"), text: t.text, x: t.x, y: t.y, color: t.color, fontSize: t.fontSize, bold: !!t.bold, step: 0, align: t.align, list: t.list }); });
-        pg.images.forEach(function(im){ prog.images.push({ id: uid("im"), src: im.src, ar: im.ar, x: im.x, y: im.y, w: im.w, h: im.h, step: 0 }); });
+        for(var ip = 0; ip < pg.images.length; ip++){
+          var im = pg.images[ip], imRef = await storeMediaBlob(im.blob);
+          if(imRef) prog.images.push({ id: uid("im"), src: imRef, ar: im.ar, x: im.x, y: im.y, w: im.w, h: im.h, step: 0 });
+        }
         pg.shapes.forEach(function(sh){ prog.shapes.push({ id: uid("sh"), type: sh.type, x: sh.x, y: sh.y, w: sh.w, h: sh.h, fx: sh.fx, fy: sh.fy, color: sh.color, sw: sh.sw, fill: sh.fill, op: sh.op, step: 0 }); });
         for(var a = 0; a < pg.audios.length; a++){
           var au = pg.audios[a], mid = uid("md"), ref1 = null;
@@ -4929,6 +5026,10 @@
       var readyPill = document.createElement("span"); readyPill.className = "offline-pill"; readyPill.id = "offline-ready-pill";
       readyPill.textContent = "📴 檢查離線準備…"; teacherCluster.appendChild(readyPill);
       updateOfflineReadyPill();
+      // 雲端同步狀態：上傳中／已同步（幾點幾分）／上傳失敗（點一下重試）
+      var syncPill = document.createElement("button"); syncPill.type = "button"; syncPill.className = "offline-pill"; syncPill.id = "cloud-sync-pill"; syncPill.style.border = "none"; syncPill.style.cursor = "pointer";
+      syncPill.onclick = function(){ if(cloudUploadFailed || !lastCloudSyncAt){ cloudUploadFailed = false; saveFS(); } updateCloudSyncPill(); };
+      teacherCluster.appendChild(syncPill); updateCloudSyncPill();
       var logoutBtn = document.createElement("button"); logoutBtn.className = "btn btn-sm btn-ghost"; logoutBtn.textContent = "登出 Log Out";
       logoutBtn.onclick = logoutTeacher;
       topbarActions.appendChild(logoutBtn);
@@ -5011,6 +5112,17 @@
       if(!assetsOk) setTimeout(updateOfflineReadyPill, 4000);
     }
   }
+
+  function updateCloudSyncPill(){
+    var el = document.getElementById("cloud-sync-pill"); if(!el) return;
+    if(!currentTeacher){ el.style.display = "none"; return; }
+    el.style.display = "";
+    if(cloudUploadFailed){ el.textContent = "⚠ 雲端上傳失敗（點我重試）"; el.className = "offline-pill is-offline"; el.title = "最近一次上傳到雲端失敗了。你的內容還在這台裝置上；點一下會再試一次。"; }
+    else if(pendingCloudUploads > 0){ el.textContent = "☁️ 上傳中…"; el.className = "offline-pill is-notready"; el.title = "正在把修改上傳到雲端。"; }
+    else if(lastCloudSyncAt){ var d = new Date(lastCloudSyncAt); el.textContent = "☁️ 已同步 " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()); el.className = "offline-pill is-ready"; el.title = "最近一次成功上傳到雲端的時間。"; }
+    else { el.textContent = "☁️ 尚未上傳"; el.className = "offline-pill"; el.title = "這次打開之後還沒有修改過內容；修改後會自動上傳。"; }
+  }
+  setInterval(updateCloudSyncPill, 1000);
 
   var versionsDialog = document.getElementById("versions-dialog");
   var versionsListEl = document.getElementById("versions-list");
@@ -5304,13 +5416,15 @@
   }
   async function exportBoardSlide(q, pr, title){
     pr = pr || {};
-    var bg = pr.bgImage || q.bgImage || "";
-    var ratio = 3 / 2;
-    if(bg){ var dim = await loadImgSize(bg); if(dim) ratio = Math.max(0.4, Math.min(3, dim.w / dim.h)); }
+    var bg = await refToDataUrl(pr.bgImage || q.bgImage || "");
+    var ratio = (Number(pr.canvasRatio || q.canvasRatio) > 0) ? Math.max(0.3, Math.min(4, Number(pr.canvasRatio || q.canvasRatio))) : 3 / 2;
+    if(bg && !(Number(pr.canvasRatio || q.canvasRatio) > 0)){ var dim = await loadImgSize(bg); if(dim) ratio = Math.max(0.4, Math.min(3, dim.w / dim.h)); }
     var W = 1200, H = Math.round(W / ratio), scale = W / 640;
     var h = '<div class="canvas" style="width:' + W + 'px;height:' + H + 'px;">';
     if(bg) h += '<img class="bg" src="' + bg + '" alt="">';
-    (pr.images || []).forEach(function(im){
+    var exportImgs = [];
+    for(var ii = 0; ii < (pr.images || []).length; ii++){ var imx = pr.images[ii]; exportImgs.push(Object.assign({}, imx, { src: await refToDataUrl(imx.src) })); }
+    exportImgs.forEach(function(im){
       h += '<img class="pic" src="' + im.src + '" alt="" style="left:' + im.x + '%;top:' + im.y + '%;width:' + im.w + '%;' + (im.h ? 'height:' + im.h + '%;object-fit:fill;' : 'aspect-ratio:1 / ' + (im.ar || 1) + ';') + '">';
     });
     var ink = strokesToPng(pr.strokes || [], W, H, scale);
@@ -5398,26 +5512,62 @@
     return { format: "mandamy-backup", version: 1, exportedAt: Date.now(), exportedAtText: fmtTime(Date.now()), projectCount: Object.keys(projects).length, folders: folders, projects: projects };
   }
   function blobToDataUrl(blob){ return new Promise(function(res, rej){ var fr = new FileReader(); fr.onload = function(){ res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(blob); }); }
-  // 備份檔要能搬到別台裝置：把「mm:」音檔參照換回真正的資料（資料網址）；找不到本體的只留下空位
+  // 備份檔要能搬到別台裝置：把「mm:」媒體參照（音檔、圖片）換回真正的資料（資料網址）；找不到本體的音檔只留下空位，圖片清成空白
   async function embedMediaInBackup(obj){
-    var jobs = [], missing = 0;
-    eachMediaRef(obj, function(md, mid){ var r = parseMediaRef(md[mid]); if(r) jobs.push({ md: md, mid: mid, r: r }); });
+    var jobs = [], missing = 0, cache = {};
+    collectMediaSlots(obj).forEach(function(sl){ var r = parseMediaRef(sl.get()); if(r) jobs.push({ sl: sl, r: r }); });
     for(var i = 0; i < jobs.length; i++){
-      var j = jobs[i], blob = null;
-      try{ var rec = (MO && MO.ok) ? await MO.getMedia(j.r.key) : null; blob = rec && rec.blob; }catch(e){}
-      if(!blob && j.r.url){ try{ var resp = await fetch(j.r.url); if(resp.ok) blob = await resp.blob(); }catch(e){} }
-      if(blob) j.md[j.mid] = await blobToDataUrl(blob); else { delete j.md[j.mid]; missing++; }
+      var j = jobs[i], dataUrl = cache[j.r.key];
+      if(dataUrl === undefined){
+        var blob = null;
+        try{ var rec = (MO && MO.ok) ? await MO.getMedia(j.r.key) : null; blob = rec && rec.blob; }catch(e){}
+        if(!blob && j.r.url){ try{ var resp = await fetch(j.r.url); if(resp.ok) blob = await resp.blob(); }catch(e){} }
+        dataUrl = blob ? await blobToDataUrl(blob) : null; cache[j.r.key] = dataUrl;
+      }
+      if(dataUrl) j.sl.set(dataUrl); else { j.sl.set(j.sl.kind === "img" ? "" : null); missing++; }
     }
     return missing;
   }
-  // 匯入時：太大的音檔資料網址換成本機參照，不要塞進課程庫
+  // 太大的資料網址（音檔、圖片）換成本機參照，不要塞進課程庫（整份課程庫會整個寫進雲端資料庫，單次寫入上限約 16MB，
+  // 也會讓每寫一筆就卡一下）。匯入備份檔時、登入讀入課程庫時都會跑一次；回傳有沒有改動。
+  var MEDIA_INLINE_LIMIT_AUDIO = 150000, MEDIA_INLINE_LIMIT_IMG = 120000;
   async function externalizeMediaInLibrary(lib){
-    if(!MO || !MO.ok) return;
-    var jobs = [];
-    eachMediaRef(lib, function(md, mid){ var v = md[mid]; if(typeof v === "string" && v.indexOf("data:") === 0 && v.length > 150000) jobs.push({ md: md, mid: mid, v: v }); });
+    if(!MO || !MO.ok) return false;
+    var jobs = [], changed = false;
+    collectMediaSlots(lib).forEach(function(sl){
+      var v = sl.get();
+      if(typeof v === "string" && v.indexOf("data:") === 0 && v.length > (sl.kind === "img" ? MEDIA_INLINE_LIMIT_IMG : MEDIA_INLINE_LIMIT_AUDIO)) jobs.push({ sl: sl, v: v });
+    });
+    var cache = {};
     for(var i = 0; i < jobs.length; i++){
-      try{ var bl = await (await fetch(jobs[i].v)).blob(); var key = await MO.putMedia(bl, ""); jobs[i].md[jobs[i].mid] = "mm:" + key; }catch(e){ console.warn("音檔轉存失敗，保留原樣", e); }
+      try{
+        var key = cache[jobs[i].v];
+        if(!key){ var bl = await (await fetch(jobs[i].v)).blob(); key = await MO.putMedia(bl, ""); cache[jobs[i].v] = key; }
+        jobs[i].sl.set("mm:" + key); changed = true;
+      }catch(e){ console.warn("媒體轉存失敗，保留原樣", e); }
     }
+    return changed;
+  }
+  function countBigInlineMedia(lib){
+    var n = 0;
+    collectMediaSlots(lib).forEach(function(sl){ var v = sl.get(); if(typeof v === "string" && v.indexOf("data:") === 0 && v.length > (sl.kind === "img" ? MEDIA_INLINE_LIMIT_IMG : MEDIA_INLINE_LIMIT_AUDIO)) n++; });
+    return n;
+  }
+  // 登入／進入課程庫後在背景跑一次：把課程庫裡還留著的大型圖片、音檔（舊版或匯入的簡報）改存在這台裝置，課程庫瘦身，
+  // 再補傳雲端。改之前先把原本的整份存進「版本記錄」，想回去隨時可以還原。
+  var libSlimRunning = false;
+  async function slimLibraryInBackground(){
+    if(libSlimRunning || !MO || !MO.ok || !fsData) return;
+    libSlimRunning = true;
+    try{
+      if(countBigInlineMedia(fsData) > 0){
+        try{ await MO.addVersion(currentLibKey(), "瘦身前的版本（大圖片／音檔改存在這台裝置）（" + fmtTime(Date.now()) + "）", fsData, true); }catch(e){ console.warn("瘦身前備份失敗，略過這次瘦身", e); return; }
+        var changed = await externalizeMediaInLibrary(fsData);
+        if(changed){ saveFS(); if(lobbyView.style.display !== "none") renderLobbyGrid(); }
+      }
+      syncMediaToCloud();
+    }catch(e){ console.warn("課程庫瘦身失敗", e); }
+    finally{ libSlimRunning = false; }
   }
   function openExportDialog(projId){
     exportingProjId = projId;
@@ -5531,7 +5681,12 @@
   async function createRoom(){
     var rId = String(Math.floor(1000 + Math.random() * 9000));
     activeRoomId = rId; var currentProj = fsData.projects[activeProjectId];
-    // 2026-10-01：老師事先在投影片上準備好的內容（文字、圖片、圖案、音檔，例如匯入 PowerPoint 的結果）要帶進房間，
+    // 2026-10-01：媒體（音檔、圖片）還沒上傳到雲端的話，學生端拿不到：開房間前先試著補傳一次
+    if(countUnsyncedMedia({ projects: { x: currentProj } }) > 0){
+      try{ await syncMediaToCloud(); }catch(e){}
+      currentProj = fsData.projects[activeProjectId] || currentProj;
+    }
+    // 老師事先在投影片上準備好的內容（文字、圖片、圖案、音檔，例如匯入 PowerPoint 的結果）要帶進房間，
     // 學生才看得到；老師以前教課時寫的筆跡、播放狀態不帶（那是上一次上課的紀錄，不是事先準備的內容）。
     var seededProgress = {};
     var srcProg = currentProj.progress || {};
@@ -5541,16 +5696,25 @@
       if(pp.bgImage) one.bgImage = pp.bgImage;
       if(Object.keys(one).length) seededProgress[qid] = JSON.parse(JSON.stringify(one));
     });
-    // 音檔還沒上傳到雲端的話，學生端聽不到：開房間前先試著補傳一次
-    var unsyncedAudio = 0;
-    if(countUnsyncedMedia({ projects: { x: { progress: seededProgress } } }) > 0){
-      try{ await syncMediaToCloud(); }catch(e){}
-      var syncedNow = fsData.projects[activeProjectId] || currentProj;
-      Object.keys(seededProgress).forEach(function(qid){ var md = seededProgress[qid].mediaData; var live = (syncedNow.progress && syncedNow.progress[qid] && syncedNow.progress[qid].mediaData) || {}; if(md) Object.keys(md).forEach(function(mid){ if(live[mid]) md[mid] = live[mid]; }); });
-      unsyncedAudio = countUnsyncedMedia({ projects: { x: { progress: seededProgress } } });
+    // 房間裡的課程資料不需要帶老師本機的 progress（房間的內容在 sharedProgress 裡），不然整份課程庫的資料都會被複製進房間
+    var roomProject = JSON.parse(JSON.stringify(currentProj)); delete roomProject.progress;
+    // 圖片如果沒辦法放到雲端（Storage 不可用），退回把圖片直接放進房間資料（有總量上限），學生至少看得到圖
+    var inlineBudget = 9000000;
+    if(MO && MO.ok){
+      var roomSlots = collectMediaSlots({ projects: { r: Object.assign({}, roomProject, { progress: seededProgress }) } });
+      for(var rs = 0; rs < roomSlots.length; rs++){
+        var sl = roomSlots[rs], rf = parseMediaRef(sl.get());
+        if(sl.kind !== "img" || !rf || rf.url) continue;
+        try{
+          var rec0 = await MO.getMedia(rf.key);
+          if(rec0 && rec0.blob && rec0.blob.size * 1.4 <= inlineBudget){ var du = await blobToDataUrl(rec0.blob); inlineBudget -= du.length; sl.set(du); }
+        }catch(e){}
+      }
     }
+    var unsyncedAudio = 0;
+    collectMediaSlots({ projects: { r: Object.assign({}, roomProject, { progress: seededProgress }) } }).forEach(function(sl2){ var r2 = parseMediaRef(sl2.get()); if(r2 && !r2.url) unsyncedAudio++; });
     await set(ref(db, "rooms/" + rId), {
-      project: currentProj, sharedProgress: seededProgress, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs,
+      project: roomProject, sharedProgress: seededProgress, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs,
       phoneticMode: (currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off",
       presence: { teacher: { online:true, name:"老師" } }
     });
@@ -5988,13 +6152,17 @@
     return new Promise(function(resolve){
       if(!src){ resolve(null); return; }
       if(thumbImgCache[src]){ resolve(thumbImgCache[src]); return; }
-      var im = new Image();
-      im.onload = function(){
-        if(Object.keys(thumbImgCache).length > 60) thumbImgCache = {};
-        thumbImgCache[src] = im; resolve(im);
-      };
-      im.onerror = function(){ resolve(null); };
-      im.src = src;
+      // mm: 參照先換成可以載入的網址（本機 IndexedDB 的 blob 網址，或雲端網址）
+      resolveMediaSrc(src, "").then(function(realSrc){
+        if(!realSrc){ resolve(null); return; }
+        var im = new Image();
+        im.onload = function(){
+          if(Object.keys(thumbImgCache).length > 60) thumbImgCache = {};
+          thumbImgCache[src] = im; resolve(im);
+        };
+        im.onerror = function(){ resolve(null); };
+        im.src = realSrc;
+      });
     });
   }
   function drawSlideThumb(q, cb){
@@ -8566,7 +8734,7 @@
     // （見下面 .bg-loading-guard 的說明與 CSS 註解）；沒有底圖的話不需要等待，一開始就是 null。
     var bgLoadingGuard = null;
     if(currentBg){
-      var img = document.createElement("img"); img.className = "bg-img-layer"; img.src = currentBg;
+      var img = document.createElement("img"); img.className = "bg-img-layer";
       bgLoadingGuard = document.createElement("div");
       bgLoadingGuard.className = "bg-loading-guard";
       var clearBgLoadingGuard = function(){
@@ -8585,6 +8753,7 @@
         clearBgLoadingGuard();
       };
       img.onerror = clearBgLoadingGuard; // 圖片壞掉／載入失敗也要解除鎖定，不然會卡死永遠不能畫
+      setImgSrc(img, currentBg); // 可能是資料網址、雲端網址，或 mm: 參照（從這台裝置的 IndexedDB 取）
       cWrap.appendChild(img);
       cWrap.appendChild(bgLoadingGuard);
     }
@@ -10824,7 +10993,7 @@
         if(stepHidden && isStudent) return;
         var el = document.createElement("img");
         el.className = "board-image" + (stepHidden ? " step-hidden" : "");
-        el.dataset.imgId = im.id; el.draggable = false; el.src = im.src;
+        el.dataset.imgId = im.id; el.draggable = false; setImgSrc(el, im.src);
         el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
         if(im.h){ el.style.height = im.h + "%"; el.style.objectFit = "fill"; }
         var rI = zrI.map[im.id] || 0;
@@ -11880,8 +12049,8 @@
             }
           };
         };
-        if(existingImg){ if(existingImg.src !== freshBg){ adoptBgRatio(existingImg); existingImg.src = freshBg; } }
-        else { var newImg = document.createElement("img"); newImg.className = "bg-img-layer"; adoptBgRatio(newImg); newImg.src = freshBg; cWrap.insertBefore(newImg, cWrap.firstChild); }
+        if(existingImg){ if(existingImg.dataset.ref !== imgRefKey(freshBg)){ adoptBgRatio(existingImg); setImgSrc(existingImg, freshBg); } }
+        else { var newImg = document.createElement("img"); newImg.className = "bg-img-layer"; adoptBgRatio(newImg); setImgSrc(newImg, freshBg); cWrap.insertBefore(newImg, cWrap.firstChild); }
       } else if(existingImg){
         existingImg.remove();
         if(!(fixedRatio > 0)){
@@ -12539,8 +12708,18 @@
   var authMode = "login"; // "login" | "setup"
 
   var authSkipTimer = null;
+  // 連線中顯示「現在在做哪一步、已經等了幾秒」，讓老師看得出來有在連線、卡在哪一步
+  var authStepText = "", authStepTimer = null, authStepStartAt = 0;
+  function setAuthStep(text){
+    authStepText = text; authStepStartAt = Date.now();
+    var el = document.getElementById("auth-connect-step"); if(!el) return;
+    clearInterval(authStepTimer);
+    function tick(){ el.textContent = authStepText + "（已等 " + Math.round((Date.now() - authStepStartAt) / 1000) + " 秒）"; }
+    tick(); authStepTimer = setInterval(tick, 500);
+  }
   function showAuthStage(stage){
     clearTimeout(authSkipTimer);
+    if(stage !== "connecting"){ clearInterval(authStepTimer); var se = document.getElementById("auth-connect-step"); if(se) se.textContent = ""; }
     var skipBtn = document.getElementById("btn-auth-skip-wait");
     if(skipBtn) skipBtn.style.display = "none";
     if(stage === "connecting"){ authSkipTimer = setTimeout(function(){ if(skipBtn && authConnectingSection.style.display !== "none") skipBtn.style.display = "flex"; }, 3000); }
@@ -12826,6 +13005,7 @@
   }
 
   function enterAppAfterLogin(){
+    setTimeout(slimLibraryInBackground, 2500);
     // 離線時沒有房間可以開（房間靠雲端即時同步）：網址帶著 ?room=… 也直接回大廳，不要去連雲端
     if(urlRoom && !isOfflineMode){ startRoom(urlRoom, "teacher"); }
     else { if(urlRoom) history.replaceState(null, "", location.pathname); showLobby(); }
@@ -12835,6 +13015,7 @@
   async function initTeacherAuthAndStart(){
     var myRun = ++authRunId;
     showAuthStage("connecting");
+    setAuthStep("① 連線 Firebase 雲端服務");
     var ready = await waitForFirebase();
     if(myRun !== authRunId) return;
     if(!ready){
@@ -12852,6 +13033,7 @@
       return;
     }
     try{
+      setAuthStep("② 讀取教師帳號");
       var accounts = await withTimeout(fetchAllTeacherAccounts(), navigator.onLine === false ? 2000 : 10000);
       if(myRun !== authRunId) return;
       var hasAnyAccount = accounts && Object.keys(accounts).length > 0;
@@ -12863,6 +13045,7 @@
         var acc = accounts[savedId];
         currentTeacher = { id: acc.id, username: acc.username, displayName: acc.displayName || acc.username, isAdmin: !!acc.isAdmin };
         isOfflineMode = false; offlineTeacher = null;
+        setAuthStep("③ 讀取你的課程庫（課程多、圖片多時會比較久）");
         fsData = await loadTeacherLibrary(currentTeacher.id);
         if(myRun !== authRunId){ currentTeacher = null; return; }
         authView.style.display = "none";
