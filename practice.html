@@ -6016,8 +6016,12 @@
     fsExitBtn.textContent = "✕";
     container.appendChild(fsExitBtn);
 
-    var ctx = canvas.getContext("2d");
-    var traceCtx = traceCanvas.getContext("2d");
+    // 2026-09-30：desynchronized:true 是瀏覽器原生支援的畫布選項（Safari 15 以後都有），讓這塊
+    // 畫布的畫面更新可以跳過瀏覽器正常的排版/合成排隊流程，直接盡快畫到螢幕上——這是目前網頁
+    // 唯一能做、專門針對「筆尖碰到螢幕到墨跡真正顯示出來」這段時間的優化（跟先前處理的雲端同步
+    // 延遲是不同層面的問題），瀏覽器不支援的話會直接忽略這個選項，不影響原本行為，沒有風險。
+    var ctx = canvas.getContext("2d", { desynchronized: true });
+    var traceCtx = traceCanvas.getContext("2d", { desynchronized: true });
     var isDrawing = false;
     var currentPath = [];
     var activeSelectedTextId = null;
@@ -6306,8 +6310,9 @@
     // 對應那一筆比對筆順（第幾筆）跟位置/形狀（compareStrokeToGuideStroke），用顏色（綠/橘/紅）跟浮現的
     // ✅/🤔/❌ 圖示即時回饋。這份練習紀錄純粹是給自己看的，重新整理頁面或切換題目就會重置，不會同步給
     // 老師或其他同學看到——如果之後想讓老師也能看到練習完成度的統計，需要再另外討論怎麼加。
-    var personalCtx = personalPaintCanvas.getContext("2d");
-    var personalGuideCtx = personalGuideCanvas.getContext("2d");
+    // 2026-09-30：同上，這塊是學生自己即時寫字的個人練習畫布，同樣加上 desynchronized:true。
+    var personalCtx = personalPaintCanvas.getContext("2d", { desynchronized: true });
+    var personalGuideCtx = personalGuideCanvas.getContext("2d", { desynchronized: true });
     var personalStrokes = [];
     var personalIsDrawing = false;
     var personalCurrentPath = [];
@@ -7402,7 +7407,8 @@
     window.addEventListener("resize", fitCanvasToViewport);
     setupCanvasFullscreen(container, fsBtn, fitCanvasToViewport);
 
-    var ctx = canvas.getContext("2d");
+    // 2026-09-30：同上，這裡是生字練習自己即時寫字的畫布，同樣加上 desynchronized:true。
+    var ctx = canvas.getContext("2d", { desynchronized: true });
     var isDrawing = false;
     var currentPath = [];
 
