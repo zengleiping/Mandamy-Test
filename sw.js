@@ -8,7 +8,7 @@
  *
  * 更新這個檔案或 vendor/ 內容時，把 CACHE_VERSION 加一號，舊快取會在新版啟用時自動清掉。
  */
-var CACHE_VERSION = "v1";
+var CACHE_VERSION = "v2";
 var PRECACHE = "mandamy-precache-" + CACHE_VERSION;
 var RUNTIME = "mandamy-runtime-" + CACHE_VERSION;
 
@@ -23,7 +23,8 @@ var PRECACHE_URLS = [
   "vendor/pinyin-pro.js",
   "vendor/pdf.min.js",
   "vendor/pdf.worker.min.js",
-  "vendor/html2canvas.min.js"
+  "vendor/html2canvas.min.js",
+  "vendor/jszip.min.js"
 ];
 
 // 跨網域、要在執行時快取的資源（看過一次就存）。
