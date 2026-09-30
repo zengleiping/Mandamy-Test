@@ -892,6 +892,11 @@
   .anim-row select{ font-size:12px; padding:3px 4px; border-radius:6px; border:1.5px solid rgba(28,33,30,.2); background:var(--surface); color:var(--ink); }
   .anim-row button{ font-size:12px; padding:3px 8px; border-radius:6px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; font-weight:700; }
   .master-layer{ position:absolute; inset:0; pointer-events:none; z-index:0; overflow:hidden; user-select:none; }
+  .mm-timer{ position:fixed; top:16px; right:16px; z-index:30000; display:flex; align-items:center; gap:8px; padding:8px 14px; background:rgba(28,33,30,.92); color:#fff; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.35); font-variant-numeric:tabular-nums; cursor:grab; user-select:none; touch-action:none; }
+  .mm-timer .mt-t{ font-size:34px; font-weight:800; letter-spacing:1px; }
+  .mm-timer button{ border:none; background:rgba(255,255,255,.18); color:#fff; border-radius:8px; padding:4px 9px; cursor:pointer; font-size:14px; }
+  .mm-timer.mt-end{ background:#B23B32; animation:mtBlink .7s infinite alternate; }
+  @keyframes mtBlink{ to{ opacity:.55; } }
   .laser-layer{ position:absolute; inset:0; z-index:60; cursor:none; touch-action:none; }
   .laser-dot{ position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:radial-gradient(circle,#fff 0 12%,#ff1e1e 30%,rgba(255,30,30,.55) 60%,rgba(255,30,30,0) 75%); box-shadow:0 0 14px 4px rgba(255,30,30,.55); pointer-events:none; }
   .laser-trail{ position:absolute; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%; background:rgba(255,40,40,.6); pointer-events:none; animation:laserFade .42s ease-out forwards; }
@@ -6472,6 +6477,45 @@
     }, 700);
   }
 
+  /* ===== 倒數計時器／自動播放 ===== */
+  var mmTimerEl = null, mmTimerIv = 0;
+  function mmBeep(){
+    try{
+      var AC = window.AudioContext || window.webkitAudioContext, ac = new AC();
+      [0, 0.3, 0.6].forEach(function(dt){ var o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; g.gain.value = 0.25; o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + dt); o.stop(ac.currentTime + dt + 0.2); });
+    }catch(e){}
+  }
+  function startCountdownTimer(){
+    if(mmTimerEl){ clearInterval(mmTimerIv); mmTimerEl.remove(); mmTimerEl = null; }
+    var v = prompt("倒數幾分鐘？（可以輸入小數，例如 0.5＝30 秒）", "3"); if(v === null) return;
+    var mins = parseFloat(v); if(!(mins > 0)){ return; }
+    var left = Math.round(mins * 60), paused = false;
+    mmTimerEl = document.createElement("div"); mmTimerEl.className = "mm-timer";
+    mmTimerEl.innerHTML = '<span class="mt-t"></span><button type="button" class="mt-p" title="暫停／繼續">⏸</button><button type="button" class="mt-x" title="關閉">✕</button>';
+    document.body.appendChild(mmTimerEl);
+    function draw(){ var m = Math.floor(left / 60), s2 = left % 60; mmTimerEl.querySelector(".mt-t").textContent = String(m).padStart(2, "0") + ":" + String(s2).padStart(2, "0"); mmTimerEl.classList.toggle("mt-end", left <= 0); }
+    draw();
+    mmTimerIv = setInterval(function(){ if(paused) return; if(left > 0){ left--; draw(); if(left === 0) mmBeep(); } }, 1000);
+    mmTimerEl.querySelector(".mt-p").onclick = function(e){ paused = !paused; e.target.textContent = paused ? "▶" : "⏸"; };
+    mmTimerEl.querySelector(".mt-x").onclick = function(){ clearInterval(mmTimerIv); mmTimerEl.remove(); mmTimerEl = null; };
+    // 可以拖曳
+    var dx = 0, dy = 0, dragging = false;
+    mmTimerEl.addEventListener("pointerdown", function(e){ if(e.target.closest("button")) return; dragging = true; var r = mmTimerEl.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; mmTimerEl.setPointerCapture(e.pointerId); });
+    mmTimerEl.addEventListener("pointermove", function(e){ if(!dragging) return; mmTimerEl.style.left = (e.clientX - dx) + "px"; mmTimerEl.style.top = (e.clientY - dy) + "px"; mmTimerEl.style.right = "auto"; });
+    mmTimerEl.addEventListener("pointerup", function(){ dragging = false; });
+  }
+  var mmAutoIv = 0;
+  function toggleAutoAdvance(btn){
+    if(mmAutoIv){ clearInterval(mmAutoIv); mmAutoIv = 0; if(btn) btn.classList.remove("active"); return; }
+    var v = prompt("每幾秒自動換下一步／下一頁？", "5"); if(v === null) return;
+    var sec = parseFloat(v); if(!(sec >= 1)) return;
+    if(btn) btn.classList.add("active");
+    mmAutoIv = setInterval(function(){
+      var nb = document.querySelector("#btn-slide-next");
+      if(!nb || nb.disabled){ clearInterval(mmAutoIv); mmAutoIv = 0; if(btn) btn.classList.remove("active"); return; }
+      nb.click();
+    }, sec * 1000);
+  }
   /* ===== 簡報者檢視：另開視窗（備忘稿／下一張／計時器／遠端翻頁），用 BroadcastChannel 跟放映視窗同步 ===== */
   var presenterWin = null, presenterBC = null;
   function pvPost(){
@@ -6505,6 +6549,64 @@
     w.document.close();
     setTimeout(pvPost, 400);
   }
+  /* ===== 尋找與取代（Ctrl/⌘+H）：文字方塊、投影片標題、備忘稿；範圍可選「這份簡報」或「整個專案」 ===== */
+  function openFindReplace(){
+    if(isStudent || document.getElementById("mm-findrep")) return;
+    var back = document.createElement("div"); back.className = "tb-modal-back"; back.id = "mm-findrep";
+    var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(560px,94vw)"; back.appendChild(modal);
+    modal.innerHTML = '<h3>🔎 尋找與取代 Find &amp; Replace</h3>' +
+      '<div style="display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:center;font-size:13px;"><span>尋找</span><input class="fr-find" type="text" style="padding:6px 8px;"><span>取代為</span><input class="fr-rep" type="text" style="padding:6px 8px;"></div>' +
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:10px 0;font-size:12.5px;"><label><input type="checkbox" class="fr-t" checked> 文字方塊</label><label><input type="checkbox" class="fr-n" checked> 備忘稿</label><label><input type="checkbox" class="fr-h" checked> 投影片標題</label><label><input type="checkbox" class="fr-case"> 區分大小寫</label><label>範圍 <select class="fr-scope"><option value="deck">目前這份簡報</option><option value="all">整個專案</option></select></label></div>' +
+      '<div class="fr-out" style="font-size:12.5px;color:var(--ink-soft);max-height:180px;overflow:auto;margin-bottom:8px;">輸入要找的字。</div>' +
+      '<div class="tb-foot"><button type="button" class="fr-go primary">全部取代</button><button type="button" class="fr-close">關閉</button></div>';
+    var $ = function(c){ return modal.querySelector(c); };
+    function targets(){
+      var secs = getSections(), cur = getCurrentQInfo(), curSec = cur ? findSectionForQuestion(cur.question.id) : null, list = [];
+      getSortedSectionKeys().forEach(function(secId){
+        if($(".fr-scope").value === "deck" && curSec && secId !== curSec.secId) return;
+        var sec = secs[secId];
+        getSortedQuestionKeys(sec).forEach(function(qId){ list.push({ secId: secId, sec: sec, qId: qId, q: sec.questions[qId] }); });
+      });
+      return list;
+    }
+    function rx(){ var f = $(".fr-find").value; if(!f) return null; return new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $(".fr-case").checked ? "g" : "gi"); }
+    function scan(doReplace){
+      var re = rx(), out = [], total = 0, rep = $(".fr-rep").value; if(!re) return { total: 0, out: [] };
+      var secs = getSections(), secsChanged = false;
+      targets().forEach(function(t){
+        var hits = 0;
+        if($(".fr-h").checked){ var m = (t.q.title || "").match(re); if(m){ hits += m.length; if(doReplace){ secs[t.secId].questions[t.qId].title = t.q.title.replace(re, function(){ return rep; }); secsChanged = true; } } }
+        if($(".fr-n").checked){ var m2 = (t.q.teacherNote || "").match(re); if(m2){ hits += m2.length; if(doReplace){ secs[t.secId].questions[t.qId].teacherNote = t.q.teacherNote.replace(re, function(){ return rep; }); secsChanged = true; } } }
+        if($(".fr-t").checked && t.sec.type === "board"){
+          var pr = getProgress(t.qId) || {}, changedT = false;
+          (pr.texts || []).forEach(function(o){ var m3 = String(o.text || "").match(re); if(m3){ hits += m3.length; if(doReplace){ o.text = o.text.replace(re, function(){ return rep; }); delete o.phoneticOverride; changedT = true; } } });
+          if(doReplace && changedT) writeProgress(t.qId, { texts: pr.texts });
+        }
+        if(hits){ total += hits; out.push({ t: t, hits: hits }); }
+      });
+      if(doReplace && secsChanged) writeSections(secs);
+      return { total: total, out: out };
+    }
+    function refresh(){
+      var r = scan(false), box = $(".fr-out");
+      if(!$(".fr-find").value){ box.textContent = "輸入要找的字。"; return; }
+      box.innerHTML = r.total ? ('找到 <b>' + r.total + '</b> 處：<br>' + r.out.map(function(x, i){ return '<a href="#" data-i="' + i + '" style="color:var(--seal);">' + escapeHtml(x.t.q.title || "") + '</a>（' + x.hits + '）'; }).join("、")) : "找不到。";
+      box._r = r;
+    }
+    ["fr-find", "fr-case", "fr-t", "fr-n", "fr-h", "fr-scope"].forEach(function(c){ $("." + c).oninput = refresh; $("." + c).onchange = refresh; });
+    $(".fr-out").onclick = function(e){ var a = e.target.closest("a[data-i]"); if(!a) return; e.preventDefault(); var x = $(".fr-out")._r.out[Number(a.dataset.i)]; if(x){ setCurrentQ(x.t.qId); } };
+    $(".fr-go").onclick = function(){
+      var pre = scan(false); if(!pre.total){ alert("找不到要取代的文字。"); return; }
+      if(!confirm("確定把 " + pre.total + " 處「" + $(".fr-find").value + "」取代為「" + $(".fr-rep").value + "」？\n（改完可以用「復原」還原目前這一頁；其他頁請再取代回來。）")) return;
+      var r = scan(true); $(".fr-out").textContent = "已取代 " + r.total + " 處。"; $(".fr-find").value = "";
+    };
+    $(".fr-close").onclick = function(){ back.remove(); };
+    back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
+    document.body.appendChild(back); $(".fr-find").focus();
+  }
+  document.addEventListener("keydown", function(e){
+    if((e.ctrlKey || e.metaKey) && (e.key === "h" || e.key === "H") && !isStudent){ e.preventDefault(); openFindReplace(); }
+  });
   function renderSidebar(){
     if(isStudent) return;
     sectionTreeListEl.innerHTML = "";
@@ -6587,6 +6689,7 @@
         <div class="section-head-actions">
           <button type="button" class="btn btn-sm btn-ghost btn-edit-sec" title="編輯大題（標題／說明／媒體）Edit Section" style="color:var(--ink-soft);">編輯</button>
           <button type="button" class="btn btn-sm btn-ghost btn-add-subq" title="新增小題 Add Question" style="color:var(--seal);">新增小題</button>
+          ${sec.type === "board" ? '<button type="button" class="btn btn-sm btn-ghost btn-findrep" title="尋找與取代（Ctrl/⌘+H）" style="color:var(--ink-soft);">🔎 尋找</button>' : ''}
           ${sec.type === "board" ? '<button type="button" class="btn btn-sm btn-ghost btn-sorter" title="投影片整理檢視：大縮圖、拖曳重排、章節" style="color:var(--seal);">🗂 整理檢視</button>' : ''}
           <button type="button" class="btn btn-sm btn-ghost btn-del-sec" title="刪除大題 Delete Section" style="color:var(--ink-soft);">刪除</button>
         </div>
@@ -6594,6 +6697,7 @@
 
       head.onclick = function(e){ if(e.target.closest("button")) return; sec.collapsed = !sec.collapsed; writeSections(secs); };
       head.querySelector(".btn-edit-sec").onclick = function(e){ e.stopPropagation(); openSectionDialog(secId); };
+      var frBtn = head.querySelector(".btn-findrep"); if(frBtn) frBtn.onclick = function(e){ e.stopPropagation(); openFindReplace(); };
       var sorterBtn = head.querySelector(".btn-sorter"); if(sorterBtn) sorterBtn.onclick = function(e){ e.stopPropagation(); openSlideSorter(); };
       head.querySelector(".btn-add-subq").onclick = function(e){ e.stopPropagation(); openQuestionDialog(secId, null); };
       head.querySelector(".btn-del-sec").onclick = function(e){
@@ -8638,6 +8742,8 @@
           <div class="color-popover-title">放映工具 Show tools</div>
           <button type="button" class="trans-opt pt-laser" title="雷射筆（快速鍵 L）：紅色游標跟著滑鼠／手指，不會留下痕跡；再按一次或 Esc 關閉">🔴 雷射筆 Laser pointer</button>
           <button type="button" class="trans-opt pt-hl" title="螢光筆：半透明黃色粗筆">🖍 螢光筆 Highlighter</button>
+          <button type="button" class="trans-opt pt-timer" title="倒數計時器（課堂活動用）：時間到會響一聲">⏱ 倒數計時 Countdown</button>
+          <button type="button" class="trans-opt pt-auto" title="自動播放：每隔幾秒自動換下一步／下一頁；再按一次停止">⏵ 自動播放 Auto-advance</button>
           <button type="button" class="trans-opt pt-presenter" title="另開一個視窗：看備忘稿、下一張、計時器，並可遠端翻頁（放映視窗分享給學生，這個視窗自己看）">🖥 簡報者檢視 Presenter view</button>
         </div>
       </div>` : ''}
@@ -11968,6 +12074,14 @@
         rb.querySelector(".f-rsbg").onclick = function(){ each(function(o, k){ if(k === "image" && o.srcOrig){ o.src = o.srcOrig; delete o.srcOrig; } }); };
         var nt = document.createElement("div"); nt.className = "tb-hint"; nt.textContent = "小提醒：圖片有裁剪時，框線和陰影會被裁掉；需要框線請先不要裁剪。去背只處理接近白色的背景。"; modal.appendChild(nt);
       }
+      var lk = first.link || {};
+      var slideOpts = slideSiblingIds.map(function(id, i){ var qq = slideSecInfo && slideSecInfo.sec.questions[id]; return '<option value="' + id + '">' + (i + 1) + '. ' + escapeHtml((qq && qq.title) || "") + '</option>'; }).join("");
+      var r5 = row("連結 Link", '<select class="f-lt"><option value="">無</option><option value="slide">跳到投影片</option><option value="url">開啟網址</option></select><select class="f-ls" style="max-width:190px;">' + slideOpts + '</select><input type="text" class="f-lu" placeholder="https://…" style="flex:1;min-width:150px;padding:3px 6px;">');
+      r5.querySelector(".f-lt").value = lk.t || ""; if(lk.t === "slide" && lk.id) r5.querySelector(".f-ls").value = lk.id; r5.querySelector(".f-lu").value = lk.url || "";
+      function showLk(){ var t = r5.querySelector(".f-lt").value; r5.querySelector(".f-ls").style.display = t === "slide" ? "" : "none"; r5.querySelector(".f-lu").style.display = t === "url" ? "" : "none"; }
+      function applyLk(){ var t = r5.querySelector(".f-lt").value; showLk(); each(function(o){ if(t === "slide") o.link = { t: "slide", id: r5.querySelector(".f-ls").value }; else if(t === "url" && r5.querySelector(".f-lu").value.trim()) o.link = { t: "url", url: r5.querySelector(".f-lu").value.trim() }; else delete o.link; }); }
+      showLk(); r5.querySelector(".f-lt").onchange = applyLk; r5.querySelector(".f-ls").onchange = applyLk; r5.querySelector(".f-lu").oninput = applyLk;
+      var lh2 = document.createElement("div"); lh2.className = "tb-hint"; lh2.textContent = "連結在「放映」時輕點物件（或編輯時按住 Ctrl/⌘ 點）就會啟動；可以做成「回到目錄」「選擇題答案」按鈕。"; modal.appendChild(lh2);
       var ok = document.createElement("button"); ok.type = "button"; ok.className = "tb-row"; ok.style.cssText = "cursor:pointer;margin:12px 0 0;padding:6px 18px;"; ok.textContent = "完成"; ok.onclick = function(){ back.remove(); }; modal.appendChild(ok);
       back.addEventListener("click", function(e){ if(e.target === back) back.remove(); });
       document.body.appendChild(back);
@@ -12549,6 +12663,23 @@
     if(ptLaser) ptLaser.onclick = function(e){ e.stopPropagation(); setLaser(!laserOn); };
     if(ptHl) ptHl.onclick = function(e){ e.stopPropagation(); useHighlighter(); };
     if(ptPv) ptPv.onclick = function(e){ e.stopPropagation(); openPresenterView(); };
+    var ptTm = vToolbar.querySelector(".pt-timer"), ptAu = vToolbar.querySelector(".pt-auto");
+    if(ptTm) ptTm.onclick = function(e){ e.stopPropagation(); startCountdownTimer(); };
+    if(ptAu) ptAu.onclick = function(e){ e.stopPropagation(); toggleAutoAdvance(ptAu); };
+    // 超連結／動作按鈕：放映中（或按住 Ctrl/⌘）輕點有設連結的物件，就跳到指定投影片或開啟網址
+    var linkDown = null;
+    cWrap.addEventListener("pointerdown", function(e){ linkDown = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
+    cWrap.addEventListener("pointerup", function(e){
+      if(isStudent || !linkDown) return;
+      var d = linkDown; linkDown = null;
+      if(Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 600) return;
+      if(!(canvasFullscreen || e.ctrlKey || e.metaKey)) return;
+      if(e.target.closest && e.target.closest(".select-bar, .laser-layer, .tn-float")) return;
+      var hit = hitTestItem(getPos(e)); if(!hit || hit.k === "stroke") return;
+      var o = selItemObj(hit); if(!o || !o.link) return;
+      if(o.link.t === "slide" && o.link.id){ setCurrentQ(o.link.id); }
+      else if(o.link.t === "url" && o.link.url){ var u = /^https?:\/\//i.test(o.link.url) ? o.link.url : "https://" + o.link.url; window.open(u, "_blank", "noopener"); }
+    }, true);
     vToolbar.addEventListener("click", function(e){ var tb = e.target.closest && e.target.closest("button[data-tool]"); if(tb && laserOn) setLaser(false); });
     document.addEventListener("keydown", function laserKeys(e){
       if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", laserKeys); return; }
