@@ -6404,6 +6404,69 @@
     deleteQuestionById(found.secId, info.question.id);
   });
 
+  /* ===== 投影片整理檢視（Slide Sorter）：大縮圖網格，拖曳或按 ◀ ▶ 重排、複製、刪除、重新命名章節 ===== */
+  function openSlideSorter(){
+    var back = document.createElement("div"); back.className = "tb-modal-back";
+    var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.cssText = "width:min(1100px,96vw);max-height:92vh;overflow:auto;"; back.appendChild(modal);
+    var drag = null;
+    function render(){
+      var secs = getSections(), keys = getSortedSectionKeys().filter(function(k){ return secs[k].type === "board"; });
+      var curInfo = getCurrentQInfo(), curId = curInfo ? curInfo.question.id : null;
+      modal.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><h3 style="margin:0;flex:1;">🗂 投影片整理檢視 Slide Sorter</h3><button type="button" class="tb-row ss-close" style="cursor:pointer;margin:0;padding:5px 14px;">完成</button></div><div class="tb-hint">拖曳縮圖來換順序（也可以拖到別的章節）；觸控裝置請按卡片上的 ◀ ▶。章節＝PowerPoint 的「章節」，可以按名稱旁的 ✎ 重新命名。</div>';
+      modal.querySelector(".ss-close").onclick = function(){ back.remove(); };
+      keys.forEach(function(secId){
+        var sec = secs[secId], qKeys = getSortedQuestionKeys(sec);
+        var h = document.createElement("div"); h.style.cssText = "display:flex;align-items:center;gap:8px;margin:16px 0 6px;font-weight:800;font-size:14px;";
+        h.innerHTML = '<span>📑 ' + escapeHtml(sec.title) + '</span><button type="button" class="tb-row ss-ren" style="cursor:pointer;margin:0;padding:2px 8px;font-size:12px;" title="重新命名章節">✎</button><span style="color:var(--ink-soft);font-weight:600;font-size:12px;">' + qKeys.length + ' 張</span><button type="button" class="tb-row ss-add" style="cursor:pointer;margin:0 0 0 auto;padding:2px 10px;font-size:12px;">＋ 新增空白投影片</button>';
+        h.querySelector(".ss-ren").onclick = function(){ var nm = prompt("章節名稱", sec.title); if(nm && nm.trim()){ var ss = getSections(); ss[secId].title = nm.trim(); writeSections(ss); render(); } };
+        h.querySelector(".ss-add").onclick = function(){ addBlankSlideToSection(secId); setTimeout(render, 120); };
+        modal.appendChild(h);
+        var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;";
+        qKeys.forEach(function(qId, idx){
+          var q = sec.questions[qId];
+          var cached = slideThumbCache[qId];
+          var card = document.createElement("div"); card.setAttribute("draggable", "true"); card.dataset.ssq = qId;
+          card.style.cssText = "border:2px solid " + (qId === curId ? "var(--seal)" : "rgba(28,33,30,.15)") + ";border-radius:10px;padding:6px;background:var(--surface);cursor:grab;position:relative;";
+          card.innerHTML = '<div style="position:absolute;left:8px;top:8px;background:var(--ink);color:#fff;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;">' + (idx + 1) + '</div>' +
+            '<img class="ss-th" src="' + (cached ? cached.url : THUMB_BLANK) + '" data-thumb-qid="' + qId + '" style="width:100%;display:block;border-radius:6px;background:#fff;border:1px solid rgba(28,33,30,.1);aspect-ratio:3/2;object-fit:contain;" alt="">' +
+            '<div style="font-size:12px;font-weight:700;margin:5px 2px 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(q.title) + '</div>' +
+            '<div style="display:flex;gap:4px;"><button type="button" class="tb-row ss-l" style="cursor:pointer;margin:0;padding:2px 8px;" title="往前移">◀</button><button type="button" class="tb-row ss-r" style="cursor:pointer;margin:0;padding:2px 8px;" title="往後移">▶</button><button type="button" class="tb-row ss-dup" style="cursor:pointer;margin:0;padding:2px 8px;font-size:12px;">複製</button><button type="button" class="tb-row ss-del" style="cursor:pointer;margin:0 0 0 auto;padding:2px 8px;font-size:12px;">刪除</button></div>';
+          if(!cached) scheduleSlideThumb(qId);
+          function reorder(toSecId, toIdx){
+            var ss = getSections(), from = ss[secId], to = ss[toSecId]; if(!from || !to) return;
+            var mq = from.questions[qId]; if(!mq) return;
+            if(toSecId === secId){
+              var lst = getSortedQuestionKeys(from); lst.splice(lst.indexOf(qId), 1); lst.splice(Math.max(0, Math.min(lst.length, toIdx)), 0, qId);
+              lst.forEach(function(k, i){ from.questions[k].order = i; });
+            } else {
+              delete from.questions[qId]; var lst2 = getSortedQuestionKeys(to); lst2.splice(Math.max(0, Math.min(lst2.length, toIdx)), 0, qId); to.questions[qId] = mq;
+              lst2.forEach(function(k, i){ to.questions[k].order = i; });
+            }
+            writeSections(ss); setTimeout(render, 80);
+          }
+          card.querySelector(".ss-l").onclick = function(e){ e.stopPropagation(); if(idx > 0) reorder(secId, idx - 1); };
+          card.querySelector(".ss-r").onclick = function(e){ e.stopPropagation(); if(idx < qKeys.length - 1) reorder(secId, idx + 1); };
+          card.querySelector(".ss-dup").onclick = function(e){ e.stopPropagation(); duplicateSlide(secId, qId); setTimeout(render, 150); };
+          card.querySelector(".ss-del").onclick = function(e){ e.stopPropagation(); deleteQuestionById(secId, qId); setTimeout(render, 150); };
+          card.onclick = function(){ setCurrentQ(qId); back.remove(); };
+          card.ondragstart = function(e){ drag = { secId: secId, qId: qId, reorder: reorder }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "ss:" + qId); };
+          card.ondragover = function(e){ if(drag && drag.qId !== qId){ e.preventDefault(); card.style.outline = "3px dashed var(--seal)"; } };
+          card.ondragleave = function(){ card.style.outline = ""; };
+          card.ondrop = function(e){ e.preventDefault(); card.style.outline = ""; if(drag && drag.qId !== qId) drag.reorder(secId, idx); drag = null; };
+          grid.appendChild(card);
+        });
+        modal.appendChild(grid);
+      });
+      // 縮圖畫好後（sidebar 的 applySlideThumb 會更新 .q-thumb），這裡也同步
+    }
+    back.addEventListener("click", function(e){ if(e.target === back) back.remove(); });
+    document.body.appendChild(back); render();
+    var iv = setInterval(function(){
+      if(!document.body.contains(back)){ clearInterval(iv); return; }
+      back.querySelectorAll("img.ss-th").forEach(function(im){ var c = slideThumbCache[im.dataset.thumbQid]; if(c && im.src !== c.url) im.src = c.url; });
+    }, 700);
+  }
+
   function renderSidebar(){
     if(isStudent) return;
     sectionTreeListEl.innerHTML = "";
@@ -6486,12 +6549,14 @@
         <div class="section-head-actions">
           <button type="button" class="btn btn-sm btn-ghost btn-edit-sec" title="編輯大題（標題／說明／媒體）Edit Section" style="color:var(--ink-soft);">編輯</button>
           <button type="button" class="btn btn-sm btn-ghost btn-add-subq" title="新增小題 Add Question" style="color:var(--seal);">新增小題</button>
+          ${sec.type === "board" ? '<button type="button" class="btn btn-sm btn-ghost btn-sorter" title="投影片整理檢視：大縮圖、拖曳重排、章節" style="color:var(--seal);">🗂 整理檢視</button>' : ''}
           <button type="button" class="btn btn-sm btn-ghost btn-del-sec" title="刪除大題 Delete Section" style="color:var(--ink-soft);">刪除</button>
         </div>
       `;
 
       head.onclick = function(e){ if(e.target.closest("button")) return; sec.collapsed = !sec.collapsed; writeSections(secs); };
       head.querySelector(".btn-edit-sec").onclick = function(e){ e.stopPropagation(); openSectionDialog(secId); };
+      var sorterBtn = head.querySelector(".btn-sorter"); if(sorterBtn) sorterBtn.onclick = function(e){ e.stopPropagation(); openSlideSorter(); };
       head.querySelector(".btn-add-subq").onclick = function(e){ e.stopPropagation(); openQuestionDialog(secId, null); };
       head.querySelector(".btn-del-sec").onclick = function(e){
         e.stopPropagation();
