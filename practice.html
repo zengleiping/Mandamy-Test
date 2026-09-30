@@ -948,6 +948,18 @@
   .tn-float{ position:absolute; right:18px; bottom:18px; width:300px; height:200px; z-index:50; background:rgba(255,248,230,.88); color:#2b2b2b; border:1.5px solid rgba(178,59,50,.55); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.18); display:flex; flex-direction:column; overflow:hidden; -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); }
   .tn-float.collapsed{ width:auto !important; height:auto !important; min-width:150px; }
   .tn-float.collapsed textarea, .tn-float.collapsed .tn-grip, .tn-float.collapsed .tn-set{ display:none !important; }
+  /* 2026-10-01：8 點縮放（四邊＋四角，跟電腦視窗一樣），觸控時邊緣／角落的感應區比看到的大 */
+  .tn-rz{ position:absolute; z-index:4; touch-action:none; }
+  .tn-rz-n{ top:0; left:14px; right:14px; height:8px; cursor:ns-resize; }
+  .tn-rz-s{ bottom:0; left:14px; right:14px; height:10px; cursor:ns-resize; }
+  .tn-rz-e{ right:0; top:14px; bottom:14px; width:10px; cursor:ew-resize; }
+  .tn-rz-w{ left:0; top:14px; bottom:14px; width:10px; cursor:ew-resize; }
+  .tn-rz-ne{ top:0; right:0; width:14px; height:14px; cursor:nesw-resize; }
+  .tn-rz-nw{ top:0; left:0; width:14px; height:14px; cursor:nwse-resize; }
+  .tn-rz-sw{ bottom:0; left:0; width:16px; height:16px; cursor:nesw-resize; }
+  .tn-rz-se{ bottom:0; right:0; width:20px; height:20px; cursor:nwse-resize; background:linear-gradient(135deg, transparent 52%, rgba(178,59,50,.55) 52%, rgba(178,59,50,.55) 60%, transparent 60%, transparent 72%, rgba(178,59,50,.55) 72%, rgba(178,59,50,.55) 80%, transparent 80%); }
+  .tn-float.collapsed .tn-rz{ display:none !important; }
+  .tn-float-head{ padding-right:14px !important; }
   .tn-grip{ position:absolute; right:0; bottom:0; width:20px; height:20px; cursor:nwse-resize; touch-action:none; z-index:3; background:linear-gradient(135deg, transparent 52%, rgba(178,59,50,.55) 52%, rgba(178,59,50,.55) 60%, transparent 60%, transparent 72%, rgba(178,59,50,.55) 72%, rgba(178,59,50,.55) 80%, transparent 80%); }
   .tn-grip-nw{ right:auto; left:0; bottom:auto; top:0; cursor:nwse-resize; background:linear-gradient(315deg, transparent 52%, rgba(178,59,50,.55) 52%, rgba(178,59,50,.55) 60%, transparent 60%, transparent 72%, rgba(178,59,50,.55) 72%, rgba(178,59,50,.55) 80%, transparent 80%); }
   .tn-set{ padding:8px 10px; background:rgba(255,255,255,.65); border-bottom:1px solid rgba(0,0,0,.08); font-size:12px; display:flex; flex-direction:column; gap:6px; }
@@ -7178,7 +7190,7 @@
       function hex2rgba(h, a){ return "rgba(" + parseInt(h.substr(1,2),16) + "," + parseInt(h.substr(3,2),16) + "," + parseInt(h.substr(5,2),16) + "," + a + ")"; }
       function build(){
         panel = document.createElement("div"); panel.className = "tn-float";
-        panel.innerHTML = '<div class="tn-float-head"><span>📝 老師備註（只有老師看得到）</span><button type="button" class="tn-b-set" title="外觀設定 Style">⚙</button><button type="button" class="tn-b-col" title="收起／展開 Collapse">—</button><button type="button" class="tn-b-x" title="關閉 Close">✕</button></div><div class="tn-set" style="display:none"></div><textarea placeholder="這一頁的備註：講稿、答案、上課提示……學生端不會顯示。打完點一下別處就自動存檔。"></textarea><div class="tn-grip" title="拖動調整大小 Resize"></div><div class="tn-grip tn-grip-nw" title="拖動調整大小 Resize"></div>';
+        panel.innerHTML = '<div class="tn-float-head"><span>📝 老師備註（只有老師看得到）</span><button type="button" class="tn-b-set" title="外觀設定 Style">⚙</button><button type="button" class="tn-b-col" title="收起／展開 Collapse">—</button><button type="button" class="tn-b-x" title="關閉 Close">✕</button></div><div class="tn-set" style="display:none"></div><textarea placeholder="這一頁的備註：講稿、答案、上課提示……學生端不會顯示。打完點一下別處就自動存檔。"></textarea><div class="tn-rz tn-rz-n" data-dir="n"></div><div class="tn-rz tn-rz-s" data-dir="s"></div><div class="tn-rz tn-rz-e" data-dir="e"></div><div class="tn-rz tn-rz-w" data-dir="w"></div><div class="tn-rz tn-rz-ne" data-dir="ne"></div><div class="tn-rz tn-rz-nw" data-dir="nw"></div><div class="tn-rz tn-rz-sw" data-dir="sw"></div><div class="tn-rz tn-rz-se" data-dir="se" title="拖動調整大小 Resize"></div>';
         var ta = panel.querySelector("textarea"); ta.value = q.teacherNote || "";
         var setBox = panel.querySelector(".tn-set"), colBtn = panel.querySelector(".tn-b-col");
         var st = loadStyle();
@@ -7210,24 +7222,43 @@
         panel.querySelector(".tn-b-x").onclick = function(){ setOpen(false); };
         panel.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
         function toTopLeft(){ var cr = container.getBoundingClientRect(), pr = panel.getBoundingClientRect(); panel.style.left = (pr.left - cr.left) + "px"; panel.style.top = (pr.top - cr.top) + "px"; panel.style.right = "auto"; panel.style.bottom = "auto"; return { cr: cr, pr: pr }; }
-        function bindGrip(grip, fromTopLeft){
-          grip.onpointerdown = function(e){
-            e.preventDefault(); e.stopPropagation(); try{ grip.setPointerCapture(e.pointerId); }catch(er){}
+        // 8 點縮放：dir 含 n/s/e/w 哪幾個字母，就動哪幾條邊；往外拖變大、往內拖變小，其他邊固定不動
+        function bindRz(h){
+          var dir = h.dataset.dir;
+          h.onpointerdown = function(e){
+            e.preventDefault(); e.stopPropagation(); try{ h.setPointerCapture(e.pointerId); }catch(er){}
             var g = toTopLeft(), sx = e.clientX, sy = e.clientY, w0 = g.pr.width, h0 = g.pr.height, l0 = g.pr.left - g.cr.left, t0 = g.pr.top - g.cr.top;
+            var CW = g.cr.width, CH = g.cr.height, MINW = 180, MINH = 110;
             function mv(ev){
-              var dx = ev.clientX - sx, dy = ev.clientY - sy;
-              if(fromTopLeft){ // 以右下角為定點：往左上拉就變大
-                var w = Math.max(180, Math.min(l0 + w0, w0 - dx)), h = Math.max(110, Math.min(t0 + h0, h0 - dy));
-                panel.style.width = w + "px"; panel.style.height = h + "px"; panel.style.left = (l0 + w0 - w) + "px"; panel.style.top = (t0 + h0 - h) + "px";
-              } else {
-                panel.style.width = Math.max(180, Math.min(g.cr.width - l0, w0 + dx)) + "px"; panel.style.height = Math.max(110, Math.min(g.cr.height - t0, h0 + dy)) + "px";
-              }
+              var dx = ev.clientX - sx, dy = ev.clientY - sy, l = l0, t = t0, w = w0, hh = h0;
+              if(dir.indexOf("e") !== -1) w = Math.max(MINW, Math.min(CW - l0, w0 + dx));
+              if(dir.indexOf("s") !== -1) hh = Math.max(MINH, Math.min(CH - t0, h0 + dy));
+              if(dir.indexOf("w") !== -1){ w = Math.max(MINW, Math.min(l0 + w0, w0 - dx)); l = l0 + w0 - w; }
+              if(dir.indexOf("n") !== -1){ hh = Math.max(MINH, Math.min(t0 + h0, h0 - dy)); t = t0 + h0 - hh; }
+              panel.style.width = w + "px"; panel.style.height = hh + "px"; panel.style.left = l + "px"; panel.style.top = t + "px";
             }
-            function up(){ grip.removeEventListener("pointermove", mv); grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", up); var r = panel.getBoundingClientRect(); try{ localStorage.setItem(SIZE_KEY, JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height) })); localStorage.setItem(NOTES_POS_KEY, JSON.stringify({ l: panel.style.left, t: panel.style.top })); }catch(er){} }
-            grip.addEventListener("pointermove", mv); grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", up);
+            function up(){
+              h.removeEventListener("pointermove", mv); h.removeEventListener("pointerup", up); h.removeEventListener("pointercancel", up);
+              var r = panel.getBoundingClientRect();
+              try{ localStorage.setItem(SIZE_KEY, JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height) })); localStorage.setItem(NOTES_POS_KEY, JSON.stringify({ l: panel.style.left, t: panel.style.top })); }catch(er){}
+            }
+            h.addEventListener("pointermove", mv); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
           };
         }
-        bindGrip(panel.querySelector(".tn-grip:not(.tn-grip-nw)"), false); bindGrip(panel.querySelector(".tn-grip-nw"), true);
+        Array.prototype.forEach.call(panel.querySelectorAll(".tn-rz"), bindRz);
+        // 容器大小變了（進出全螢幕、收合側欄…）：面板不能跑到看不到的地方或比容器還大（只在畫面上夾回去，不覆蓋存下來的設定）
+        function clampPanel(){
+          if(!panel || panel.style.display === "none" || panel.classList.contains("collapsed")) return;
+          var cr = container.getBoundingClientRect(); if(!cr.width || !cr.height) return;
+          var pr = panel.getBoundingClientRect();
+          var w = Math.min(pr.width, cr.width), hh = Math.min(pr.height, cr.height);
+          var l = pr.left - cr.left, t = pr.top - cr.top;
+          l = Math.max(0, Math.min(cr.width - w, l)); t = Math.max(0, Math.min(cr.height - hh, t));
+          if(w !== pr.width) panel.style.width = w + "px";
+          if(hh !== pr.height) panel.style.height = hh + "px";
+          if(panel.style.left) { panel.style.left = l + "px"; panel.style.top = t + "px"; }
+        }
+        if(window.ResizeObserver){ try{ new ResizeObserver(clampPanel).observe(container); }catch(er){} }
         var head = panel.querySelector(".tn-float-head");
         head.onpointerdown = function(e){
           if(e.target.closest("button")) return;
