@@ -808,6 +808,13 @@
   }
   .size-combo-opt:hover, .size-combo-opt.current{ background:rgba(178,59,50,0.12); color:var(--seal); }
   :root:not([data-theme="light"]) .size-combo-input, :root:not([data-theme="light"]) .size-combo-toggle{ border-color:rgba(255,255,255,0.14); }
+  /* 2026-09-30 逐步出現：老師端看得到還沒出現的文字（半透明＋左上角步驟號），學生端完全不渲染。 */
+  .movable-text.step-hidden{ opacity:0.35; }
+  .text-step-badge{
+    position:absolute; left:-10px; top:-12px; min-width:18px; height:18px; padding:0 4px; box-sizing:border-box;
+    border-radius:9px; background:#F59E0B; color:#fff; font:700 11px/18px "Plus Jakarta Sans",sans-serif;
+    text-align:center; pointer-events:none; z-index:9;
+  }
   .text-size-row{ display:flex; gap:6px; align-items:stretch; }
   .text-bold-btn{
     width:34px; flex:none; font-size:15px; font-weight:900; font-family:serif; cursor:pointer;
@@ -5577,7 +5584,7 @@
   // opacity：畫筆濃淡（1 = 全不透明／最濃，數字越小越淡）——老師點重點時可以調淡一點，
   // 學生跟著描的時候才看得出來哪些是老師畫的、哪些是自己描上去的，兩者疊在一起也不會完全分不出來。
   // 2026-09-30：筆刷粗細預設改成 2（使用者要求）；文字新增 bold（加粗）開關，預設不加粗。
-  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, eraserMode: "stroke" };
+  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, eraserMode: "stroke" };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
   // pinnedExtraTools：工具列精簡後，格線／底圖／移動畫面／錄示範這些非核心工具預設收合，
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
@@ -5589,6 +5596,7 @@
   // 接著維持全螢幕，不用每換一題都重新點一次。實際「搬到 body 底下蓋滿視窗」的邏輯統一寫在
   // setupCanvasFullscreen() 這個共用函式，renderDrawBoard／renderHanziBoard 各自呼叫一次。
   var canvasFullscreen = false;
+  var slideKeyHandler = null; // 老師鍵盤翻頁／翻步驟的監聽器，換題目前先移除
   var canvasFsKeyHandler = null; // 記住上一次掛的 Escape 鍵監聽器，換題目前先移除，避免累積重複監聽
   // 學生第一次遇到小白板／生字練習畫布時，自動幫他們打開一次全螢幕（怕學生自己不會點），
   // 之後就尊重他們自己的選擇（包括手動退出），不會每換一題都硬幫他們切回全螢幕。只對學生生效，
@@ -5709,10 +5717,10 @@
     // hover 顯示 popover 的機制（.tool-btn-v-wrap + .color-popover）。
     vToolbar.innerHTML = `
       <button type="button" class="tool-btn-v" id="btn-canvas-fs" title="全螢幕作答區：整個畫面都是畫布，工具列浮在畫布上 Fullscreen canvas — toolbar floats on top"><span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">全螢幕</span></button>
-      ${isMultiSlideDeck ? `
+      ${(isMultiSlideDeck || !isStudent) ? `
       <div class="slide-nav-row">
-        <button type="button" class="tool-btn-v slide-nav-btn" id="btn-slide-prev" ${slideIndex <= 0 ? 'disabled' : ''} title="上一頁 Previous slide"><span class="tool-btn-v-icon">◀</span></button>
-        <button type="button" class="tool-btn-v slide-nav-btn" id="btn-slide-next" ${slideIndex >= slideSiblingIds.length - 1 ? 'disabled' : ''} title="下一頁 Next slide"><span class="tool-btn-v-icon">▶</span></button>
+        <button type="button" class="tool-btn-v slide-nav-btn" id="btn-slide-prev" ${slideIndex <= 0 ? 'disabled' : ''} title="上一步／上一頁 Previous step or slide（鍵盤 ←）"><span class="tool-btn-v-icon">◀</span></button>
+        <button type="button" class="tool-btn-v slide-nav-btn" id="btn-slide-next" ${slideIndex >= slideSiblingIds.length - 1 ? 'disabled' : ''} title="下一步／下一頁 Next step or slide（鍵盤 → 或空白鍵）"><span class="tool-btn-v-icon">▶</span></button>
       </div>
       <div class="slide-nav-counter">${slideIndex + 1} / ${slideSiblingIds.length}</div>` : ''}
       <div class="tool-v-sep"></div>
@@ -5744,6 +5752,10 @@
               ${sizeComboHtml("board-font-select", boardState.fontSize, 8, 200, [12,14,16,18,20,24,28,32,36,40,48,52,60,68,72,84,96,120])}
               <button type="button" class="text-bold-btn ${boardState.bold?'active':''}" title="加粗 Bold（選取文字方塊後按，可以改已經打好的字）"><b>B</b></button>
             </div>
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="0＝一開始就顯示；1＝老師按第 1 次「▶」才出現，以此類推">出現時機 Appears at step</span></div>
+            ${sizeComboHtml("text-step-input", boardState.step, 0, 30, [0,1,2,3,4,5,6,7,8,9,10])}
           </div>
         </div>
       </div>
@@ -6206,8 +6218,82 @@
     // 都能用——這樣老師全螢幕播簡報＋畫記的時候，翻頁不用先退出全螢幕。
     var btnSlidePrev = vToolbar.querySelector("#btn-slide-prev");
     var btnSlideNext = vToolbar.querySelector("#btn-slide-next");
-    if(btnSlidePrev) btnSlidePrev.onclick = function(){ if(slideIndex > 0) setCurrentQ(slideSiblingIds[slideIndex - 1]); };
-    if(btnSlideNext) btnSlideNext.onclick = function(){ if(slideIndex < slideSiblingIds.length - 1) setCurrentQ(slideSiblingIds[slideIndex + 1]); };
+
+    // 2026-09-30 逐步出現：老師端的 ▶／◀ 先處理「這一頁還沒出現的步驟」，這一頁的步驟都出現完了才翻到下一頁
+    // （跟 PPT 一樣）；◀ 反過來，步驟退到 0 之後才回上一頁，而且回到上一頁時是「全部都出現」的狀態。
+    // 學生端維持原本的行為（只翻頁，不會動到老師控制的步驟）。revealStep 存在這一頁的 progress 裡，
+    // 用既有的 sharedProgress 自動同步給全班。
+    function maxStepOf(qId){
+      return (getProgress(qId).texts || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, 0);
+    }
+    function slideStepNext(){
+      if(isStudent){ if(slideIndex < slideSiblingIds.length - 1) setCurrentQ(slideSiblingIds[slideIndex + 1]); return; }
+      var cur = getProgress(q.id).revealStep || 0;
+      if(cur < maxStepOf(q.id)){ writeProgress(q.id, { revealStep: cur + 1 }); return; }
+      if(slideIndex < slideSiblingIds.length - 1){
+        var nid = slideSiblingIds[slideIndex + 1];
+        writeProgress(nid, { revealStep: 0 });
+        setCurrentQ(nid);
+      }
+    }
+    function slideStepPrev(){
+      if(isStudent){ if(slideIndex > 0) setCurrentQ(slideSiblingIds[slideIndex - 1]); return; }
+      var cur = getProgress(q.id).revealStep || 0;
+      if(cur > 0){ writeProgress(q.id, { revealStep: cur - 1 }); return; }
+      if(slideIndex > 0){
+        var pid = slideSiblingIds[slideIndex - 1];
+        writeProgress(pid, { revealStep: maxStepOf(pid) });
+        setCurrentQ(pid);
+      }
+    }
+    function updateSlideNavUi(){
+      var cur = getProgress(q.id).revealStep || 0;
+      var mx = maxStepOf(q.id);
+      var last = slideSiblingIds.length - 1;
+      if(btnSlidePrev) btnSlidePrev.disabled = isStudent ? slideIndex <= 0 : !(cur > 0 || slideIndex > 0);
+      if(btnSlideNext) btnSlideNext.disabled = isStudent ? slideIndex >= last : !(cur < mx || slideIndex < last);
+      var counterEl = vToolbar.querySelector(".slide-nav-counter");
+      if(counterEl){
+        var txt = isMultiSlideDeck ? (slideIndex + 1) + " / " + slideSiblingIds.length : "";
+        if(!isStudent && mx > 0) txt += (txt ? " · " : "") + "步驟 " + Math.min(cur, mx) + "/" + mx;
+        counterEl.textContent = txt;
+      }
+    }
+    if(btnSlidePrev) btnSlidePrev.onclick = slideStepPrev;
+    if(btnSlideNext) btnSlideNext.onclick = slideStepNext;
+    updateSlideNavUi();
+    // 鍵盤翻頁（只有老師）：→／PageDown／空白鍵＝下一步，←／PageUp＝上一步。正在輸入文字（輸入框、文字方塊
+    // 編輯）時不攔截；每次重畫先移除上一次掛的監聽，避免累積。
+    if(slideKeyHandler) document.removeEventListener("keydown", slideKeyHandler);
+    slideKeyHandler = null;
+    if(!isStudent){
+      slideKeyHandler = function(e){
+        if(!document.body.contains(cWrap)) return;
+        var tg = e.target, tag = tg && tg.tagName;
+        if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (tg && tg.isContentEditable)) return;
+        if(e.ctrlKey || e.metaKey || e.altKey) return;
+        if(tag === "BUTTON" && e.key === " ") return; // 空白鍵在按鈕上本來就是「按下」，不要搶
+        if(e.key === "ArrowRight" || e.key === "PageDown" || e.key === " "){ e.preventDefault(); slideStepNext(); }
+        else if(e.key === "ArrowLeft" || e.key === "PageUp"){ e.preventDefault(); slideStepPrev(); }
+      };
+      document.addEventListener("keydown", slideKeyHandler);
+    }
+
+    // 出現時機（第幾次點擊出現）：可以自己輸入也可以下拉選。有選取的文字方塊就改那一個，否則改成之後新打的字的預設值。
+    var stepInputEl = vToolbar.querySelector(".text-step-input");
+    if(stepInputEl){
+      bindSizeCombo(stepInputEl.closest(".size-combo"), function(n){
+        boardState.step = n;
+        var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
+        if(selObj){
+          snapshotForUndo();
+          selObj.step = n;
+          writeProgress(q.id, { texts: texts });
+          renderTexts();
+          updateSlideNavUi();
+        }
+      });
+    }
 
     // 格線／筆刷粗細／底圖／移動畫面／錄示範這些非核心工具的實際事件綁定：初始已經被 pin 住的
     // 工具（上面已經搬進 vToolbar），以及之後使用者從「➕更多」點加入的工具，都會呼叫這裡。
@@ -6698,9 +6784,12 @@
       textLayer.innerHTML = "";
       var scale = getScaleRatio();
 
+      var revealNow = getProgress(q.id).revealStep || 0;
       texts.forEach(function(t, idx){
+        var stepHidden = (t.step || 0) > revealNow; // 還沒輪到出現
+        if(stepHidden && isStudent) return;          // 學生端完全不渲染（DOM 裡也找不到）
         var div = document.createElement("div");
-        div.className = "movable-text" + (t.id === activeSelectedTextId ? " active" : "");
+        div.className = "movable-text" + (t.id === activeSelectedTextId ? " active" : "") + (stepHidden ? " step-hidden" : "");
         div.style.left = t.x + "%";
         div.style.top = t.y + "%";
         div.style.color = t.color || "var(--ink)";
@@ -6710,6 +6799,7 @@
         div.style.fontWeight = isTextBold(t) ? "700" : "400";
 
         div.innerHTML = `
+          ${(!isStudent && (t.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + t.step + ' 次點擊出現">' + t.step + '</span>' : ''}
           <span class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</span>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
@@ -6799,6 +6889,8 @@
           if(fontSelect) fontSelect.value = String(t.fontSize || 36);
           var boldBtnSync = vToolbar.querySelector(".text-bold-btn");
           if(boldBtnSync) boldBtnSync.classList.toggle("active", isTextBold(t)); // 選到哪個文字方塊，B 就顯示那個的狀態
+          var stepInputSync = vToolbar.querySelector(".text-step-input");
+          if(stepInputSync) stepInputSync.value = String(t.step || 0);
           snapshotForUndo(); // 在拖動開始「之前」存一份快照，上一步就能整個復原成拖動前的位置
 
           var startX = e.clientX, startY = e.clientY;
@@ -6946,7 +7038,8 @@
               y: p.y,
               color: boardState.color,
               fontSize: boardState.fontSize || 36,
-              bold: !!boardState.bold
+              bold: !!boardState.bold,
+              step: boardState.step || 0
             });
             writeProgress(q.id, { texts: texts });
           }
@@ -7382,6 +7475,7 @@
 
       if(!strokesLooksUnchanged) redrawStrokes();
       renderTexts();
+      updateSlideNavUi();
       return true;
     }
     liveBoardQId = q.id;
