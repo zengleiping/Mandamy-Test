@@ -918,17 +918,30 @@
   .arrange-hint{ font-size:11px; color:var(--ink-soft); margin-top:6px; line-height:1.4; max-width:180px; white-space:normal; }
   #btn-notes.has-note::after{ content:''; position:absolute; top:5px; right:7px; width:8px; height:8px; border-radius:50%; background:var(--seal); }
   #btn-notes{ position:relative; }
-  .tn-float{ position:absolute; right:18px; bottom:18px; width:300px; z-index:50; background:#FFF8E6; border:1.5px solid var(--seal); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.22); display:flex; flex-direction:column; overflow:hidden; }
-  :root:not([data-theme="light"]) .tn-float{ background:#3a3326; color:#fff; }
+  .tn-float{ position:absolute; right:18px; bottom:18px; width:300px; height:200px; z-index:50; background:rgba(255,248,230,.88); color:#2b2b2b; border:1.5px solid rgba(178,59,50,.55); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.18); display:flex; flex-direction:column; overflow:hidden; -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); }
+  .tn-float.collapsed{ width:auto !important; height:auto !important; min-width:150px; }
+  .tn-float.collapsed textarea, .tn-float.collapsed .tn-grip, .tn-float.collapsed .tn-set{ display:none !important; }
+  .tn-grip{ position:absolute; right:0; bottom:0; width:20px; height:20px; cursor:nwse-resize; touch-action:none; z-index:3; background:linear-gradient(135deg, transparent 52%, rgba(178,59,50,.55) 52%, rgba(178,59,50,.55) 60%, transparent 60%, transparent 72%, rgba(178,59,50,.55) 72%, rgba(178,59,50,.55) 80%, transparent 80%); }
+  .tn-grip-nw{ right:auto; left:0; bottom:auto; top:0; cursor:nwse-resize; background:linear-gradient(315deg, transparent 52%, rgba(178,59,50,.55) 52%, rgba(178,59,50,.55) 60%, transparent 60%, transparent 72%, rgba(178,59,50,.55) 72%, rgba(178,59,50,.55) 80%, transparent 80%); }
+  .tn-set{ padding:8px 10px; background:rgba(255,255,255,.65); border-bottom:1px solid rgba(0,0,0,.08); font-size:12px; display:flex; flex-direction:column; gap:6px; }
+  .tn-set .row{ display:flex; align-items:center; gap:6px; }
+  .tn-set .row b{ width:34px; font-weight:600; flex:none; }
+  .tn-set input[type=range]{ flex:1; min-width:0; }
+  .tn-sw{ width:20px; height:20px; border-radius:50%; border:1.5px solid rgba(0,0,0,.25); cursor:pointer; padding:0; }
+  .tn-sw.on{ outline:2px solid var(--seal); outline-offset:1px; }
   .board-area.canvas-fs-active .tn-float{ z-index:9002; }
   .tn-float-head{ display:flex; align-items:center; gap:6px; padding:5px 8px; background:rgba(178,59,50,.12); font-size:12px; font-weight:700; color:var(--seal); cursor:grab; user-select:none; touch-action:none; }
   .tn-float-head span{ flex:1; }
   .tn-float-head button{ border:none; background:transparent; cursor:pointer; font-size:14px; color:var(--seal); }
-  .tn-float textarea{ border:none; outline:none; resize:vertical; min-height:90px; max-height:50vh; padding:8px 10px; font-size:14px; line-height:1.6; background:transparent; color:inherit; font-family:inherit; }
+  .tn-float textarea{ flex:1; min-height:0; border:none; outline:none; resize:none; padding:8px 10px; font-size:14px; line-height:1.6; background:transparent; color:inherit; font-family:inherit; }
   .shape-proxy{ position:absolute; pointer-events:auto; box-sizing:border-box; border:1.5px dashed transparent; cursor:grab; touch-action:none; }
   .shape-proxy:hover{ border-color:#1E88E5; }
   .shape-proxy.active{ border-color:var(--seal); cursor:grabbing; }
-  .shape-proxy:hover .resize-handle, .shape-proxy.active .resize-handle{ display:block; }
+  .rh{ display:none; position:absolute; width:11px; height:11px; margin:-6px 0 0 -6px; background:#fff; border:2px solid #1E88E5; border-radius:50%; box-shadow:0 1px 4px rgba(0,0,0,.35); z-index:10; touch-action:none; box-sizing:border-box; }
+  .shape-proxy:hover .rh, .shape-proxy.active .rh, .image-proxy:hover .rh, .image-proxy.active .rh{ display:block; }
+  .rh-nw{ left:0; top:0; cursor:nwse-resize; } .rh-n{ left:50%; top:0; cursor:ns-resize; } .rh-ne{ left:100%; top:0; cursor:nesw-resize; }
+  .rh-e{ left:100%; top:50%; cursor:ew-resize; } .rh-se{ left:100%; top:100%; cursor:nwse-resize; } .rh-s{ left:50%; top:100%; cursor:ns-resize; }
+  .rh-sw{ left:0; top:100%; cursor:nesw-resize; } .rh-w{ left:0; top:50%; cursor:ew-resize; }
   .text-layer:not(.objs-interactive) .shape-proxy{ pointer-events:none; }
   .shape-popover{ min-width:214px; }
   .shape-type-row{ display:flex; gap:4px; flex-wrap:nowrap; }
@@ -945,7 +958,6 @@
   }
   .image-proxy:hover{ border-color:#1E88E5; }
   .image-proxy.active{ border-color:var(--seal); cursor:grabbing; }
-  .image-proxy:hover .resize-handle, .image-proxy.active .resize-handle{ display:block; }
   /* 左側投影片縮圖／新增按鈕 */
   .q-thumb{ width:64px; height:auto; min-height:32px; max-height:48px; object-fit:contain; flex:none; border:1px solid var(--grid-line); border-radius:4px; background:#FFFCF7; }
   /* 投影片列：縮圖佔了位置，「編輯／刪除」平常收起來，滑鼠移到那一列才浮現，標題才有地方顯示 */
@@ -3969,7 +3981,7 @@
       }
       imgs.forEach(function(im, i){
         var el = loaded[i + 1]; if(!el) return;
-        var w = im.w / 100 * W, h = w * (im.ar || 1);
+        var w = im.w / 100 * W, h = im.h ? im.h / 100 * H : w * (im.ar || 1);
         x.drawImage(el, im.x / 100 * W - w / 2, im.y / 100 * H - h / 2, w, h);
       });
       (prog.shapes || []).forEach(function(sh){
@@ -6699,17 +6711,62 @@
         val = val.trim(); if((qq.teacherNote || "") === val) return;
         qq.teacherNote = val; q.teacherNote = val; writeSections(secs); syncBtn(panel && panel.style.display !== "none");
       }
+      var STYLE_KEY = "mandamy-notes-style", SIZE_KEY = "mandamy-notes-size", COLL_KEY = "mandamy-notes-collapsed";
+      var SWATCHES = ["#FFF8E6", "#FFFFFF", "#EAF4FF", "#EAF8EE", "#FFEFF3", "#F3EEFF"];
+      function loadStyle(){ var d = { bg: "#FFF8E6", op: 0.88, fs: 14 }; try{ var v = JSON.parse(localStorage.getItem(STYLE_KEY) || "null"); if(v){ if(/^#[0-9a-f]{6}$/i.test(v.bg || "")) d.bg = v.bg; if(v.op >= 0.3 && v.op <= 1) d.op = v.op; if(v.fs >= 11 && v.fs <= 28) d.fs = v.fs; } }catch(e){} return d; }
+      function hex2rgba(h, a){ return "rgba(" + parseInt(h.substr(1,2),16) + "," + parseInt(h.substr(3,2),16) + "," + parseInt(h.substr(5,2),16) + "," + a + ")"; }
       function build(){
         panel = document.createElement("div"); panel.className = "tn-float";
-        panel.innerHTML = '<div class="tn-float-head"><span>📝 老師備註（只有老師看得到）</span><button type="button" title="關閉 Close">✕</button></div><textarea placeholder="這一頁的備註：講稿、答案、上課提示……學生端不會顯示。打完點一下別處就自動存檔。"></textarea>';
+        panel.innerHTML = '<div class="tn-float-head"><span>📝 老師備註（只有老師看得到）</span><button type="button" class="tn-b-set" title="外觀設定 Style">⚙</button><button type="button" class="tn-b-col" title="收起／展開 Collapse">—</button><button type="button" class="tn-b-x" title="關閉 Close">✕</button></div><div class="tn-set" style="display:none"></div><textarea placeholder="這一頁的備註：講稿、答案、上課提示……學生端不會顯示。打完點一下別處就自動存檔。"></textarea><div class="tn-grip" title="拖動調整大小 Resize"></div><div class="tn-grip tn-grip-nw" title="拖動調整大小 Resize"></div>';
         var ta = panel.querySelector("textarea"); ta.value = q.teacherNote || "";
+        var setBox = panel.querySelector(".tn-set"), colBtn = panel.querySelector(".tn-b-col");
+        var st = loadStyle();
+        function applyStyle(){ panel.style.background = hex2rgba(st.bg, st.op); ta.style.fontSize = st.fs + "px"; }
+        function saveStyle(){ try{ localStorage.setItem(STYLE_KEY, JSON.stringify(st)); }catch(er){} }
+        applyStyle();
+        function buildSet(){
+          setBox.innerHTML = '<div class="row"><b>底色</b></div><div class="row"><b>透明度</b><input type="range" class="tn-op" min="30" max="100" step="2"><span class="tn-opv"></span></div><div class="row"><b>字級</b><input type="range" class="tn-fs" min="11" max="28" step="1"><span class="tn-fsv"></span></div>';
+          var swRow = setBox.querySelector(".row");
+          SWATCHES.forEach(function(c){ var sw = document.createElement("button"); sw.type = "button"; sw.className = "tn-sw" + (c.toLowerCase() === st.bg.toLowerCase() ? " on" : ""); sw.style.background = c; sw.title = c;
+            sw.onclick = function(){ st.bg = c; applyStyle(); saveStyle(); buildSet(); }; swRow.appendChild(sw); });
+          var op = setBox.querySelector(".tn-op"), opv = setBox.querySelector(".tn-opv"), fs = setBox.querySelector(".tn-fs"), fsv = setBox.querySelector(".tn-fsv");
+          op.value = String(Math.round(st.op * 100)); opv.textContent = op.value + "%"; fs.value = String(st.fs); fsv.textContent = st.fs + "px";
+          op.oninput = function(){ st.op = op.value / 100; opv.textContent = op.value + "%"; applyStyle(); saveStyle(); };
+          fs.oninput = function(){ st.fs = +fs.value; fsv.textContent = fs.value + "px"; applyStyle(); saveStyle(); };
+        }
+        panel.querySelector(".tn-b-set").onclick = function(){ if(setBox.style.display === "none"){ buildSet(); setBox.style.display = ""; } else setBox.style.display = "none"; };
+        function applySize(){
+          if(panel.classList.contains("collapsed")){ panel.style.width = ""; panel.style.height = ""; return; }
+          try{ var sz = JSON.parse(localStorage.getItem(SIZE_KEY) || "null"); if(sz && sz.w && sz.h){ panel.style.width = sz.w + "px"; panel.style.height = sz.h + "px"; } }catch(er){}
+        }
+        function setCollapsed(on){ panel.classList.toggle("collapsed", on); colBtn.textContent = on ? "▢" : "—"; colBtn.title = on ? "展開 Expand" : "收起 Collapse"; try{ localStorage.setItem(COLL_KEY, on ? "1" : "0"); }catch(er){} if(on){ panel.style.width = ""; panel.style.height = ""; } else applySize(); }
+        colBtn.onclick = function(){ setCollapsed(!panel.classList.contains("collapsed")); };
         var saveTimer = null;
         ta.addEventListener("input", function(){ clearTimeout(saveTimer); saveTimer = setTimeout(function(){ save(ta.value); }, 700); }); // 點畫布不會讓輸入框失焦，所以邊打邊自動存
         ta.addEventListener("change", function(){ save(ta.value); });
         ta.addEventListener("blur", function(){ save(ta.value); });
         ta.addEventListener("keydown", function(e){ e.stopPropagation(); }); // 打字時不要觸發翻頁／刪除物件的快捷鍵
-        panel.querySelector("button").onclick = function(){ setOpen(false); };
+        panel.querySelector(".tn-b-x").onclick = function(){ setOpen(false); };
         panel.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+        function toTopLeft(){ var cr = container.getBoundingClientRect(), pr = panel.getBoundingClientRect(); panel.style.left = (pr.left - cr.left) + "px"; panel.style.top = (pr.top - cr.top) + "px"; panel.style.right = "auto"; panel.style.bottom = "auto"; return { cr: cr, pr: pr }; }
+        function bindGrip(grip, fromTopLeft){
+          grip.onpointerdown = function(e){
+            e.preventDefault(); e.stopPropagation(); try{ grip.setPointerCapture(e.pointerId); }catch(er){}
+            var g = toTopLeft(), sx = e.clientX, sy = e.clientY, w0 = g.pr.width, h0 = g.pr.height, l0 = g.pr.left - g.cr.left, t0 = g.pr.top - g.cr.top;
+            function mv(ev){
+              var dx = ev.clientX - sx, dy = ev.clientY - sy;
+              if(fromTopLeft){ // 以右下角為定點：往左上拉就變大
+                var w = Math.max(180, Math.min(l0 + w0, w0 - dx)), h = Math.max(110, Math.min(t0 + h0, h0 - dy));
+                panel.style.width = w + "px"; panel.style.height = h + "px"; panel.style.left = (l0 + w0 - w) + "px"; panel.style.top = (t0 + h0 - h) + "px";
+              } else {
+                panel.style.width = Math.max(180, Math.min(g.cr.width - l0, w0 + dx)) + "px"; panel.style.height = Math.max(110, Math.min(g.cr.height - t0, h0 + dy)) + "px";
+              }
+            }
+            function up(){ grip.removeEventListener("pointermove", mv); grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", up); var r = panel.getBoundingClientRect(); try{ localStorage.setItem(SIZE_KEY, JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height) })); localStorage.setItem(NOTES_POS_KEY, JSON.stringify({ l: panel.style.left, t: panel.style.top })); }catch(er){} }
+            grip.addEventListener("pointermove", mv); grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", up);
+          };
+        }
+        bindGrip(panel.querySelector(".tn-grip:not(.tn-grip-nw)"), false); bindGrip(panel.querySelector(".tn-grip-nw"), true);
         var head = panel.querySelector(".tn-float-head");
         head.onpointerdown = function(e){
           if(e.target.closest("button")) return;
@@ -6724,6 +6781,8 @@
         };
         try{ var pos = JSON.parse(localStorage.getItem(NOTES_POS_KEY) || "null"); if(pos && pos.l && pos.t){ panel.style.left = pos.l; panel.style.top = pos.t; panel.style.right = "auto"; panel.style.bottom = "auto"; } }catch(er){}
         container.appendChild(panel);
+        var wasColl = false; try{ wasColl = localStorage.getItem(COLL_KEY) === "1"; }catch(er){}
+        if(wasColl) setCollapsed(true); else applySize();
       }
       function setOpen(on){
         if(on && !panel) build();
@@ -8472,6 +8531,41 @@
         var fb = vToolbar.querySelector(".shape-fill-btn"); if(fb) fb.classList.toggle("active", !!sh.fill);
       }
     }
+    // PPT 式 8 個控制點：四邊只拉那一邊（壓扁／拉長），四角同時拉兩邊（圖片四角維持比例；圖形四角自由，按住 Shift 維持比例）
+    function addEdgeHandles(px, o){
+      ["nw","n","ne","e","se","s","sw","w"].forEach(function(dir){
+        var h = document.createElement("div"); h.className = "rh rh-" + dir; px.appendChild(h);
+        h.onpointerdown = function(e){
+          e.stopPropagation(); e.preventDefault();
+          try{ h.setPointerCapture(e.pointerId); }catch(er){}
+          o.select(); o.snapshot();
+          var b0 = o.getBox(), rect = cWrap.getBoundingClientRect(), sx = e.clientX, sy = e.clientY;
+          var bw0 = b0.r - b0.l, bh0 = b0.b - b0.t, isCorner = dir.length === 2;
+          function onMove(ev){
+            var dx = (ev.clientX - sx) / rect.width * 100, dy = (ev.clientY - sy) / rect.height * 100;
+            var b = { l: b0.l, t: b0.t, r: b0.r, b: b0.b };
+            if(dir.indexOf("w") >= 0) b.l = b0.l + dx;
+            if(dir.indexOf("e") >= 0) b.r = b0.r + dx;
+            if(dir.indexOf("n") >= 0) b.t = b0.t + dy;
+            if(dir.indexOf("s") >= 0) b.b = b0.b + dy;
+            if(o.clamp){ b.l = Math.max(0, b.l); b.t = Math.max(0, b.t); b.r = Math.min(100, b.r); b.b = Math.min(100, b.b); }
+            if(b.r - b.l < o.minW){ if(dir.indexOf("w") >= 0) b.l = b.r - o.minW; else b.r = b.l + o.minW; }
+            if(b.b - b.t < o.minH){ if(dir.indexOf("n") >= 0) b.t = b.b - o.minH; else b.b = b.t + o.minH; }
+            if(isCorner && (o.prop || ev.shiftKey) && bw0 > 0 && bh0 > 0){
+              var ratio = (bw0 * rect.width) / (bh0 * rect.height), nw = b.r - b.l;
+              var nh = nw * rect.width / ratio / rect.height;
+              if(dir.indexOf("n") >= 0) b.t = b.b - nh; else b.b = b.t + nh;
+            }
+            o.setBox(b);
+          }
+          function onUp(){
+            h.removeEventListener("pointermove", onMove); h.removeEventListener("pointerup", onUp); h.removeEventListener("pointercancel", onUp);
+            o.commit();
+          }
+          h.addEventListener("pointermove", onMove); h.addEventListener("pointerup", onUp); h.addEventListener("pointercancel", onUp);
+        };
+      });
+    }
     function renderShapeProxies(){
       var zrP = zRanks();
       var revealNow = getProgress(q.id).revealStep || 0;
@@ -8487,25 +8581,14 @@
           px.style.width = Math.max(sh.w, 1.5) + "%"; px.style.height = Math.max(sh.h, 2.5) + "%";
         }
         place();
-        px.innerHTML = ((!isStudent && (sh.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + sh.step + ' 次點擊出現">' + sh.step + '</span>' : '') + '<div class="resize-handle" title="按住拖動縮放 Drag to resize"></div>';
-        var handle = px.querySelector(".resize-handle");
-        handle.onpointerdown = function(e){
-          e.stopPropagation(); e.preventDefault();
-          try{ handle.setPointerCapture(e.pointerId); }catch(err){}
-          selectShapeObj(sh.id); snapshotForUndo();
-          var rect = cWrap.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, w0 = sh.w, h0 = sh.h;
-          function onMove(ev){
-            sh.w = Math.max(1, Math.min(100 - sh.x, w0 + (ev.clientX - sx) / rect.width * 100));
-            sh.h = Math.max(sh.type === "line" || sh.type === "arrow" ? 0 : 1, Math.min(100 - sh.y, h0 + (ev.clientY - sy) / rect.height * 100));
-            place(); renderShapeSvg();
-          }
-          function onUp(){
-            handle.removeEventListener("pointermove", onMove); handle.removeEventListener("pointerup", onUp); handle.removeEventListener("pointercancel", onUp);
-            sh.w = Math.round(sh.w * 10) / 10; sh.h = Math.round(sh.h * 10) / 10;
-            writeProgress(q.id, { shapes: shapes });
-          }
-          handle.addEventListener("pointermove", onMove); handle.addEventListener("pointerup", onUp); handle.addEventListener("pointercancel", onUp);
-        };
+        px.innerHTML = ((!isStudent && (sh.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + sh.step + ' 次點擊出現">' + sh.step + '</span>' : '') + '';
+        addEdgeHandles(px, {
+          clamp: true, prop: false, minW: 1, minH: (sh.type === "line" || sh.type === "arrow") ? 0 : 1,
+          select: function(){ selectShapeObj(sh.id); }, snapshot: snapshotForUndo,
+          getBox: function(){ return { l: sh.x, t: sh.y, r: sh.x + sh.w, b: sh.y + sh.h }; },
+          setBox: function(b){ sh.x = b.l; sh.y = b.t; sh.w = b.r - b.l; sh.h = b.b - b.t; place(); renderShapeSvg(); },
+          commit: function(){ sh.x = Math.round(sh.x * 10) / 10; sh.y = Math.round(sh.y * 10) / 10; sh.w = Math.round(sh.w * 10) / 10; sh.h = Math.round(sh.h * 10) / 10; writeProgress(q.id, { shapes: shapes }); }
+        });
         px.onpointerdown = function(e){
           e.stopPropagation();
           if(boardState.tool === "stroke-eraser"){
@@ -8573,6 +8656,7 @@
         el.className = "board-image" + (stepHidden ? " step-hidden" : "");
         el.dataset.imgId = im.id; el.draggable = false; el.src = im.src;
         el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
+        if(im.h){ el.style.height = im.h + "%"; el.style.objectFit = "fill"; }
         var rI = zrI.map[im.id] || 0;
         if(rI > zrI.minText){ el.style.zIndex = String(rI + 1); textLayer.appendChild(el); } // 在某個文字上面：要畫在筆跡之上
         else { el.style.zIndex = String(rI); imageLayer.appendChild(el); }
@@ -8581,35 +8665,23 @@
         px.className = "image-proxy" + (im.id === activeSelectedImageId ? " active" : "");
         px.dataset.imgId = im.id;
         px.style.left = im.x + "%"; px.style.top = im.y + "%"; px.style.width = im.w + "%";
-        px.style.aspectRatio = "1 / " + (im.ar || 1);
+        if(im.h) px.style.height = im.h + "%"; else px.style.aspectRatio = "1 / " + (im.ar || 1);
         px.style.zIndex = String(rI + 1);
-        px.innerHTML = ((!isStudent && (im.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + im.step + ' 次點擊出現">' + im.step + '</span>' : '') + '<div class="resize-handle" title="按住拖動縮放 Drag to resize"></div>';
-
-        var handle = px.querySelector(".resize-handle");
-        handle.onpointerdown = function(e){
-          e.stopPropagation(); e.preventDefault();
-          try{ handle.setPointerCapture(e.pointerId); }catch(err){}
-          selectImageObj(im.id);
-          var startW = im.w;
-          var r0 = px.getBoundingClientRect();
-          var cx0 = r0.left + r0.width / 2, cy0 = r0.top + r0.height / 2;
-          var startDist = Math.hypot(e.clientX - cx0, e.clientY - cy0) || 1;
-          function onMove(ev){
-            var d = Math.hypot(ev.clientX - cx0, ev.clientY - cy0);
-            im.w = Math.max(3, Math.min(100, Math.round(startW * d / startDist * 10) / 10));
-            px.style.width = im.w + "%"; el.style.width = im.w + "%";
-          }
-          function onUp(){
-            handle.removeEventListener("pointermove", onMove);
-            handle.removeEventListener("pointerup", onUp);
-            handle.removeEventListener("pointercancel", onUp);
-            writeProgress(q.id, { images: images });
-          }
-          snapshotForUndo();
-          handle.addEventListener("pointermove", onMove);
-          handle.addEventListener("pointerup", onUp);
-          handle.addEventListener("pointercancel", onUp);
-        };
+        px.innerHTML = ((!isStudent && (im.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + im.step + ' 次點擊出現">' + im.step + '</span>' : '') + '';
+        addEdgeHandles(px, {
+          clamp: false, prop: true, minW: 3, minH: 3,
+          select: function(){ selectImageObj(im.id); }, snapshot: snapshotForUndo,
+          getBox: function(){
+            var hh = im.h || (px.getBoundingClientRect().height / (cWrap.getBoundingClientRect().height || 1) * 100);
+            return { l: im.x - im.w / 2, r: im.x + im.w / 2, t: im.y - hh / 2, b: im.y + hh / 2 };
+          },
+          setBox: function(b){
+            im.w = b.r - b.l; im.h = b.b - b.t; im.x = (b.l + b.r) / 2; im.y = (b.t + b.b) / 2;
+            [px, el].forEach(function(n){ n.style.left = im.x + "%"; n.style.top = im.y + "%"; n.style.width = im.w + "%"; n.style.height = im.h + "%"; });
+            px.style.aspectRatio = "auto"; el.style.objectFit = "fill";
+          },
+          commit: function(){ ["x","y","w","h"].forEach(function(k){ im[k] = Math.round(im[k] * 10) / 10; }); writeProgress(q.id, { images: images }); }
+        });
 
         px.onpointerdown = function(e){
           e.stopPropagation();
