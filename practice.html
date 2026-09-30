@@ -887,13 +887,32 @@
   .draw-toolbar-top .tb-head{ width:auto; margin-right:4px; }
   .tb-head button{ height:24px; min-width:28px; padding:0 6px; border-radius:8px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); font-size:12px; font-weight:700; cursor:pointer; }
   .tb-head button:hover{ border-color:var(--seal); color:var(--seal); }
-  .draw-toolbar-vertical.tb-collapsed{ width:auto; padding:6px; }
-  .draw-toolbar-vertical.tb-collapsed > *:not(.tb-head){ display:none !important; }
-  .draw-toolbar-vertical.tb-collapsed .tb-head{ flex-direction:column; }
-  .draw-toolbar-top.tb-collapsed{ width:auto; align-self:flex-start; padding:4px 8px; }
-  .draw-toolbar-top.tb-collapsed > *:not(.tb-head){ display:none !important; }
-  .draw-toolbar-top.tb-collapsed .tb-head{ margin-right:0; }
-  .board-area.canvas-fs-active .draw-toolbar-top.tb-collapsed{ right:auto; }
+  /* 2026-10-01：收合＝只剩一個小三角形（約 24px），浮在舞台區左上角，完全不佔版面；
+     「隱藏整條」（⚙ 自訂裡勾選）＝連三角形都沒有（兩條都隱藏時才會在角落留一個小三角形可以叫回來）。 */
+  .draw-board-layout{ position:relative; }
+  .draw-toolbar-vertical.tb-collapsed, .draw-toolbar-top.tb-collapsed{
+    position:absolute; top:6px; width:auto; padding:0; margin:0; background:transparent; border:none; box-shadow:none; z-index:30; overflow:visible; max-height:none;
+  }
+  .draw-toolbar-vertical.tb-collapsed{ left:6px; }
+  .draw-toolbar-top.tb-collapsed{ left:36px; right:auto; }
+  .board-area.tb-left-hidden .draw-toolbar-top.tb-collapsed{ left:6px; }
+  .draw-toolbar-vertical.tb-collapsed > *:not(.tb-head), .draw-toolbar-top.tb-collapsed > *:not(.tb-head){ display:none !important; }
+  .draw-toolbar-vertical.tb-collapsed .tb-head, .draw-toolbar-top.tb-collapsed .tb-head{ width:auto; margin:0; }
+  .tb-collapsed .tb-head button + button{ display:none; }
+  .tb-collapsed .tb-head button{ width:24px; height:24px; min-width:0; padding:0; font-size:11px; opacity:.8; }
+  .tb-collapsed .tb-head button:hover{ opacity:1; }
+  .draw-toolbar-vertical.tb-hidden, .draw-toolbar-top.tb-hidden{ display:none !important; }
+  .tb-restore-tri{ display:none; position:absolute; top:6px; left:6px; z-index:30; width:24px; height:24px; align-items:center; justify-content:center; padding:0; border-radius:6px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); font-size:11px; font-weight:700; cursor:pointer; opacity:.8; }
+  .tb-restore-tri:hover{ opacity:1; border-color:var(--seal); color:var(--seal); }
+  .board-area.canvas-fs-active .tb-restore-tri{ top:14px; left:14px; }
+  .board-area.canvas-fs-active .draw-toolbar-vertical.tb-collapsed{ top:14px; left:14px; background:transparent; padding:0; overflow:visible; max-height:none; }
+  .board-area.canvas-fs-active .draw-toolbar-top.tb-collapsed{ top:14px; left:44px; right:auto; background:transparent; }
+  .board-area.canvas-fs-active.tb-left-hidden .draw-toolbar-top.tb-collapsed{ left:14px; }
+  .board-area.canvas-fs-active.tb-left-collapsed .draw-toolbar-top:not(.tb-collapsed){ left:48px; }
+  .board-area.canvas-fs-active.tb-left-hidden .draw-toolbar-top:not(.tb-collapsed){ left:14px; }
+  /* 全螢幕：工具列裡已經有「退出」鈕時，右上角那顆 ✕ 是多餘的（Esc 也能退出），藏起來少一個雜項；
+     工具列收合／隱藏（退出鈕不在畫面上）時才會顯示 ✕ */
+  .board-area.canvas-fs-active.fs-exit-in-bar .canvas-fs-exit-btn{ display:none; }
   .draw-toolbar-vertical .tool-btn-v, .draw-toolbar-top .tool-btn-v{ touch-action:none; -webkit-touch-callout:none; user-select:none; }
   body.tb-drag-active .color-popover{ display:none !important; }
   body.tb-drag-active{ cursor:grabbing; user-select:none; }
@@ -6470,7 +6489,7 @@
   var pinnedExtraTools = {};
   // 2026-10-01 工具列自訂：哪些工具放左側／上方／隱藏、順序、收合狀態，存在這台裝置的 localStorage（每台裝置各自記，不同步）
   var TB_STORE_KEY = "mandamy-toolbar-layout-v1";
-  var TB_DEFAULT = { left: ["fs", "pen", "text", "shape", "eraser"], top: ["nav", "transition", "media", "notes", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false };
+  var TB_DEFAULT = { left: ["fs", "pen", "text", "shape", "eraser"], top: ["nav", "transition", "media", "notes", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
   var tbConfig = null;
   function loadTbConfig(){
     if(tbConfig) return tbConfig;
@@ -7038,12 +7057,25 @@
       return col;
     }
     var tbColLeft = makeTbHead(vToolbar, "left"), tbColTop = makeTbHead(topBar, "top");
+    // 兩條都「隱藏整條」時，角落留一個小三角形可以把工具列叫回來（不然就再也打不開 ⚙ 自訂了）
+    var tbRestore = document.createElement("button"); tbRestore.type = "button"; tbRestore.className = "tb-restore-tri"; tbRestore.textContent = "▶";
+    tbRestore.title = "顯示工具列 Show toolbars";
+    tbRestore.onclick = function(e){ e.stopPropagation(); var c = loadTbConfig(); c.hiddenLeft = false; c.hiddenTop = false; c.collapsedLeft = false; c.collapsedTop = false; saveTbConfig(); syncTbCollapse(); requestAnimationFrame(fitCanvasToViewport); setTimeout(fitCanvasToViewport, 60); };
+    container.appendChild(tbRestore);
     function syncTbCollapse(){
       var c = loadTbConfig();
-      vToolbar.classList.toggle("tb-collapsed", !!c.collapsedLeft);
-      topBar.classList.toggle("tb-collapsed", !!c.collapsedTop);
+      var hl = !!c.hiddenLeft, ht = !!c.hiddenTop;
+      vToolbar.classList.toggle("tb-hidden", hl); topBar.classList.toggle("tb-hidden", ht);
+      vToolbar.classList.toggle("tb-collapsed", !!c.collapsedLeft && !hl);
+      topBar.classList.toggle("tb-collapsed", !!c.collapsedTop && !ht);
+      container.classList.toggle("tb-left-hidden", hl);
+      container.classList.toggle("tb-left-collapsed", !!c.collapsedLeft && !hl);
+      tbRestore.style.display = (hl && ht) ? "flex" : "none";
       tbColLeft.textContent = c.collapsedLeft ? "▶" : "◀"; tbColLeft.title = c.collapsedLeft ? "展開工具列 Expand" : "收合工具列 Collapse";
-      tbColTop.textContent = c.collapsedTop ? "▼ 工具列" : "▲"; tbColTop.title = c.collapsedTop ? "展開上方工具列 Expand" : "收合上方工具列 Collapse";
+      tbColTop.textContent = c.collapsedTop ? "▼" : "▲"; tbColTop.title = c.collapsedTop ? "展開上方工具列 Expand" : "收合上方工具列 Collapse";
+      var fsNode = tbItems.fs && tbItems.fs.nodes[0];
+      var fsBar = fsNode && fsNode.closest && fsNode.closest(".draw-toolbar-vertical, .draw-toolbar-top");
+      container.classList.toggle("fs-exit-in-bar", !!(fsBar && !fsBar.classList.contains("tb-collapsed") && !fsBar.classList.contains("tb-hidden")));
     }
     function applyToolbarLayout(){
       var c = loadTbConfig();
@@ -7082,6 +7114,16 @@
       var modal = document.createElement("div"); modal.className = "tb-modal"; back.appendChild(modal);
       function render(){
         modal.innerHTML = '<h3>⚙ 自訂工具列 Customize toolbars</h3><div class="tb-hint">小技巧：直接「長按」工具圖示就能拖到想要的位置（左側或上方都可以）。這裡也能用按鈕調整，或把工具隱藏。設定只記在這台裝置。</div>';
+        var barRow = document.createElement("div"); barRow.className = "tb-row"; barRow.style.flexWrap = "wrap";
+        [["hiddenLeft", "隱藏整條左側工具列 Hide left bar"], ["hiddenTop", "隱藏整條上方工具列 Hide top bar"]].forEach(function(bh){
+          var lb = document.createElement("label"); lb.style.cssText = "display:flex;align-items:center;gap:6px;margin-right:12px;font-size:13px;cursor:pointer;";
+          var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!c[bh[0]];
+          cb.onchange = function(){ c[bh[0]] = cb.checked; commit(); };
+          lb.appendChild(cb); lb.appendChild(document.createTextNode(bh[1])); barRow.appendChild(lb);
+        });
+        modal.appendChild(barRow);
+        var barHint = document.createElement("div"); barHint.className = "tb-hint"; barHint.textContent = "隱藏整條＝完全不佔版面；兩條都隱藏時，畫面左上角會留一個小三角形可以叫回來。只想暫時收起來的話，按工具列上的 ◀ ／ ▲ 收成一個小三角形就好。";
+        modal.appendChild(barHint);
         [["left", "左側工具列 Left"], ["top", "上方工具列 Top"], ["hidden", "隱藏 Hidden"]].forEach(function(sec){
           var title = document.createElement("div"); title.className = "tb-sec-title"; title.textContent = sec[1]; modal.appendChild(title);
           var keys = c[sec[0]].filter(function(k){ return tbItems[k]; });
@@ -7102,7 +7144,7 @@
         });
         var foot = document.createElement("div"); foot.className = "tb-foot";
         var reset = document.createElement("button"); reset.textContent = "恢復預設";
-        reset.onclick = function(){ var d = JSON.parse(JSON.stringify(TB_DEFAULT)); d.collapsedLeft = c.collapsedLeft; d.collapsedTop = c.collapsedTop; tbConfig = d; c = d; commit(); };
+        reset.onclick = function(){ var d = JSON.parse(JSON.stringify(TB_DEFAULT)); d.collapsedLeft = c.collapsedLeft; d.collapsedTop = c.collapsedTop; d.hiddenLeft = c.hiddenLeft; d.hiddenTop = c.hiddenTop; tbConfig = d; c = d; commit(); };
         var done = document.createElement("button"); done.className = "primary"; done.textContent = "完成";
         done.onclick = function(){ back.remove(); };
         foot.appendChild(reset); foot.appendChild(done); modal.appendChild(foot);
@@ -7405,7 +7447,7 @@
         var wrapRect = layout.getBoundingClientRect();
         var bottomLimit = stageWrapEl ? stageWrapEl.getBoundingClientRect().bottom : window.innerHeight;
         availableHeight = Math.max(220, bottomLimit - wrapRect.top - 6);
-        availableWidth = Math.max(220, layout.clientWidth - vToolbar.offsetWidth - 16);
+        availableWidth = Math.max(220, layout.clientWidth - (vToolbar.classList.contains("tb-collapsed") || vToolbar.classList.contains("tb-hidden") ? 0 : vToolbar.offsetWidth + 16));
       }
       stageArea.style.width = Math.floor(availableWidth) + "px";
       stageArea.style.height = Math.floor(availableHeight) + "px";
