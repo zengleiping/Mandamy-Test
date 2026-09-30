@@ -1674,8 +1674,8 @@
           <div class="bank-menu-pop" id="add-slide-menu-pop">
             <button type="button" class="bank-menu-item" id="btn-new-slide" title="新增一張空白投影片（不是題目，是上課內容，可以直接畫記／貼圖）Add a blank slide — not a question, just teaching content you can draw or paste on">🖼️ 空白投影片 Blank Slide</button>
             <button type="button" class="bank-menu-item" id="btn-import-slides-top" title="匯入簡報：選 PowerPoint（.pptx，文字／圖片／圖案／音檔會變成可編輯的物件）或 PDF（每一頁變成一張底圖）。舊的 .ppt 請先另存成 .pptx。 Import a .pptx (editable objects) or a PDF (one image per page)">📥 匯入簡報（PowerPoint .pptx／PDF）Import Slides</button>
-            <button type="button" class="bank-menu-item" id="btn-export-pptx" title="把目前這份簡報匯出成 PowerPoint（.pptx）：文字、圖片、圖案可以在 PowerPoint 裡編輯；手寫筆跡會合成一張透明圖片。">📤 匯出成 PowerPoint（.pptx）Export</button>
-            <button type="button" class="bank-menu-item" id="btn-export-pdf" title="把目前這份簡報每一頁匯出成一份 PDF（可以當講義發給學生）。">📤 匯出成 PDF（講義）Export PDF</button>
+            <button type="button" class="bank-menu-item" id="btn-deck-export-pptx" title="把目前這份簡報匯出成 PowerPoint（.pptx）：文字、圖片、圖案可以在 PowerPoint 裡編輯；手寫筆跡會合成一張透明圖片。">📤 匯出成 PowerPoint（.pptx）Export</button>
+            <button type="button" class="bank-menu-item" id="btn-deck-export-pdf" title="把目前這份簡報每一頁匯出成一份 PDF（可以當講義發給學生）。">📤 匯出成 PDF（講義）Export PDF</button>
           </div>
         </div>
         <input type="file" id="import-slides-top-file" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none;">
@@ -7117,7 +7117,7 @@
 
   var btnNewSlide = document.getElementById("btn-new-slide");
   if(btnNewSlide) btnNewSlide.onclick = function(){ closeAddSlideMenu(); createBlankSlideSection(); };
-  var btnExpPptx = document.getElementById("btn-export-pptx"), btnExpPdf = document.getElementById("btn-export-pdf");
+  var btnExpPptx = document.getElementById("btn-deck-export-pptx"), btnExpPdf = document.getElementById("btn-deck-export-pdf");
   if(btnExpPptx) btnExpPptx.onclick = function(){ closeAddSlideMenu(); exportDeckPptx(); };
   if(btnExpPdf) btnExpPdf.onclick = function(){ closeAddSlideMenu(); exportDeckPdf(); };
   var btnImportSlidesTop = document.getElementById("btn-import-slides-top");
