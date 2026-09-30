@@ -891,6 +891,15 @@
     border:1.5px solid rgba(28,33,30,0.14); border-radius:7px;
   }
   .text-fmt-btn:hover{ border-color:var(--seal); color:var(--seal); }
+  /* 注音在字右側（直式，像生字本）：字＋右邊一排直的注音符號，聲調符號在注音右邊、輕聲點在注音上方 */
+  .zy-r{ display:inline-flex; align-items:center; vertical-align:middle; }
+  .zy-s{ display:inline-flex; align-items:center; margin-left:.06em; font-family:"Noto Sans TC","Plus Jakarta Sans",sans-serif; font-size:.36em; font-weight:600; line-height:1; opacity:.88; cursor:text; }
+  .zy-col{ display:inline-flex; flex-direction:column; align-items:center; }
+  .zy-m{ display:flex; flex-direction:column; align-items:center; }
+  .zy-ch{ display:block; line-height:1.02; }
+  .zy-n{ line-height:1; margin-bottom:.1em; }
+  .zy-t{ margin-left:.08em; align-self:center; }
+  .zy-s.ph-overridden{ color:var(--seal); opacity:1; }
   .text-bg-toggle{ display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:600; cursor:pointer; }
   .text-bg-controls{ display:flex; align-items:center; gap:8px; }
   .text-bg-controls input[type=color]{ width:34px; height:26px; padding:0; border:1.5px solid rgba(28,33,30,0.2); border-radius:6px; background:none; cursor:pointer; flex:none; }
@@ -1099,6 +1108,13 @@
   .canvas-stage-wrap.trans-fade{ animation:slideFadeIn .4s ease both; }
   .canvas-stage-wrap.trans-slide-next{ animation:slideSlideNext .38s ease both; }
   .canvas-stage-wrap.trans-slide-prev{ animation:slideSlidePrev .38s ease both; }
+  /* 翻書：新的一頁像書頁一樣從書脊（下一頁＝左邊、上一頁＝右邊）翻開來。用個別的 rotate 屬性（不用 transform），
+     transform-origin 要蓋過畫布縮放寫在行內的 0 0，所以用 !important（動畫結束 class 移除後就恢復）。 */
+  @keyframes slideBookNext{ from{ rotate:0 1 0 -86deg; opacity:.35; } to{ rotate:0 1 0 0deg; opacity:1; } }
+  @keyframes slideBookPrev{ from{ rotate:0 1 0 86deg; opacity:.35; } to{ rotate:0 1 0 0deg; opacity:1; } }
+  .canvas-stage-wrap.trans-book-next{ animation:slideBookNext .75s cubic-bezier(.22,.8,.3,1) both; transform-origin:left center !important; box-shadow:0 14px 40px rgba(0,0,0,.25); }
+  .canvas-stage-wrap.trans-book-prev{ animation:slideBookPrev .75s cubic-bezier(.22,.8,.3,1) both; transform-origin:right center !important; box-shadow:0 14px 40px rgba(0,0,0,.25); }
+  .canvas-stage-area{ perspective:1800px; }
   .slide-add-row{
     display:flex; align-items:center; justify-content:center; gap:6px; width:100%; margin-top:4px; padding:8px 0;
     font:700 13px/1 "Plus Jakarta Sans",sans-serif; color:var(--seal); background:transparent;
@@ -1505,7 +1521,7 @@
   .btn-theme-bg.active, .btn-theme-accent.active, .btn-phonetic-mode.active{
     outline: 2.5px solid var(--ink) !important; outline-offset: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
-  .btn-phonetic-mode.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
+  .btn-phonetic-mode.active, .btn-phonetic-layout.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
 
   /* 2026-10-01 離線教課：頂部列的小標籤 */
   .offline-pill{ display:inline-block; font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--ink-soft); white-space:nowrap; }
@@ -1792,6 +1808,12 @@
       <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="pinyin">拼音 Pinyin</button>
       <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="zhuyin">ㄅㄆㄇ 注音 Zhuyin</button>
     </div>
+    <label style="margin-top:12px;display:block;">注音位置 Zhuyin position</label>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+      <button type="button" class="btn btn-sm btn-phonetic-layout" data-layout="top">字的上方 Above</button>
+      <button type="button" class="btn btn-sm btn-phonetic-layout" data-layout="right">字的右側（直式，像生字本）Right, vertical</button>
+    </div>
+    <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">「右側」只對注音有效（拼音一律在字的上方）。想改某個字的讀音：點那個字的注音／拼音，聲調可以直接打數字——1～4＝一～四聲、0＝輕聲（例如 ni3 會自動變成 nǐ，ㄋㄧ3 會變成 ㄋㄧˇ）。</p>
     <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">用「文字」工具在小白板上打字時，字的正上方要不要自動加拼音或注音——第一次用文字工具時會問一次，之後都可以回這裡改。</p>
 
     <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
@@ -2940,7 +2962,7 @@
             first = false;
             var h = (par.lnSpc && par.lnSpc.pts ? par.lnSpc.pts * 12700 : fsEmu * 1.2 * lnMul);
             var wEmu = Math.min((measureEm(piece, st.bold) + bulletEm) * fsEmu, availW);
-            L.push({ par: par, pi: pi, text: piece, pt: st.pt, bold: st.bold, color: color, fsEmu: fsEmu, before: before, h: h, w: wEmu, empty: !/\S/.test(piece) });
+            L.push({ lhMul: 1.2 * lnMul, par: par, pi: pi, text: piece, pt: st.pt, bold: st.bold, color: color, fsEmu: fsEmu, before: before, h: h, w: wEmu, empty: !/\S/.test(piece) });
             totalH += before + h;
           });
         });
@@ -2957,7 +2979,7 @@
         if(!it.empty && g && !g.closed && prevKey === key && (it.pi === prevPi || it.par.list !== "none") && !it.before){
           g.lines.push(it.text); g.h += it.h; g.w = Math.max(g.w, it.w);
         } else if(!it.empty){
-          groups.push({ par: it.par, lines: [it.text], y: cursor, h: it.h, w: it.w, color: it.color, pt: it.pt, bold: it.bold });
+          groups.push({ par: it.par, lines: [it.text], y: cursor, h: it.h, w: it.w, color: it.color, pt: it.pt, bold: it.bold, lhMul: it.lhMul });
         } else if(g){ g.closed = true; }
         prevKey = it.empty ? null : key; prevPi = it.pi;
         cursor += it.h;
@@ -2967,7 +2989,7 @@
         if(par.align === "ctr") cxEmu = box.x + box.cx / 2 + (indent / 2);
         else if(par.align === "r") cxEmu = box.x + box.cx - rIns - g.w / 2;
         else cxEmu = box.x + lIns + indent + g.w / 2;
-        out.texts.push({ text: g.lines.join("\n"), pt: g.pt, bold: g.bold, color: g.color, align: par.align === "ctr" ? "center" : (par.align === "r" ? "right" : "left"), list: par.list, cx: cxEmu, cy: g.y + g.h / 2, estW: g.w, estH: g.h });
+        out.texts.push({ text: g.lines.join("\n"), pt: g.pt, bold: g.bold, color: g.color, align: par.align === "ctr" ? "center" : (par.align === "r" ? "right" : "left"), list: par.list, cx: cxEmu, cy: g.y + g.h / 2, estW: g.w, estH: g.h, lh: g.lines.length > 1 ? g.lhMul : undefined });
         out.plainText.push(g.lines.join("\n"));
       });
     }
@@ -3095,7 +3117,7 @@
       s.texts.forEach(function(t){
         var fs = Math.round(t.pt * 640 / slideWpt * 10) / 10;
         var al = t.align === "center" || t.align === "ctr" ? "center" : (t.align === "right" || t.align === "r" ? "right" : "left");
-        page.texts.push({ text: t.text, x: pctX(t.cx), y: pctY(t.cy), fontSize: Math.max(6, fs), color: t.color, bold: !!t.bold, align: al, list: t.list });
+        page.texts.push({ text: t.text, x: pctX(t.cx), y: pctY(t.cy), fontSize: Math.max(6, fs), color: t.color, bold: !!t.bold, align: al, list: t.list, lh: t.lh });
       });
       if(s.failed && s.fallbackText){ page.texts.push({ text: s.fallbackText, x: 50, y: 50, fontSize: 14, color: "#1C1C1C", bold: false, align: "left", list: "none" }); }
       for(var k = 0; k < s.images.length; k++){
@@ -3177,6 +3199,8 @@
   // 小白板「文字」工具打字加註音：null 表示這台裝置從沒選過（要先跳出一次選擇視窗），
   // 實際的轉換函式（setPhoneticMode／buildPhoneticHtml…）在下面「打字加註音」那段一起定義。
   var currentPhoneticMode = localStorage.getItem("hanyu_phonetic_mode");
+  // 注音位置：top＝字的正上方（預設）；right＝字的右邊、直式排列（跟生字本的寫法一樣，聲調符號在注音右側）。只對注音有效。
+  var currentPhoneticLayout = localStorage.getItem("hanyu_phonetic_layout") === "right" ? "right" : "top";
 
   // 2026-09-29：平板＋觸控筆的「掌心誤觸」問題——一旦偵測到這台裝置有在用觸控筆（Apple Pencil／
   // 電容筆等，pointerType === "pen"），之後畫布上的「手指」輸入就只用來移動畫面（平移），不會被
@@ -3953,7 +3977,7 @@
         sec.questions[qId] = { id: qId, order: i, title: "投影片 " + (i + 1) + " Slide " + (i + 1), desc: "", bgImage: bgRef, gridType: "none", media: [], teacherNote: pg.notes || "", weight: 1, canvasRatio: Math.round(conv.pres.cx / conv.pres.cy * 10000) / 10000 };
         if(pg.notes) notes++;
         var prog = { texts: [], images: [], shapes: [], medias: [], mediaData: {} };
-        pg.texts.forEach(function(t){ prog.texts.push({ id: uid("t"), text: t.text, x: t.x, y: t.y, color: t.color, fontSize: t.fontSize, bold: !!t.bold, step: 0, align: t.align, list: t.list }); });
+        pg.texts.forEach(function(t){ var to = { id: uid("t"), text: t.text, x: t.x, y: t.y, color: t.color, fontSize: t.fontSize, bold: !!t.bold, step: 0, align: t.align, list: t.list }; if(t.lh && Math.abs(t.lh - 1) > 0.02) to.lh = Math.round(t.lh * 100) / 100; prog.texts.push(to); });
         for(var ip = 0; ip < pg.images.length; ip++){
           var im = pg.images[ip], imRef = await storeMediaBlob(im.blob);
           if(imRef) prog.images.push({ id: uid("im"), src: imRef, ar: im.ar, x: im.x, y: im.y, w: im.w, h: im.h, step: 0 });
@@ -4581,6 +4605,10 @@
   document.querySelectorAll(".btn-phonetic-mode").forEach(function(b){
     b.classList.toggle("active", b.dataset.phonetic === (currentPhoneticMode || "off"));
     b.onclick = function(){ setPhoneticMode(b.dataset.phonetic); };
+  });
+  document.querySelectorAll(".btn-phonetic-layout").forEach(function(b){
+    b.classList.toggle("active", b.dataset.layout === currentPhoneticLayout);
+    b.onclick = function(){ setPhoneticLayout(b.dataset.layout); };
   });
 
   var soundStyleSelect = document.getElementById("setting-sound-style");
@@ -5420,7 +5448,8 @@
     var ratio = (Number(pr.canvasRatio || q.canvasRatio) > 0) ? Math.max(0.3, Math.min(4, Number(pr.canvasRatio || q.canvasRatio))) : 3 / 2;
     if(bg && !(Number(pr.canvasRatio || q.canvasRatio) > 0)){ var dim = await loadImgSize(bg); if(dim) ratio = Math.max(0.4, Math.min(3, dim.w / dim.h)); }
     var W = 1200, H = Math.round(W / ratio), scale = W / 640;
-    var h = '<div class="canvas" style="width:' + W + 'px;height:' + H + 'px;">';
+    var pgBgC = pr.bgColor || q.bgColor || "", pgBgO = pr.bgOp != null ? pr.bgOp : (q.bgOp != null ? q.bgOp : 1);
+    var h = '<div class="canvas" style="width:' + W + 'px;height:' + H + 'px;' + (/^#[0-9a-fA-F]{6}$/.test(pgBgC) ? 'background:' + exportRgba(pgBgC, pgBgO) + ';' : '') + '">';
     if(bg) h += '<img class="bg" src="' + bg + '" alt="">';
     var exportImgs = [];
     for(var ii = 0; ii < (pr.images || []).length; ii++){ var imx = pr.images[ii]; exportImgs.push(Object.assign({}, imx, { src: await refToDataUrl(imx.src) })); }
@@ -5490,6 +5519,7 @@
       '.canvas{position:relative;overflow:hidden;background:#fff}.canvas>img,.canvas>svg{position:absolute}' +
       '.canvas .bg{inset:0;width:100%;height:100%;object-fit:contain}.canvas .pic{transform:translate(-50%,-50%);max-width:none}.canvas .ink,.canvas .shp{inset:0;width:100%;height:100%}' +
       '.mt{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;line-height:1;width:max-content}.mt .tl{white-space:pre;min-height:1em}' +
+      '.zy-r{display:inline-flex;align-items:center;vertical-align:middle}.zy-s{display:inline-flex;align-items:center;margin-left:.06em;font-size:.36em;font-weight:600;line-height:1;opacity:.88}.zy-col{display:inline-flex;flex-direction:column;align-items:center}.zy-m{display:flex;flex-direction:column;align-items:center}.zy-ch{display:block;line-height:1.02}.zy-n{line-height:1;margin-bottom:.1em}.zy-t{margin-left:.08em;align-self:center}' +
       '.mt:has(ruby){line-height:2.15;padding-top:.3em}.mt ruby{ruby-position:over}.mt rt{font-size:.42em;font-weight:600;opacity:.8;letter-spacing:0}' +
       '.mt.list-bullet .tl:not(:empty)::before{content:"•";display:inline-block;min-width:1.1em}.mt.list-number{counter-reset:tl}.mt.list-number .tl:not(:empty){counter-increment:tl}.mt.list-number .tl:not(:empty)::before{content:counter(tl) ".";display:inline-block;min-width:1.5em;margin-right:.15em}' +
       '.generic{font-size:15px;line-height:1.8}.pairs{border-collapse:collapse}.pairs td{border:1px solid #ddd;padding:4px 12px}.kv b{color:#6B5F55;margin-right:6px}' +
@@ -5692,7 +5722,7 @@
     var srcProg = currentProj.progress || {};
     Object.keys(srcProg).forEach(function(qid){
       var pp = srcProg[qid] || {}, one = {};
-      ["texts", "images", "shapes", "medias", "mediaData", "gridType", "canvasRatio"].forEach(function(k){ if(pp[k] !== undefined && pp[k] !== null && !(Array.isArray(pp[k]) && !pp[k].length)) one[k] = pp[k]; });
+      ["texts", "images", "shapes", "medias", "mediaData", "gridType", "canvasRatio", "bgColor", "bgOp"].forEach(function(k){ if(pp[k] !== undefined && pp[k] !== null && !(Array.isArray(pp[k]) && !pp[k].length)) one[k] = pp[k]; });
       if(pp.bgImage) one.bgImage = pp.bgImage;
       if(Object.keys(one).length) seededProgress[qid] = JSON.parse(JSON.stringify(one));
     });
@@ -5716,6 +5746,7 @@
     await set(ref(db, "rooms/" + rId), {
       project: roomProject, sharedProgress: seededProgress, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs,
       phoneticMode: (currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off",
+      phoneticLayout: currentPhoneticLayout,
       presence: { teacher: { online:true, name:"老師" } }
     });
     attachPresence(rId, "teacher", "老師"); startRoom(rId, "teacher");
@@ -5752,6 +5783,7 @@
       // 看不到，跟文字內容本身是不是同步了無關——這裡把它也變成跟 lockNoticeLangs 一樣的房間設定，
       // 老師改了就同步套用到所有人的畫面（不寫回各自的 localStorage，只影響這次上課的顯示）。
       if(roomData.phoneticMode !== undefined) applyRoomPhoneticMode(roomData.phoneticMode);
+      if(roomData.phoneticLayout !== undefined) applyRoomPhoneticLayout(roomData.phoneticLayout);
 
       if(roomData.broadcastScore && roomData.broadcastTime){
         if(window.__lastBroadcastTime !== roomData.broadcastTime){
@@ -6144,7 +6176,7 @@
   function slideThumbSig(q, prog){
     var bg = prog.bgImage || q.bgImage || "";
     var st = prog.strokes || [];
-    return [bg.length, bg.slice(-24), st.length, (st[st.length - 1] || {}).id || "",
+    return [bg.length, bg.slice(-24), (prog.bgColor || q.bgColor || "") + (prog.bgOp != null ? prog.bgOp : (q.bgOp != null ? q.bgOp : "")), st.length, (st[st.length - 1] || {}).id || "",
       JSON.stringify(prog.texts || []),
       (prog.images || []).map(function(i){ return [i.id, i.x, i.y, i.w, (i.src || "").length].join(","); }).join("|")].join("#");
   }
@@ -6176,6 +6208,8 @@
       var c = document.createElement("canvas"); c.width = W; c.height = H;
       var x = c.getContext("2d");
       x.fillStyle = "#FFFCF7"; x.fillRect(0, 0, W, H);
+      var tbc = prog.bgColor || q.bgColor || "";
+      if(/^#[0-9a-fA-F]{6}$/.test(tbc)){ x.save(); x.globalAlpha = (prog.bgOp != null ? prog.bgOp : (q.bgOp != null ? q.bgOp : 1)); x.fillStyle = tbc; x.fillRect(0, 0, W, H); x.restore(); }
       if(bgImg){
         var s0 = Math.min(W / bgImg.naturalWidth, H / bgImg.naturalHeight);
         var bw0 = bgImg.naturalWidth * s0, bh0 = bgImg.naturalHeight * s0;
@@ -6701,6 +6735,19 @@
      currentPhoneticMode 本身宣告在上面「主題與模式引擎」那段，跟 currentBgMode 等設定放一起，
      這裡開始才是實際的轉換／UI 邏輯。 */
 
+  function setPhoneticLayout(layout){
+    currentPhoneticLayout = layout === "right" ? "right" : "top";
+    localStorage.setItem("hanyu_phonetic_layout", currentPhoneticLayout);
+    document.querySelectorAll(".btn-phonetic-layout").forEach(function(b){ b.classList.toggle("active", b.dataset.layout === currentPhoneticLayout); });
+    if(inRoom() && roomRole === "teacher") update(ref(db, "rooms/" + activeRoomId), { phoneticLayout: currentPhoneticLayout });
+    if(typeof renderStage === "function") renderStage();
+  }
+  function applyRoomPhoneticLayout(layout){
+    layout = layout === "right" ? "right" : "top";
+    if(layout === currentPhoneticLayout) return;
+    currentPhoneticLayout = layout;
+    document.querySelectorAll(".btn-phonetic-layout").forEach(function(b){ b.classList.toggle("active", b.dataset.layout === layout); });
+  }
   function setPhoneticMode(mode){
     currentPhoneticMode = mode;
     localStorage.setItem("hanyu_phonetic_mode", mode);
@@ -6785,6 +6832,32 @@
     return (tone === "0" || tone === "5") ? (mark + body) : (body + mark);
   }
 
+  // 用數字打聲調（習慣用注音鍵盤的輸入法）：1～4＝一～四聲、0（或 5）＝輕聲，自動換成調號。
+  // 拼音：ni3→nǐ、lv4→lǜ、ma0→ma；注音：ㄋㄧ3→ㄋㄧˇ、ㄇㄚ0→˙ㄇㄚ（一聲不標）。可以一次打好幾個音節（空白隔開）。
+  var PINYIN_TONE_TABLE = { a: ["ā","á","ǎ","à"], e: ["ē","é","ě","è"], i: ["ī","í","ǐ","ì"], o: ["ō","ó","ǒ","ò"], u: ["ū","ú","ǔ","ù"], "ü": ["ǖ","ǘ","ǚ","ǜ"] };
+  function addPinyinToneMark(syl, tone){
+    var b = syl.replace(/u:/g, "ü").replace(/v/g, "ü");
+    if(tone < 1 || tone > 4) return b; // 輕聲：拼音不標調號
+    var lower = b.toLowerCase(), idx = -1;
+    if(lower.indexOf("a") !== -1) idx = lower.indexOf("a");
+    else if(lower.indexOf("e") !== -1) idx = lower.indexOf("e");
+    else if(lower.indexOf("ou") !== -1) idx = lower.indexOf("ou");
+    else { for(var i = lower.length - 1; i >= 0; i--){ if(/[aeiouü]/.test(lower.charAt(i))){ idx = i; break; } } }
+    if(idx < 0) return b;
+    var ch = lower.charAt(idx), rep = PINYIN_TONE_TABLE[ch]; if(!rep) return b;
+    var marked = rep[tone - 1]; if(b.charAt(idx) !== lower.charAt(idx)) marked = marked.toUpperCase();
+    return b.slice(0, idx) + marked + b.slice(idx + 1);
+  }
+  function convertToneDigits(str){
+    if(!str) return str;
+    return String(str).split(/(\s+)/).map(function(part){
+      var m = /^([a-züÜvV:]+)([0-5])$/.exec(part);
+      if(m) return addPinyinToneMark(m[1], Number(m[2]));
+      var z = /^([ㄅ-ㄩ]+)([0-5])$/.exec(part);
+      if(z){ var d = Number(z[2]); return d === 0 || d === 5 ? "˙" + z[1] : z[1] + ({ 1: "", 2: "ˊ", 3: "ˇ", 4: "ˋ" }[d] || ""); }
+      return part;
+    }).join("");
+  }
   function isHanChar(ch){
     return /[㐀-䶿一-鿿豈-﫿]/.test(ch);
   }
@@ -6828,6 +6901,12 @@
       var hasOverride = overrides && typeof overrides[baseIdx + i] === "string" && overrides[baseIdx + i] !== "";
       var annotation = hasOverride ? overrides[baseIdx + i]
         : (currentPhoneticMode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i]);
+      if(currentPhoneticMode === "zhuyin" && currentPhoneticLayout === "right"){
+        // 直式、在字右邊：把注音拆成「符號本體」和「聲調符號」，本體直排，聲調放在右邊（輕聲 ˙ 放在上方）
+        var ann = String(annotation || ""), tone = "", neutral = false, main = ann.replace(/[ˊˇˋ˙]/g, function(m){ if(m === "˙") neutral = true; else tone = m; return ""; });
+        html += "<span class=\"zy-r\" data-ph-idx=\"" + (baseIdx + i) + "\"><span class=\"zy-c\">" + escapeHtml(ch) + "</span><span class=\"zy-s" + (hasOverride ? " ph-overridden" : "") + "\"><span class=\"zy-col\">" + (neutral ? "<span class=\"zy-n\">˙</span>" : "") + "<span class=\"zy-m\">" + Array.from(main).map(function(c){ return "<span class=\"zy-ch\">" + escapeHtml(c) + "</span>"; }).join("") + "</span></span>" + (tone ? "<span class=\"zy-t\">" + tone + "</span>" : "") + "</span></span>";
+        continue;
+      }
       html += "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt" + (hasOverride ? " class=\"ph-overridden\"" : "") + ">" + escapeHtml(annotation || "") + "</rt></ruby>";
     }
     return html;
@@ -8249,7 +8328,7 @@
   // opacity：畫筆濃淡（1 = 全不透明／最濃，數字越小越淡）——老師點重點時可以調淡一點，
   // 學生跟著描的時候才看得出來哪些是老師畫的、哪些是自己描上去的，兩者疊在一起也不會完全分不出來。
   // 2026-09-30：筆刷粗細預設改成 2（使用者要求）；文字新增 bold（加粗）開關，預設不加粗。
-  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false, shapeOpacity: 1, textBgOn: false, textBgColor: "#FFF3B0", textBgOp: 1 };
+  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false, shapeOpacity: 1, textBgOn: false, textBgColor: "#FFF3B0", textBgOp: 1, lineH: 1 };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
   // pinnedExtraTools：工具列精簡後，格線／底圖／移動畫面／錄示範這些非核心工具預設收合，
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
@@ -8292,14 +8371,14 @@
       // 板類（.tool-btn-v）跟生字練習學生端（普通 .btn）用的按鈕視覺不一樣，各自用對應的內容格式
       if(toggleBtn.classList.contains("tool-btn-v")){
         toggleBtn.innerHTML = canvasFullscreen
-          ? '<span class="tool-btn-v-icon">⤡</span><span class="tool-btn-v-label">退出</span>'
-          : '<span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">全螢幕</span>';
+          ? '<span class="tool-btn-v-icon">⤡</span><span class="tool-btn-v-label">結束放映</span>'
+          : '<span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">放映</span>';
       } else {
         toggleBtn.textContent = canvasFullscreen ? "⤡ 退出" : "⛶ 全螢幕";
       }
       toggleBtn.title = canvasFullscreen
         ? "退出全螢幕，回到原本版面 Exit fullscreen canvas"
-        : "全螢幕作答區：整個畫面都是畫布，工具列浮在畫布上 Fullscreen canvas — toolbar floats on top";
+        : "投影片放映（全螢幕）：整個畫面都是投影片，工具列浮在上面 Slide show — toolbar floats on top";
       toggleBtn.classList.toggle("active", canvasFullscreen);
     }
     function enter(){
@@ -8403,7 +8482,7 @@
     // 說多數情況優先用這個），滑鼠移入按鈕可以切換成局部擦，跟畫筆/打字的顏色選盤共用同一套
     // hover 顯示 popover 的機制（.tool-btn-v-wrap + .color-popover）。
     vToolbar.innerHTML = `
-      <button type="button" class="tool-btn-v" id="btn-canvas-fs" title="全螢幕作答區：整個畫面都是畫布，工具列浮在畫布上 Fullscreen canvas — toolbar floats on top"><span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">全螢幕</span></button>
+      <button type="button" class="tool-btn-v" id="btn-canvas-fs" title="投影片放映（全螢幕）：整個畫面都是投影片，工具列浮在上面 Slide show — toolbar floats on top"><span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">放映</span></button>
       ${(isMultiSlideDeck || !isStudent) ? `
       <div class="slide-nav-row">
         <button type="button" class="tool-btn-v slide-nav-btn" id="btn-slide-prev" ${slideIndex <= 0 ? 'disabled' : ''} title="上一步／上一頁 Previous step or slide（鍵盤 ←）"><span class="tool-btn-v-icon">◀</span></button>
@@ -8412,12 +8491,13 @@
       <div class="slide-nav-counter">${slideIndex + 1} / ${slideSiblingIds.length}</div>` : ''}
       ${(isMultiSlideDeck && !isStudent) ? `
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v" id="btn-transition" title="換頁效果（套用到整份簡報）Slide transition"><span class="tool-btn-v-icon">✨</span><span class="tool-btn-v-label">效果</span></button>
+        <button type="button" class="tool-btn-v" id="btn-transition" title="轉場（切換投影片時的效果，套用到整份簡報）Transition"><span class="tool-btn-v-icon">✨</span><span class="tool-btn-v-label">轉場</span></button>
         <div class="color-popover">
-          <div class="color-popover-title">換頁效果 Transition</div>
+          <div class="color-popover-title">轉場 Transition</div>
           <button type="button" class="trans-opt ${(slideSecInfo.sec.transition || 'none') === 'none' ? 'active' : ''}" data-trans="none">無 None</button>
-          <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'fade' ? 'active' : ''}" data-trans="fade">淡入 Fade</button>
-          <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'slide' ? 'active' : ''}" data-trans="slide">滑動 Slide</button>
+          <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'fade' ? 'active' : ''}" data-trans="fade">淡出 Fade</button>
+          <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'slide' ? 'active' : ''}" data-trans="slide">推入 Push</button>
+          <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'book' ? 'active' : ''}" data-trans="book">翻書 Page turn</button>
         </div>
       </div>` : ''}
       ${!isStudent ? `
@@ -8441,7 +8521,7 @@
             ${sizeComboHtml("pen-size-input", boardState.size, 1, 60, [1,2,3,4,6,8,10,12,16,20,24,32,40])}
           </div>
           <div class="popover-field-row">
-            <div class="popover-field-row-label"><span>濃淡 Opacity</span><b id="pen-opacity-value">${Math.round((boardState.opacity==null?1:boardState.opacity)*100)}%</b></div>
+            <div class="popover-field-row-label"><span>透明度 Transparency</span><b id="pen-opacity-value">${Math.round((boardState.opacity==null?1:boardState.opacity)*100)}%</b></div>
             <input type="range" id="pen-opacity-slider" min="15" max="100" step="5" value="${Math.round((boardState.opacity==null?1:boardState.opacity)*100)}">
           </div>
         </div>
@@ -8450,16 +8530,16 @@
         <button type="button" class="tool-btn-v ${boardState.tool==='select'?'active':''}" data-tool="select" title="選取 Select：按住拖曳＝框選範圍內的東西（筆跡、文字、圖片、圖形都可以）；點一下選單一個；Shift 加選。選好之後可以拖曳搬動、組成群組（Ctrl/⌘+G）、刪除"><span class="tool-btn-v-icon">⬚</span><span class="tool-btn-v-label">選取</span></button>
       </div>
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v ${boardState.tool==='text'?'active':''}" data-tool="text" title="文字 Text（滑鼠移入可選顏色／字級 hover for color &amp; size）"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_TEXT}" alt=""><span class="tool-btn-v-label">文字</span></button>
+        <button type="button" class="tool-btn-v ${boardState.tool==='text'?'active':''}" data-tool="text" title="文字 Text（滑鼠移入可選顏色／字級 hover for color &amp; size）"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_TEXT}" alt=""><span class="tool-btn-v-label">文字方塊</span></button>
         <div class="color-popover text-popover">
-          <div class="color-popover-title">文字顏色 Text Color</div>
+          <div class="color-popover-title">字型色彩 Font color</div>
           <div class="color-dot-grid">${colorDotsHtml}</div>
           ${colorPickerRowHtml}
           <div class="popover-field-row">
-            <div class="popover-field-row-label"><span>字級 Size</span></div>
+            <div class="popover-field-row-label"><span>字型大小 Font size</span></div>
             <div class="text-size-row">
               ${sizeComboHtml("board-font-select", boardState.fontSize, 8, 200, [12,14,16,18,20,24,28,32,36,40,48,52,60,68,72,84,96,120])}
-              <button type="button" class="text-bold-btn ${boardState.bold?'active':''}" title="加粗 Bold（選取文字方塊後按，可以改已經打好的字）"><b>B</b></button>
+              <button type="button" class="text-bold-btn ${boardState.bold?'active':''}" title="粗體 Bold（選取文字方塊後按，可以改已經打好的字）"><b>B</b></button>
             </div>
           </div>
           <div class="popover-field-row">
@@ -8474,6 +8554,10 @@
             </div>
           </div>
           <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="100%＝預設；數字越大行與行之間離得越開（選取文字方塊時改那一個，也會是之後新打的字的預設）">行距 Line spacing（%）</span></div>
+            ${sizeComboHtml("text-lh-input", Math.round((boardState.lineH || 1) * 100), 60, 400, [80,100,115,150,200,250])}
+          </div>
+          <div class="popover-field-row">
             <div class="popover-field-row-label"><span>文字框底色 Box background</span><label class="text-bg-toggle" title="預設不加底色；打勾後可以選顏色和透明度（選取文字方塊時改那一個，也會是之後新打的字的預設）"><input type="checkbox" class="text-bg-on" ${boardState.textBgOn ? "checked" : ""}> 加底色</label></div>
             <div class="text-bg-controls">
               <input type="color" class="text-bg-color" value="${boardState.textBgColor}" title="底色">
@@ -8482,13 +8566,13 @@
             </div>
           </div>
           <div class="popover-field-row">
-            <div class="popover-field-row-label"><span title="0＝一開始就顯示；1＝老師按第 1 次「▶」才出現，以此類推">出現時機 Appears at step</span></div>
+            <div class="popover-field-row-label"><span title="0＝一開始就顯示；1＝老師按第 1 次「▶」才出現，以此類推">動畫：第幾次點擊出現 Animation</span></div>
             ${sizeComboHtml("text-step-input", boardState.step, 0, 30, [0,1,2,3,4,5,6,7,8,9,10])}
           </div>
         </div>
       </div>
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v ${boardState.tool==='shape'?'active':''}" data-tool="shape" title="圖形 Shapes（滑鼠移入選形狀／顏色／線條粗細；拖曳畫出來，或點一下放預設大小）"><span class="tool-btn-v-icon">🔷</span><span class="tool-btn-v-label">圖形</span></button>
+        <button type="button" class="tool-btn-v ${boardState.tool==='shape'?'active':''}" data-tool="shape" title="圖形 Shapes（滑鼠移入選形狀／顏色／線條粗細；拖曳畫出來，或點一下放預設大小）"><span class="tool-btn-v-icon">🔷</span><span class="tool-btn-v-label">圖案</span></button>
         <div class="color-popover shape-popover">
           <div class="color-popover-title">圖形 Shapes</div>
           <div class="shape-type-row">
@@ -8506,7 +8590,7 @@
             ${sizeComboHtml("shape-size-input", boardState.shapeSize, 1, 40, [1,2,3,4,6,8,10,14,20])}
           </div>
           <div class="popover-field-row">
-            <div class="popover-field-row-label"><span>濃淡 Opacity</span><b id="shape-opacity-value">${Math.round((boardState.shapeOpacity==null?1:boardState.shapeOpacity)*100)}%</b></div>
+            <div class="popover-field-row-label"><span>透明度 Transparency</span><b id="shape-opacity-value">${Math.round((boardState.shapeOpacity==null?1:boardState.shapeOpacity)*100)}%</b></div>
             <input type="range" id="shape-opacity-slider" min="10" max="100" step="5" value="${Math.round((boardState.shapeOpacity==null?1:boardState.shapeOpacity)*100)}">
           </div>
           <div class="popover-field-row">
@@ -8515,19 +8599,19 @@
         </div>
       </div>
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v" id="btn-arrange" title="排列：調整選取物件的上下層（文字／圖形／圖片）Arrange layers"><span class="tool-btn-v-icon">🗂️</span><span class="tool-btn-v-label">層級</span></button>
+        <button type="button" class="tool-btn-v" id="btn-arrange" title="排列：調整選取物件的上下層（文字／圖形／圖片）Arrange layers"><span class="tool-btn-v-icon">🗂️</span><span class="tool-btn-v-label">排列</span></button>
         <div class="color-popover arrange-popover">
-          <div class="color-popover-title">上下層 Arrange</div>
-          <button type="button" class="arrange-layers-btn" id="btn-open-layers">☰ 開啟層級面板</button>
+          <div class="color-popover-title">排列 Arrange</div>
+          <button type="button" class="arrange-layers-btn" id="btn-open-layers">☰ 開啟選取窗格</button>
           <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="front">⤒ 移到最上層</button>
-          <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="forward">↑ 上一層</button>
-          <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="backward">↓ 下一層</button>
+          <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="forward">↑ 上移一層</button>
+          <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="backward">↓ 下移一層</button>
           <button type="button" class="eraser-mode-opt arrange-opt" data-arrange="back">⤓ 移到最下層</button>
           <div class="arrange-hint">先用「文字」或「圖形」工具點選一個物件。快捷鍵：Ctrl+] 上一層、Ctrl+[ 下一層，加 Shift 移到最上／最下。</div>
         </div>
       </div>
-      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-notes" title="老師備註：這一頁只有你看得到的備註（可以隨時開關）Speaker notes — only you can see them"><span class="tool-btn-v-icon">📝</span><span class="tool-btn-v-label">備註</span></button>` : ''}
-      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-canvas-size" title="畫布大小：決定這一頁的畫布長寬比（學生端會跟著變）Canvas size"><span class="tool-btn-v-icon">📐</span><span class="tool-btn-v-label">畫布</span></button>` : ''}
+      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-notes" title="備忘稿：這一頁只有你看得到的備忘稿（老師備註，可以隨時開關）Speaker notes"><span class="tool-btn-v-icon">📝</span><span class="tool-btn-v-label">備忘稿</span></button>` : ''}
+      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-canvas-size" title="投影片設定：大小、背景顏色、範本（學生端會跟著變）Slide setup"><span class="tool-btn-v-icon">📐</span><span class="tool-btn-v-label">投影片設定</span></button>` : ''}
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v ${(boardState.tool==='stroke-eraser'||boardState.tool==='pixel-eraser')?'active':''}" id="btn-eraser" title="橡皮擦：預設整條擦掉，滑鼠移入可切換成局部擦 Eraser — hover to switch modes"><img class="tool-btn-v-icon tool-btn-v-icon-img" id="btn-eraser-icon" src="${TOOL_ICON_ERASER}" alt=""><span class="tool-btn-v-label">橡皮擦</span></button>
         <div class="color-popover">
@@ -8537,9 +8621,9 @@
         </div>
       </div>
       <div class="tool-v-sep"></div>
-      <button type="button" class="tool-btn-v" id="btn-undo" title="上一步 Undo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_UNDO}" alt=""><span class="tool-btn-v-label">上一步</span></button>
-      <button type="button" class="tool-btn-v" id="btn-redo" title="下一步 Redo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_REDO}" alt=""><span class="tool-btn-v-label">下一步</span></button>
-      <button type="button" class="tool-btn-v" id="btn-clear-draw" style="color:var(--seal);" title="清空畫布 Clear Canvas"><span class="tool-btn-v-icon">🗑️</span><span class="tool-btn-v-label">清空</span></button>
+      <button type="button" class="tool-btn-v" id="btn-undo" title="復原 Undo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_UNDO}" alt=""><span class="tool-btn-v-label">復原</span></button>
+      <button type="button" class="tool-btn-v" id="btn-redo" title="取消復原 Redo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_REDO}" alt=""><span class="tool-btn-v-label">取消復原</span></button>
+      <button type="button" class="tool-btn-v" id="btn-clear-draw" style="color:var(--seal);" title="清除全部（可以按「復原」）Clear all"><span class="tool-btn-v-icon">🗑️</span><span class="tool-btn-v-label">清除全部</span></button>
       <div class="tool-v-sep"></div>
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v" id="btn-more-tools" title="更多工具：滑鼠移入可以加入格線／底圖／移動畫面等工具 More tools"><span class="tool-btn-v-icon">➕</span><span class="tool-btn-v-label">更多</span></button>
@@ -8613,10 +8697,10 @@
       bgGroupEl = document.createElement("div"); bgGroupEl.className = "extra-tool-group";
       bgGroupEl.innerHTML = `
         <div class="tool-v-sep"></div>
-        <button type="button" class="tool-btn-v" id="btn-upload-bg" title="上傳圖片 Upload Image"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_IMAGE}" alt=""><span class="tool-btn-v-label">上傳</span></button>
-        <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除圖片 Remove Image"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清除圖片</span></button>
+        <button type="button" class="tool-btn-v" id="btn-upload-bg" title="背景圖片：上傳圖片當這一頁的背景 Background picture"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_IMAGE}" alt=""><span class="tool-btn-v-label">背景圖片</span></button>
+        <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除背景圖片 Remove background picture"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清除背景圖片</span></button>
         <input type="file" id="board-bg-file" accept="image/*" style="display:none;">`;
-      extraToolsPool.bg = { label: "上傳", icon: TOOL_ICON_IMAGE, el: bgGroupEl };
+      extraToolsPool.bg = { label: "背景圖片", icon: TOOL_ICON_IMAGE, el: bgGroupEl };
     }
 
     var panGroupEl = document.createElement("div"); panGroupEl.className = "extra-tool-group";
@@ -8716,18 +8800,28 @@
     var fixedRatio = Number(progress.canvasRatio || q.canvasRatio) || 0;
     function clampRatio(r){ return Math.max(0.3, Math.min(4, r)); }
     if(fixedRatio > 0) BOARD_ASPECT_RATIO = clampRatio(fixedRatio);
+    // 2026-10-01 投影片設定：背景顏色＋透明度（q.bgColor／q.bgOp；沒設＝預設的淺色底）
+    var pageBgColor = String(progress.bgColor || q.bgColor || ""), pageBgOp = Number(progress.bgOp != null ? progress.bgOp : (q.bgOp != null ? q.bgOp : 1));
+    if(!(pageBgOp >= 0.05 && pageBgOp <= 1)) pageBgOp = 1;
+    function applyPageBackground(){
+      if(/^#[0-9a-fA-F]{6}$/.test(pageBgColor)){
+        var r = parseInt(pageBgColor.substr(1, 2), 16), g = parseInt(pageBgColor.substr(3, 2), 16), b2 = parseInt(pageBgColor.substr(5, 2), 16);
+        cWrap.style.background = "rgba(" + r + "," + g + "," + b2 + "," + pageBgOp + ")";
+      } else cWrap.style.background = "";
+    }
 
     var stageArea = document.createElement("div");
     stageArea.className = "canvas-stage-area";
 
     var cWrap = document.createElement("div");
     cWrap.className = "canvas-stage-wrap";
+    applyPageBackground();
     // 換頁效果：只有「同一份簡報裡從別頁翻過來」才播（第一次打開、重新整理都不播）。
     var transMode = (slideSecInfo && slideSecInfo.sec.transition) || "none";
     if(transMode !== "none" && lastBoardQId && lastBoardQId !== q.id && slideSecInfo && lastBoardSecId === slideSecInfo.secId){
-      var transCls = transMode === "fade" ? "trans-fade" : (slideIndex >= lastBoardIdx ? "trans-slide-next" : "trans-slide-prev");
+      var transCls = transMode === "fade" ? "trans-fade" : (transMode === "book" ? (slideIndex >= lastBoardIdx ? "trans-book-next" : "trans-book-prev") : (slideIndex >= lastBoardIdx ? "trans-slide-next" : "trans-slide-prev"));
       cWrap.classList.add(transCls);
-      cWrap.addEventListener("animationend", function(){ cWrap.classList.remove("trans-fade", "trans-slide-next", "trans-slide-prev"); });
+      cWrap.addEventListener("animationend", function(){ cWrap.classList.remove("trans-fade", "trans-slide-next", "trans-slide-prev", "trans-book-next", "trans-book-prev"); });
     }
     lastBoardQId = q.id; lastBoardSecId = slideSecInfo ? slideSecInfo.secId : null; lastBoardIdx = slideIndex;
     // 圖片還沒載入完成、BOARD_ASPECT_RATIO 還沒校正成底圖真正比例之前，先蓋住畫布不讓人下筆
@@ -8812,21 +8906,21 @@
 
     // ===== 工具列自訂：分配到左側／上方／隱藏，並支援收合 =====
     var TB_ITEM_DEFS = [
-      { key: "fs", label: "全螢幕", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
+      { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
       { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [vToolbar.querySelector(".slide-nav-row"), vToolbar.querySelector(".slide-nav-counter")]; } },
-      { key: "transition", label: "換頁效果", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "transition", label: "轉場", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "media", label: "媒體（YouTube／音檔）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-media"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "select", label: "選取（框選／群組）", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="select"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "pen", label: "筆", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="pen"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "text", label: "文字", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="text"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "shape", label: "圖形", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="shape"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "arrange", label: "層級（上下層）", cat: "b", find: function(){ var b = vToolbar.querySelector("#btn-arrange"); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "canvassize", label: "畫布大小", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-size")]; } },
-      { key: "notes", label: "老師備註", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-notes")]; } },
+      { key: "text", label: "文字方塊", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="text"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "shape", label: "圖案", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="shape"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "arrange", label: "排列（上移／下移）", cat: "b", find: function(){ var b = vToolbar.querySelector("#btn-arrange"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "canvassize", label: "投影片設定", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-size")]; } },
+      { key: "notes", label: "備忘稿", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-notes")]; } },
       { key: "eraser", label: "橡皮擦", cat: "b", find: function(){ var b = vToolbar.querySelector("#btn-eraser"); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "undo", label: "上一步", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-undo")]; } },
-      { key: "redo", label: "下一步", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-redo")]; } },
-      { key: "clear", label: "清空", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-clear-draw")]; } }
+      { key: "undo", label: "復原", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-undo")]; } },
+      { key: "redo", label: "取消復原", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-redo")]; } },
+      { key: "clear", label: "清除全部", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-clear-draw")]; } }
     ];
     var tbItems = {};
     TB_ITEM_DEFS.forEach(function(d){
@@ -8971,7 +9065,7 @@
       function hex2rgba(h, a){ return "rgba(" + parseInt(h.substr(1,2),16) + "," + parseInt(h.substr(3,2),16) + "," + parseInt(h.substr(5,2),16) + "," + a + ")"; }
       function build(){
         panel = document.createElement("div"); panel.className = "tn-float";
-        panel.innerHTML = '<div class="tn-float-head"><span>📝 老師備註（只有老師看得到）</span><button type="button" class="tn-b-set" title="外觀設定 Style">⚙</button><button type="button" class="tn-b-col" title="收起／展開 Collapse">—</button><button type="button" class="tn-b-x" title="關閉 Close">✕</button></div><div class="tn-set" style="display:none"></div><textarea placeholder="這一頁的備註：講稿、答案、上課提示……學生端不會顯示。打完點一下別處就自動存檔。"></textarea><div class="tn-rz tn-rz-n" data-dir="n"></div><div class="tn-rz tn-rz-s" data-dir="s"></div><div class="tn-rz tn-rz-e" data-dir="e"></div><div class="tn-rz tn-rz-w" data-dir="w"></div><div class="tn-rz tn-rz-ne" data-dir="ne"></div><div class="tn-rz tn-rz-nw" data-dir="nw"></div><div class="tn-rz tn-rz-sw" data-dir="sw"></div><div class="tn-rz tn-rz-se" data-dir="se" title="拖動調整大小 Resize"></div>';
+        panel.innerHTML = '<div class="tn-float-head"><span>📝 備忘稿（只有老師看得到）</span><button type="button" class="tn-b-set" title="外觀設定 Style">⚙</button><button type="button" class="tn-b-col" title="收起／展開 Collapse">—</button><button type="button" class="tn-b-x" title="關閉 Close">✕</button></div><div class="tn-set" style="display:none"></div><textarea placeholder="這一頁的備註：講稿、答案、上課提示……學生端不會顯示。打完點一下別處就自動存檔。"></textarea><div class="tn-rz tn-rz-n" data-dir="n"></div><div class="tn-rz tn-rz-s" data-dir="s"></div><div class="tn-rz tn-rz-e" data-dir="e"></div><div class="tn-rz tn-rz-w" data-dir="w"></div><div class="tn-rz tn-rz-ne" data-dir="ne"></div><div class="tn-rz tn-rz-nw" data-dir="nw"></div><div class="tn-rz tn-rz-sw" data-dir="sw"></div><div class="tn-rz tn-rz-se" data-dir="se" title="拖動調整大小 Resize"></div>';
         var ta = panel.querySelector("textarea"); ta.value = q.teacherNote || "";
         var setBox = panel.querySelector(".tn-set"), colBtn = panel.querySelector(".tn-b-col");
         var st = loadStyle();
@@ -10337,7 +10431,7 @@
     // 2026-09-30：文字加粗。舊資料沒有 bold 欄位，一律當成加粗（跟這個功能上線前的樣子一樣，文字方塊
     // 本來就是 font-weight:700）；新打的字用工具列的「B」開關決定（boardState.bold，預設不加粗）。
     function isTextBold(t){ return t.bold === undefined ? true : !!t.bold; }
-    function applyTextBgDefaults(t){ if(boardState.textBgOn){ t.bgOn = true; t.bgColor = boardState.textBgColor; t.bgOp = boardState.textBgOp == null ? 1 : boardState.textBgOp; } }
+    function applyTextBgDefaults(t){ if(boardState.lineH && Math.abs(boardState.lineH - 1) > 0.001) t.lh = boardState.lineH; if(boardState.textBgOn){ t.bgOn = true; t.bgColor = boardState.textBgColor; t.bgOp = boardState.textBgOp == null ? 1 : boardState.textBgOp; } }
     function textBgRgba(hex, a){ var h = /^#[0-9a-fA-F]{6}$/.test(hex || "") ? hex : "#FFF3B0"; return "rgba(" + parseInt(h.substr(1, 2), 16) + "," + parseInt(h.substr(3, 2), 16) + "," + parseInt(h.substr(5, 2), 16) + "," + (a == null ? 1 : a) + ")"; }
 
     function renderTexts(){
@@ -10375,6 +10469,8 @@
           <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</div>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
+        // 行距（預設 100%）：有注音（ruby）的文字本來行高就是 2.15，行距是在預設行高上再乘倍數
+        if(t.lh && Math.abs(t.lh - 1) > 0.001){ var baseLh = div.querySelector("ruby") ? 2.15 : 1; div.style.lineHeight = String(Math.round(baseLh * t.lh * 1000) / 1000); }
 
         // 2026-09-30 新增：多音字（例如「誰」）自動產生的拼音／注音不一定是老師要的常用讀音，
         // 點一下字上方的注音就能自己改成想要的讀音，改完存在 t.phoneticOverride（跟 t.text 一起
@@ -10385,10 +10481,10 @@
         // <rt> 之外還包含那個漢字本身的文字節點，瀏覽器 elementFromPoint 對著漢字點下去，命中的
         // 也是外層的 <ruby>，如果整個 <ruby> 都攔截，會連「點在字上準備拖曳整個文字方塊」都被
         // 誤判成要編輯注音，導致文字方塊完全拖不動。
-        div.querySelectorAll(".text-content rt").forEach(function(rtEl){
+        div.querySelectorAll(".text-content rt, .text-content .zy-s").forEach(function(rtEl){
           rtEl.onpointerdown = function(e){
             e.stopPropagation(); e.preventDefault();
-            var rubyEl = rtEl.closest("ruby");
+            var rubyEl = rtEl.closest("ruby, .zy-r");
             var idx = Number(rubyEl.dataset.phIdx);
             var curVal = rtEl.textContent;
             var rubyRect = rubyEl.getBoundingClientRect();
@@ -10400,13 +10496,13 @@
             showInlineTextInput(cWrap, editorPos, function(newVal){
               snapshotForUndo();
               if(!Array.isArray(t.phoneticOverride)) t.phoneticOverride = [];
-              var trimmed = (newVal || "").trim();
+              var trimmed = convertToneDigits((newVal || "").trim()); // ni3 → nǐ（數字聲調自動轉換）
               // 清空輸入框＝恢復自動判斷的讀音，不是「這個字不要注音」——真的不想要這個字有注音，
               // 用橡皮擦把整個文字方塊擦掉重打會更清楚，不會跟「打字漏打」混在一起。
               t.phoneticOverride[idx] = trimmed === "" ? null : trimmed;
               writeProgress(q.id, { texts: texts });
               renderTexts();
-            }, curVal, "自訂這個字的拼音／注音，留空＝恢復自動判斷");
+            }, curVal, "自訂拼音／注音（聲調可打數字：ni3→nǐ；1～4聲、0輕聲），留空＝恢復自動判斷");
           };
         });
 
@@ -10477,6 +10573,7 @@
           if(stepInputSync) stepInputSync.value = String(t.step || 0);
           syncTextFmtUi(t.align || "left", t.list || "none");
           if(typeof syncTextBgUi === "function") syncTextBgUi(t);
+          if(lhInputEl) lhInputEl.value = String(Math.round((t.lh || 1) * 100));
           snapshotForUndo(); // 在拖動開始「之前」存一份快照，上一步就能整個復原成拖動前的位置
 
           var startX = e.clientX, startY = e.clientY;
@@ -11118,8 +11215,21 @@
     // 畫布同樣改用 Pointer Events：iPad 上不管是手指觸控還是 Apple Pencil，都會統一走這一套事件，
     // 不再只認滑鼠事件。按下時用 setPointerCapture 鎖定畫筆事件在 canvas 上，移動再快、再貼近邊緣，
     // 都不會被系統手勢（例如捲動／縮放）打斷這一筆的繪製。
+    // 按住滑鼠「右鍵」拖曳＝框選（跟 PowerPoint 一樣，不管目前是哪個工具）：自動切到「選取」工具並開始框選
+    function switchToSelectTool(){
+      if(boardState.tool === "select") return;
+      boardState.tool = "select";
+      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){ if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active"); });
+      var sb = vToolbar.querySelector('button[data-tool="select"]'); if(sb) sb.classList.add("active");
+      canvas.style.cursor = toolCursor(); clearObjSelection(); syncObjInteractive();
+    }
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
+      if(e.pointerType === "mouse" && e.button === 2){
+        e.preventDefault(); try{ canvas.setPointerCapture(e.pointerId); }catch(er){}
+        switchToSelectTool(); startSelectInteraction(e, getPos(e));
+        return;
+      }
       if(Date.now() - inlineInputClosedAt < 150){ e.preventDefault(); return; } // 這一下點擊只是「確認剛打的文字」，不要順便畫線／開新輸入框
       if(e.pointerType === "pen") stylusEverUsed = true;
 
@@ -11343,6 +11453,20 @@
       });
     }
 
+    // 行距：有選取的文字方塊就改那一個，同時記成之後新打的字的預設
+    var lhInputEl = vToolbar.querySelector(".text-lh-input");
+    if(lhInputEl){
+      bindSizeCombo(lhInputEl.closest(".size-combo"), function(n){
+        boardState.lineH = n / 100;
+        var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
+        if(selObj){
+          snapshotForUndo();
+          if(Math.abs(boardState.lineH - 1) < 0.001) delete selObj.lh; else selObj.lh = boardState.lineH;
+          writeProgress(q.id, { texts: texts });
+          renderTexts();
+        }
+      });
+    }
     // 文字框底色（預設不加）：勾選＝加底色，顏色與透明度可調。選取文字方塊時改那一個，同時記成之後新打的字的預設。
     var bgOnEl = vToolbar.querySelector(".text-bg-on"), bgColorEl = vToolbar.querySelector(".text-bg-color"), bgOpEl = vToolbar.querySelector(".text-bg-op"), bgOpvEl = vToolbar.querySelector(".text-bg-opv");
     function selectedTextObj(){ return activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null; }
@@ -11727,7 +11851,7 @@
     function toggleLayersPanel(on){
       if(!layersPanel){
         layersPanel = document.createElement("div"); layersPanel.className = "layers-panel"; layersPanel.style.display = "none";
-        layersPanel.innerHTML = '<div class="lp-head"><span>☰ 層級 Layers（上＝最上層）</span><button type="button" class="lp-x" title="關閉">✕</button></div><div class="lp-body"></div><div class="lp-foot">點一列＝選取那個東西（被蓋住的也選得到）；用按鈕或拖曳調整上下層。筆跡是另外一整層，不在這個清單裡。</div>';
+        layersPanel.innerHTML = '<div class="lp-head"><span>☰ 選取窗格 Selection Pane（上＝最上層）</span><button type="button" class="lp-x" title="關閉">✕</button></div><div class="lp-body"></div><div class="lp-foot">點一列＝選取那個東西（被蓋住的也選得到）；用按鈕或拖曳調整上下層。筆跡是另外一整層，不在這個清單裡。</div>';
         layersPanel.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
         layersPanel.querySelector(".lp-x").onclick = function(){ toggleLayersPanel(false); };
         var head = layersPanel.querySelector(".lp-head");
@@ -11764,16 +11888,68 @@
       writeProgress(q.id, { canvasRatio: fixedRatio > 0 ? q.canvasRatio : null });
       writeSections(getSections());
     }
-    function openCanvasSizeDialog(){
+    function setPageBackground(color, op){
+      pageBgColor = color || ""; pageBgOp = (op >= 0.05 && op <= 1) ? op : 1;
+      applyPageBackground();
+      if(pageBgColor){ q.bgColor = pageBgColor; q.bgOp = Math.round(pageBgOp * 100) / 100; } else { delete q.bgColor; delete q.bgOp; }
+      writeProgress(q.id, { bgColor: pageBgColor || null, bgOp: pageBgColor ? q.bgOp : null });
+      writeSections(getSections());
+    }
+    function setGridTypeFromSetup(g){
+      gridOverlay.className = "grid-overlay" + (g === 'tian' ? ' grid-tian' : (g === 'jiu' ? ' grid-jiu' : ''));
+      gridOverlay.style.display = g === 'none' ? 'none' : 'block';
+      positionGridOverlay();
+      vToolbar.querySelectorAll(".grid-btn-v").forEach(function(gb){ gb.classList.toggle("active", gb.dataset.grid === g); });
+      writeProgress(q.id, { gridType: g });
+    }
+    // 範本：套用時「新增」文字方塊／圖案到這一頁（不刪掉你已經寫的東西，可以按「復原」），座標是佔頁面的百分比、字級是 640 寬單位
+    var SLIDE_TEMPLATES = [
+      { name: "空白", desc: "什麼都沒有", objs: [] },
+      { name: "標題投影片", desc: "大標題＋副標題", objs: [
+        { t: "點兩下編輯標題", x: 50, y: 38, fs: 46, b: true, a: "center" }, { t: "副標題", x: 50, y: 58, fs: 22, c: "#6B5F55", a: "center" } ] },
+      { name: "標題與內容", desc: "標題＋項目符號內容", objs: [
+        { t: "標題", x: 50, y: 13, fs: 34, b: true, a: "center" }, { t: "第一點\n第二點\n第三點", x: 32, y: 48, fs: 24, a: "left", list: "bullet" } ] },
+      { name: "兩欄內容", desc: "標題＋左右兩欄", objs: [
+        { t: "標題", x: 50, y: 13, fs: 34, b: true, a: "center" },
+        { t: "左欄第一點\n左欄第二點", x: 27, y: 50, fs: 22, a: "left", list: "bullet" }, { t: "右欄第一點\n右欄第二點", x: 73, y: 50, fs: 22, a: "left", list: "bullet" } ] },
+      { name: "圖片與說明", desc: "左邊放圖片（貼上即可）、右邊說明", objs: [
+        { shape: { type: "rect", x: 7, y: 18, w: 42, h: 64, color: "#B9AFA5", sw: 2 } }, { t: "在這裡貼上圖片（Ctrl／⌘+V）", x: 28, y: 50, fs: 16, c: "#8A7F75", a: "center" },
+        { t: "標題", x: 74, y: 30, fs: 30, b: true, a: "center" }, { t: "說明文字", x: 74, y: 52, fs: 20, a: "center" } ] },
+      { name: "大字卡", desc: "一個超大的字或詞", objs: [ { t: "字", x: 50, y: 50, fs: 150, b: true, a: "center" } ] },
+      { name: "生字練習（田字格）", desc: "標題＋田字格", grid: "tian", objs: [ { t: "生字練習", x: 50, y: 8, fs: 26, b: true, a: "center" } ] },
+      { name: "對話", desc: "A／B 兩行對話", objs: [
+        { t: "A：", x: 14, y: 34, fs: 30, b: true, a: "left" }, { t: "B：", x: 14, y: 58, fs: 30, b: true, a: "left" } ] }
+    ];
+    function applySlideTemplate(tp, clearFirst){
+      snapshotForUndo();
+      if(clearFirst){ texts = []; shapes = []; images = []; groups = []; selSet = []; }
+      tp.objs.forEach(function(o){
+        if(o.shape){
+          var sh = Object.assign({ id: uid("sh"), fx: false, fy: false, fill: false, op: 1, step: 0 }, o.shape);
+          assignNewZ("shape", sh); shapes.push(sh);
+        } else {
+          var t = { id: uid("t"), text: o.t, x: o.x, y: o.y, color: o.c || "#2B2320", fontSize: o.fs, bold: !!o.b, step: 0, align: o.a || "left", list: o.list || "none" };
+          if(boardState.lineH && Math.abs(boardState.lineH - 1) > 0.001) t.lh = boardState.lineH;
+          assignNewZ("text", t); texts.push(t);
+        }
+      });
+      if(tp.grid) setGridTypeFromSetup(tp.grid);
+      localSelfSeq++;
+      writeProgress(q.id, { texts: texts, shapes: shapes, images: images, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+      renderTexts();
+    }
+    function openSlideSetupDialog(){
       var back = document.createElement("div"); back.className = "tb-modal-back";
-      var modal = document.createElement("div"); modal.className = "tb-modal"; back.appendChild(modal);
-      var PRESETS = [["自動（有底圖用底圖比例，否則 3:2）", 0], ["16:9 寬螢幕", 16 / 9], ["16:10", 16 / 10], ["3:2", 3 / 2], ["4:3 投影片", 4 / 3], ["1:1 正方形", 1], ["3:4 直式", 3 / 4], ["9:16 直式手機", 9 / 16], ["A4 橫式", 297 / 210], ["A4 直式", 210 / 297]];
+      var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(560px,94vw)"; back.appendChild(modal);
+      var PRESETS = [["自動（有背景圖用圖片比例，否則 3:2）", 0], ["16:9 寬螢幕", 16 / 9], ["16:10", 16 / 10], ["3:2", 3 / 2], ["4:3 標準", 4 / 3], ["1:1 正方形", 1], ["3:4 直式", 3 / 4], ["9:16 直式手機", 9 / 16], ["A4 橫式", 297 / 210], ["A4 直式", 210 / 297]];
+      function sec(title){ var d = document.createElement("div"); d.className = "tb-sec-title"; d.style.marginTop = "14px"; d.textContent = title; modal.appendChild(d); }
       function render(){
-        modal.innerHTML = '<h3>📐 畫布大小 Canvas size</h3><div class="tb-hint">決定這一頁畫布的「長寬比」，學生端會跟著變。畫布一律在舞台區裡置中、盡量放大；舞台區其餘的空白處也能寫字。改比例不會移動已經放好的東西（位置是佔畫布的百分比，會跟著畫布伸縮）。</div>';
-        var grid = document.createElement("div"); grid.style.cssText = "display:flex;flex-direction:column;gap:6px;margin:10px 0;";
+        modal.innerHTML = '<h3>📐 投影片設定 Slide Setup</h3><div class="tb-hint">這一頁的大小、背景和範本。學生端會即時跟著變；改大小不會移動已經放好的東西（位置是佔整頁的百分比，會跟著伸縮）；舞台區其餘的空白處也能寫字。</div>';
+        sec("投影片大小 Slide size");
+        var grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0;";
         PRESETS.forEach(function(pr){
           var on = pr[1] === 0 ? !(fixedRatio > 0) : (fixedRatio > 0 && Math.abs(fixedRatio - pr[1]) < 0.002);
-          var bt = document.createElement("button"); bt.type = "button"; bt.className = "tb-row"; bt.style.cssText = "cursor:pointer;justify-content:space-between;" + (on ? "border-color:var(--seal);background:var(--seal-soft);font-weight:700;" : "");
+          var bt = document.createElement("button"); bt.type = "button"; bt.className = "tb-row"; bt.style.cssText = "cursor:pointer;justify-content:space-between;margin:0;font-size:12.5px;" + (on ? "border-color:var(--seal);background:var(--seal-soft);font-weight:700;" : "");
           bt.innerHTML = '<span>' + pr[0] + '</span><span>' + (on ? "✓" : "") + '</span>';
           bt.onclick = function(){ setCanvasRatio(pr[1]); render(); };
           grid.appendChild(bt);
@@ -11781,13 +11957,46 @@
         modal.appendChild(grid);
         var cu = document.createElement("div"); cu.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;";
         var curW = fixedRatio > 0 ? Math.round(fixedRatio * 100) / 100 : 3, curH = fixedRatio > 0 ? 1 : 2;
-        cu.innerHTML = '自訂 Custom：寬 <input type="number" class="cs-w" min="1" max="100" step="0.1" value="' + curW + '" style="width:70px;padding:4px 6px;"> : 高 <input type="number" class="cs-h" min="1" max="100" step="0.1" value="' + curH + '" style="width:70px;padding:4px 6px;"> <button type="button" class="cs-apply tb-row" style="cursor:pointer;padding:5px 12px;">套用</button>';
+        cu.innerHTML = '自訂：寬 <input type="number" class="cs-w" min="1" max="100" step="0.1" value="' + curW + '" style="width:70px;padding:4px 6px;"> : 高 <input type="number" class="cs-h" min="1" max="100" step="0.1" value="' + curH + '" style="width:70px;padding:4px 6px;"> <button type="button" class="cs-apply tb-row" style="cursor:pointer;padding:5px 12px;margin:0;">套用</button>';
         cu.querySelector(".cs-apply").onclick = function(){
           var w = parseFloat(cu.querySelector(".cs-w").value), h = parseFloat(cu.querySelector(".cs-h").value);
           if(!(w > 0) || !(h > 0)){ alert("請輸入大於 0 的寬與高。"); return; }
           setCanvasRatio(w / h); render();
         };
         modal.appendChild(cu);
+
+        sec("背景 Background");
+        var bgRow = document.createElement("div"); bgRow.style.cssText = "display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin-top:8px;";
+        var hasBg = /^#[0-9a-fA-F]{6}$/.test(pageBgColor);
+        bgRow.innerHTML = '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" class="bg-on" ' + (hasBg ? "checked" : "") + '> 純色背景</label>' +
+          '<input type="color" class="bg-color" value="' + (hasBg ? pageBgColor : "#FFF8E6") + '" style="width:40px;height:30px;padding:0;border:1.5px solid rgba(28,33,30,.2);border-radius:6px;cursor:pointer;">' +
+          '<span>透明度</span><input type="range" class="bg-op" min="5" max="100" step="5" value="' + Math.round(pageBgOp * 100) + '" style="width:130px;"><b class="bg-opv">' + Math.round(pageBgOp * 100) + '%</b>';
+        var bgOn = bgRow.querySelector(".bg-on"), bgCol = bgRow.querySelector(".bg-color"), bgOp = bgRow.querySelector(".bg-op"), bgOpv = bgRow.querySelector(".bg-opv");
+        function commitBg(){ bgOpv.textContent = bgOp.value + "%"; setPageBackground(bgOn.checked ? bgCol.value : "", Number(bgOp.value) / 100); }
+        bgOn.onchange = commitBg;
+        bgCol.oninput = function(){ if(!bgOn.checked) bgOn.checked = true; commitBg(); };
+        bgOp.oninput = function(){ if(!bgOn.checked) bgOn.checked = true; commitBg(); };
+        modal.appendChild(bgRow);
+        var sw = document.createElement("div"); sw.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;";
+        ["#FFFFFF", "#FFF8E6", "#EAF4FF", "#EAF8EE", "#FFEFF3", "#F3EEFF", "#2B2320", "#1E3A5F"].forEach(function(c){
+          var b2 = document.createElement("button"); b2.type = "button"; b2.title = c; b2.style.cssText = "width:26px;height:26px;border-radius:50%;border:1.5px solid rgba(0,0,0,.3);cursor:pointer;padding:0;background:" + c;
+          b2.onclick = function(){ bgOn.checked = true; bgCol.value = c; commitBg(); };
+          sw.appendChild(b2);
+        });
+        modal.appendChild(sw);
+        var bgHint = document.createElement("div"); bgHint.className = "tb-hint"; bgHint.style.marginTop = "6px"; bgHint.textContent = "沒有勾選＝預設的淺色底。有背景圖片的投影片，背景顏色會墊在圖片下面（圖片是透明或比較小的時候才看得到）。"; modal.appendChild(bgHint);
+
+        sec("範本 Layouts");
+        var tpHint = document.createElement("div"); tpHint.className = "tb-hint"; tpHint.textContent = "按一下範本＝把範本的文字方塊／圖案「加到這一頁」，不會刪掉你已經放的東西（不喜歡可以按「復原」）。"; modal.appendChild(tpHint);
+        var clr = document.createElement("label"); clr.style.cssText = "display:flex;align-items:center;gap:6px;font-size:12.5px;margin:6px 0;cursor:pointer;"; clr.innerHTML = '<input type="checkbox" class="tp-clear"> 套用前先清除這一頁的文字、圖案、圖片（筆跡不動）'; modal.appendChild(clr);
+        var tg = document.createElement("div"); tg.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:6px;";
+        SLIDE_TEMPLATES.forEach(function(tp){
+          var bt = document.createElement("button"); bt.type = "button"; bt.className = "tb-row"; bt.style.cssText = "cursor:pointer;flex-direction:column;align-items:flex-start;gap:2px;margin:0;";
+          bt.innerHTML = '<b style="font-size:13px;">' + tp.name + '</b><span style="font-size:11.5px;color:var(--ink-soft);">' + tp.desc + '</span>';
+          bt.onclick = function(){ applySlideTemplate(tp, modal.querySelector(".tp-clear").checked); back.remove(); };
+          tg.appendChild(bt);
+        });
+        modal.appendChild(tg);
         var foot = document.createElement("div"); foot.className = "tb-foot";
         var done = document.createElement("button"); done.className = "primary"; done.textContent = "完成"; done.onclick = function(){ back.remove(); };
         foot.appendChild(done); modal.appendChild(foot);
@@ -11795,7 +12004,7 @@
       back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
       render(); document.body.appendChild(back);
     }
-    if(canvasSizeBtn) canvasSizeBtn.addEventListener("click", function(e){ e.stopPropagation(); openCanvasSizeDialog(); });
+    if(canvasSizeBtn) canvasSizeBtn.addEventListener("click", function(e){ e.stopPropagation(); openSlideSetupDialog(); });
 
     vToolbar.querySelectorAll(".arrange-opt").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); arrangeSelected(b.dataset.arrange); }; });
     var shapeFillBtn = vToolbar.querySelector(".shape-fill-btn");
@@ -11924,9 +12133,9 @@
     var canvasZoom = 1, canvasPanX = 0, canvasPanY = 0;
     var zoomCtrl = document.createElement("div"); zoomCtrl.className = "canvas-zoom-ctrl";
     zoomCtrl.innerHTML = `
-      <button type="button" id="btn-canvas-zoom-out" title="畫布縮放：縮小 Canvas zoom (zoom into the board/image) — Zoom out">－</button>
-      <span id="canvas-zoom-pct" title="🎨 畫布縮放：只放大這塊畫布本身（方便看清底圖細節、搭配移動工具拖曳），點擊回到 100% Canvas zoom — zooms only this board/canvas. Click to reset zoom &amp; pan">🎨 100%</span>
-      <button type="button" id="btn-canvas-zoom-in" title="畫布縮放：放大 Canvas zoom (zoom into the board/image) — Zoom in">＋</button>
+      <button type="button" id="btn-canvas-zoom-out" title="縮放：縮小 Zoom (zoom into the board/image) — Zoom out">－</button>
+      <span id="canvas-zoom-pct" title="🎨 縮放：只放大這塊畫布本身（方便看清底圖細節、搭配移動工具拖曳），點擊回到 100% Zoom — zooms only this board/canvas. Click to reset zoom &amp; pan">🎨 100%</span>
+      <button type="button" id="btn-canvas-zoom-in" title="縮放：放大 Zoom (zoom into the board/image) — Zoom in">＋</button>
     `;
     stageArea.appendChild(zoomCtrl);
     var zoomPctEl = zoomCtrl.querySelector("#canvas-zoom-pct");
@@ -12021,6 +12230,9 @@
       medias = freshProgress.medias || [];
       var freshGrid = freshProgress.gridType || q.gridType || "none";
       var freshBg = freshProgress.bgImage || q.bgImage || "";
+      var freshBgColor = String(freshProgress.bgColor || q.bgColor || ""), freshBgOp = Number(freshProgress.bgOp != null ? freshProgress.bgOp : (q.bgOp != null ? q.bgOp : 1));
+      if(!(freshBgOp >= 0.05 && freshBgOp <= 1)) freshBgOp = 1;
+      if(freshBgColor !== pageBgColor || freshBgOp !== pageBgOp){ pageBgColor = freshBgColor; pageBgOp = freshBgOp; applyPageBackground(); }
       var freshFixed = Number(freshProgress.canvasRatio || q.canvasRatio) || 0;
       if(freshFixed !== fixedRatio){
         // 老師改了畫布大小：學生端（和老師的另一台裝置）即時跟著變
