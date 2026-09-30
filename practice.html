@@ -1674,6 +1674,8 @@
           <div class="bank-menu-pop" id="add-slide-menu-pop">
             <button type="button" class="bank-menu-item" id="btn-new-slide" title="新增一張空白投影片（不是題目，是上課內容，可以直接畫記／貼圖）Add a blank slide — not a question, just teaching content you can draw or paste on">🖼️ 空白投影片 Blank Slide</button>
             <button type="button" class="bank-menu-item" id="btn-import-slides-top" title="匯入簡報：選 PowerPoint（.pptx，文字／圖片／圖案／音檔會變成可編輯的物件）或 PDF（每一頁變成一張底圖）。舊的 .ppt 請先另存成 .pptx。 Import a .pptx (editable objects) or a PDF (one image per page)">📥 匯入簡報（PowerPoint .pptx／PDF）Import Slides</button>
+            <button type="button" class="bank-menu-item" id="btn-export-pptx" title="把目前這份簡報匯出成 PowerPoint（.pptx）：文字、圖片、圖案可以在 PowerPoint 裡編輯；手寫筆跡會合成一張透明圖片。">📤 匯出成 PowerPoint（.pptx）Export</button>
+            <button type="button" class="bank-menu-item" id="btn-export-pdf" title="把目前這份簡報每一頁匯出成一份 PDF（可以當講義發給學生）。">📤 匯出成 PDF（講義）Export PDF</button>
           </div>
         </div>
         <input type="file" id="import-slides-top-file" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none;">
@@ -6235,19 +6237,22 @@
       });
     });
   }
-  function drawSlideThumb(q, cb){
+  function drawSlideThumb(q, cb, W0, asCanvas){
     var prog = getProgress(q.id) || {};
     var bg = prog.bgImage || q.bgImage || "";
     var imgs = prog.images || [];
     Promise.all([loadThumbImg(bg)].concat(imgs.map(function(im){ return loadThumbImg(im.src); }))).then(function(loaded){
       var bgImg = loaded[0];
-      var ratio = bgImg ? Math.max(0.4, Math.min(3, bgImg.naturalWidth / bgImg.naturalHeight)) : 1.5;
-      var W = 192, H = Math.max(40, Math.round(W / ratio));
+      var fr0 = Number(prog.canvasRatio || q.canvasRatio) || 0;
+      var ratio = fr0 > 0 ? fr0 : (bgImg ? Math.max(0.4, Math.min(3, bgImg.naturalWidth / bgImg.naturalHeight)) : 1.5);
+      var W = W0 || 192, H = Math.max(40, Math.round(W / ratio));
       var c = document.createElement("canvas"); c.width = W; c.height = H;
       var x = c.getContext("2d");
       x.fillStyle = "#FFFCF7"; x.fillRect(0, 0, W, H);
-      var tbc = prog.bgColor || q.bgColor || "";
-      if(/^#[0-9a-fA-F]{6}$/.test(tbc)){ x.save(); x.globalAlpha = (prog.bgOp != null ? prog.bgOp : (q.bgOp != null ? q.bgOp : 1)); x.fillStyle = tbc; x.fillRect(0, 0, W, H); x.restore(); }
+      var tbc = prog.bgColor || q.bgColor || "", tbo = (prog.bgOp != null ? prog.bgOp : (q.bgOp != null ? q.bgOp : 1));
+      var fsec = findSectionForQuestion(q.id), mst = (fsec && fsec.sec.master) || null;
+      if(!/^#[0-9a-fA-F]{6}$/.test(tbc) && mst && /^#[0-9a-fA-F]{6}$/.test(mst.bgColor || "")){ tbc = mst.bgColor; tbo = mst.bgOp != null ? mst.bgOp : 1; }
+      if(/^#[0-9a-fA-F]{6}$/.test(tbc)){ x.save(); x.globalAlpha = tbo; x.fillStyle = tbc; x.fillRect(0, 0, W, H); x.restore(); }
       if(bgImg){
         var s0 = Math.min(W / bgImg.naturalWidth, H / bgImg.naturalHeight);
         var bw0 = bgImg.naturalWidth * s0, bh0 = bgImg.naturalHeight * s0;
@@ -6291,14 +6296,32 @@
         var widths = lines.map(function(ln){ return x.measureText(ln).width; });
         var bw = Math.max.apply(null, widths.concat([1]));
         var left = t.x / 100 * W - bw / 2, top = t.y / 100 * H - lines.length * lh / 2;
+        if(t.bgOn && /^#[0-9a-fA-F]{6}$/.test(t.bgColor || "")){ x.save(); x.globalAlpha = (t.bgOp == null ? 1 : t.bgOp); x.fillStyle = t.bgColor; x.fillRect(left - fs * 0.4, top - fs * 0.1, bw + fs * 0.8, lines.length * lh + fs * 0.2); x.restore(); }
+        if(t.bdW > 0){ x.save(); x.strokeStyle = t.bdC || "#333"; x.lineWidth = t.bdW * sc; x.strokeRect(left - fs * 0.4, top - fs * 0.1, bw + fs * 0.8, lines.length * lh + fs * 0.2); x.restore(); }
         lines.forEach(function(ln, i){
           var ax = left;
           if(t.align === "center") ax = left + (bw - widths[i]) / 2; else if(t.align === "right") ax = left + bw - widths[i];
           x.fillText(ln, ax, top + i * lh);
         });
       });
-      var url; try{ url = c.toDataURL("image/jpeg", 0.7); }catch(e){ url = THUMB_BLANK; }
-      cb(url);
+      if(mst){
+        var msc = W / 640; x.save(); x.textBaseline = "alphabetic";
+        function mtxt(tx, cfg){ x.font = "400 " + (cfg.size || 16) * msc + 'px "LXGW WenKai TC", serif'; x.fillStyle = cfg.color || "#7A7A7A"; var w2 = x.measureText(tx).width, pos = cfg.pos || "c"; x.fillText(tx, pos === "l" ? W * 0.03 : pos === "r" ? W * 0.97 - w2 : (W - w2) / 2, H * 0.985 - 2 * msc); }
+        if(mst.footer && mst.footer.text) mtxt(mst.footer.text, mst.footer);
+        if(mst.pageNum && mst.pageNum.on && fsec){ var ks = getSortedQuestionKeys(fsec.sec); mtxt(String(ks.indexOf(q.id) + 1) + (mst.pageNum.total ? " / " + ks.length : ""), mst.pageNum); }
+        x.restore();
+      }
+      function finish(){
+        if(asCanvas){ cb(c); return; }
+        var url; try{ url = c.toDataURL("image/jpeg", 0.7); }catch(e){ url = THUMB_BLANK; }
+        cb(url);
+      }
+      if(mst && mst.logo && mst.logo.src){
+        loadThumbImg(mst.logo.src).then(function(lg){
+          if(lg){ var lw = W * (mst.logo.w || 10) / 100, lh = lw * lg.naturalHeight / lg.naturalWidth, cn = mst.logo.corner || "tr"; x.drawImage(lg, cn[1] === "l" ? W * 0.02 : W * 0.98 - lw, cn[0] === "t" ? H * 0.025 : H * 0.975 - lh, lw, lh); }
+          finish();
+        });
+      } else finish();
     });
   }
   function applySlideThumb(qId, url){
@@ -6608,6 +6631,187 @@
   document.addEventListener("keydown", function(e){
     if((e.ctrlKey || e.metaKey) && (e.key === "h" || e.key === "H") && !isStudent){ e.preventDefault(); openFindReplace(); }
   });
+  /* ===== 匯出簡報：PDF（每頁一張圖，當講義）／PowerPoint .pptx（文字、圖片、圖案是可編輯的物件；手寫筆跡合成一張透明圖）===== */
+  function exportDeckInfo(){
+    var cur = getCurrentQInfo(), found = cur ? findSectionForQuestion(cur.question.id) : null;
+    if(!found || found.sec.type !== "board"){ alert("請先點開一份「小白板」簡報（左邊列表裡的任何一張投影片），再按匯出。\nOpen a whiteboard deck first."); return null; }
+    var keys = getSortedQuestionKeys(found.sec);
+    return { secId: found.secId, sec: found.sec, slides: keys.map(function(k){ return found.sec.questions[k]; }) };
+  }
+  function mmDownloadBlob(blob, name){
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  }
+  function mmSafeName(s){ return String(s || "簡報").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 60); }
+  function dataUrlToBytes(u){ var b = atob(u.split(",")[1]), a = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  async function exportDeckPdf(){
+    var info = exportDeckInfo(); if(!info) return;
+    var bar = document.createElement("div"); bar.className = "import-slides-toast"; bar.textContent = "正在產生 PDF…"; document.body.appendChild(bar);
+    try{
+      var pages = [];
+      for(var i = 0; i < info.slides.length; i++){
+        bar.textContent = "正在產生 PDF… " + (i + 1) + " / " + info.slides.length;
+        var cv = await new Promise(function(res){ drawSlideThumb(info.slides[i], res, 1600, true); });
+        pages.push({ w: cv.width, h: cv.height, jpg: dataUrlToBytes(cv.toDataURL("image/jpeg", 0.88)) });
+      }
+      var enc = new TextEncoder(), parts = [], offsets = [], len = 0;
+      function put(x){ var b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); len += b.length; }
+      function obj(n, body){ offsets[n] = len; put(n + " 0 obj\n"); if(typeof body === "string") put(body); else { put(body.head); put(body.data); put("\nendstream"); } put("\nendobj\n"); }
+      put("%PDF-1.4\n");
+      var n = pages.length, kids = pages.map(function(_, i){ return (3 + i * 3) + " 0 R"; }).join(" ");
+      obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+      obj(2, "<< /Type /Pages /Kids [" + kids + "] /Count " + n + " >>");
+      pages.forEach(function(pg, i){
+        var pw = 842, ph = Math.round(842 * pg.h / pg.w * 100) / 100, id = 3 + i * 3;
+        obj(id, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + pw + " " + ph + "] /Resources << /XObject << /Im0 " + (id + 2) + " 0 R >> >> /Contents " + (id + 1) + " 0 R >>");
+        var cs = "q " + pw + " 0 0 " + ph + " 0 0 cm /Im0 Do Q";
+        obj(id + 1, { head: "<< /Length " + cs.length + " >>\nstream\n", data: enc.encode(cs) });
+        obj(id + 2, { head: "<< /Type /XObject /Subtype /Image /Width " + pg.w + " /Height " + pg.h + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + pg.jpg.length + " >>\nstream\n", data: pg.jpg });
+      });
+      var xrefAt = len, total = 3 + n * 3;
+      put("xref\n0 " + total + "\n0000000000 65535 f \n");
+      for(var k = 1; k < total; k++) put(String(offsets[k]).padStart(10, "0") + " 00000 n \n");
+      put("trailer\n<< /Size " + total + " /Root 1 0 R >>\nstartxref\n" + xrefAt + "\n%%EOF");
+      mmDownloadBlob(new Blob(parts, { type: "application/pdf" }), mmSafeName(info.sec.title) + ".pdf");
+    }catch(err){ console.error(err); alert("匯出 PDF 失敗：" + (err && err.message ? err.message : err)); }
+    bar.remove();
+  }
+  async function exportDeckPptx(){
+    var info = exportDeckInfo(); if(!info) return;
+    if(typeof JSZip === "undefined"){ alert("匯出元件還沒載入，請稍後再試。"); return; }
+    var bar = document.createElement("div"); bar.className = "import-slides-toast"; bar.textContent = "正在產生 PowerPoint…"; document.body.appendChild(bar);
+    try{
+      var XE = function(t){ return String(t == null ? "" : t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
+      var hex6 = function(c, d){ return (typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c)) ? c.slice(1).toUpperCase() : d; };
+      var zip = new JSZip(), WE = 12192000;
+      var zf = function(n, d){ zip.file(n, d, { createFolders: false }); };
+      var slideRatios = [], mediaN = 0, contentImgExt = {};
+      var slideXmls = [], slideRels = [];
+      for(var si = 0; si < info.slides.length; si++){
+        bar.textContent = "正在產生 PowerPoint… " + (si + 1) + " / " + info.slides.length;
+        var q = info.slides[si], prog = getProgress(q.id) || {};
+        var bgRef = prog.bgImage || q.bgImage || "", bgEl = await loadThumbImg(bgRef);
+        var fr = Number(prog.canvasRatio || q.canvasRatio) || 0;
+        var ratio = fr > 0 ? fr : (bgEl ? Math.max(0.4, Math.min(3, bgEl.naturalWidth / bgEl.naturalHeight)) : 1.5);
+        var HE = Math.round(WE / ratio); slideRatios.push(HE);
+        var rels = [], shapesXml = [], nid = 2;
+        var X = function(pct){ return Math.round(pct / 100 * WE); }, Y = function(pct){ return Math.round(pct / 100 * HE); };
+        async function addPic(dataUrlOrRef, xEmu, yEmu, wEmu, hEmu, crop, name){
+          var du = await refToDataUrl(dataUrlOrRef); if(!du) return;
+          var mime = (du.match(/^data:([^;,]+)/) || [])[1] || "image/png";
+          var bytes;
+          if(mime === "image/png" || mime === "image/jpeg"){ bytes = dataUrlToBytes(du); }
+          else { var im = new Image(); im.src = du; try{ await im.decode(); }catch(_){ return; } var c2 = document.createElement("canvas"); c2.width = im.naturalWidth; c2.height = im.naturalHeight; c2.getContext("2d").drawImage(im, 0, 0); bytes = dataUrlToBytes(c2.toDataURL("image/png")); mime = "image/png"; }
+          var ext = mime === "image/jpeg" ? "jpeg" : "png"; contentImgExt[ext] = true;
+          mediaN++; var fn = "image" + mediaN + "." + ext; zf("ppt/media/" + fn, bytes);
+          var rid = "rId" + (rels.length + 2); rels.push('<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/' + fn + '"/>');
+          var src = "";
+          if(crop && (crop.l || crop.t || crop.r || crop.b)) src = '<a:srcRect l="' + Math.round((crop.l || 0) * 1000) + '" t="' + Math.round((crop.t || 0) * 1000) + '" r="' + Math.round((crop.r || 0) * 1000) + '" b="' + Math.round((crop.b || 0) * 1000) + '"/>';
+          shapesXml.push('<p:pic><p:nvPicPr><p:cNvPr id="' + (nid++) + '" name="' + XE(name) + '"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="' + rid + '"/>' + (src || "") + '<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="' + Math.round(xEmu) + '" y="' + Math.round(yEmu) + '"/><a:ext cx="' + Math.max(1, Math.round(wEmu)) + '" cy="' + Math.max(1, Math.round(hEmu)) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>');
+        }
+        var bgXml = "";
+        var mm = (info.sec.master) || {};
+        var bgc = hex6(prog.bgColor || q.bgColor, null), bgo = prog.bgOp != null ? prog.bgOp : (q.bgOp != null ? q.bgOp : 1);
+        if(!bgc && mm.bgColor){ bgc = hex6(mm.bgColor, null); bgo = mm.bgOp != null ? mm.bgOp : 1; }
+        bgXml = '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="' + (bgc || "FFFCF7") + '">' + (bgc && bgo < 1 ? '<a:alpha val="' + Math.round(bgo * 100000) + '"/>' : "") + '</a:srgbClr></a:solidFill><a:effectLst/></p:bgPr></p:bg>';
+        if(bgEl){
+          var s0 = Math.min(WE / bgEl.naturalWidth, HE / bgEl.naturalHeight), bw0 = bgEl.naturalWidth * s0, bh0 = bgEl.naturalHeight * s0;
+          await addPic(bgRef, (WE - bw0) / 2, (HE - bh0) / 2, bw0, bh0, null, "背景圖片");
+        }
+        // 依上下層排序（images / shapes / texts 各自有 z，沒有就照原本順序）
+        var entries = [];
+        (prog.images || []).forEach(function(o, i){ entries.push({ k: "image", o: o, z: (o.z != null ? o.z : i), n: entries.length }); });
+        (prog.shapes || []).forEach(function(o, i){ entries.push({ k: "shape", o: o, z: (o.z != null ? o.z : 1000 + i), n: entries.length }); });
+        (prog.texts || []).forEach(function(o, i){ entries.push({ k: "text", o: o, z: (o.z != null ? o.z : 2000 + i), n: entries.length }); });
+        entries.sort(function(a, b){ return (a.z - b.z) || (a.n - b.n); });
+        // 手寫筆跡：合成一張透明 PNG 放在圖片／圖案之上、文字之下（跟畫面上的層次一致）
+        var strokeDone = false;
+        async function addStrokes(){
+          strokeDone = true;
+          var sts = (prog.strokes || []).filter(function(st){ return st.points && st.points.length > 1; }); if(!sts.length) return;
+          var CW = 1600, CH = Math.round(CW / ratio), sc = CW / 640, c = document.createElement("canvas"); c.width = CW; c.height = CH; var l = c.getContext("2d");
+          sts.forEach(function(st){
+            l.save();
+            if(st.isEraser){ l.globalCompositeOperation = "destination-out"; l.lineWidth = Math.max(1, st.size * 2.5 * sc); }
+            else { l.strokeStyle = st.color; l.lineWidth = Math.max(0.8, st.size * sc); l.globalAlpha = (st.opacity == null) ? 1 : st.opacity; }
+            l.lineCap = "round"; l.lineJoin = "round"; l.beginPath(); l.moveTo(st.points[0].x * CW / 100, st.points[0].y * CH / 100);
+            for(var k = 1; k < st.points.length; k++) l.lineTo(st.points[k].x * CW / 100, st.points[k].y * CH / 100);
+            l.stroke(); l.restore();
+          });
+          await addPic(c.toDataURL("image/png"), 0, 0, WE, HE, null, "手寫筆跡");
+        }
+        var mc = document.createElement("canvas").getContext("2d");
+        for(var ei = 0; ei < entries.length; ei++){
+          var e = entries[ei], o = e.o;
+          if(e.k === "text" && !strokeDone) await addStrokes();
+          if(e.k === "image"){
+            var wE = X(o.w), hE = o.h ? Y(o.h) : wE * (o.ar || 1);
+            await addPic(o.src, X(o.x) - wE / 2, Y(o.y) - hE / 2, wE, hE, o.crop, "圖片");
+          } else if(e.k === "shape"){
+            var gx = X(o.x), gy = Y(o.y), gw = X(o.w), gh = Y(o.h), col = hex6(o.color, "B23B32"), lw = Math.max(1, (o.sw || 3)) * 1.5 * 12700;
+            var isLine = o.type === "line" || o.type === "arrow", alpha = (o.op == null ? 1 : o.op);
+            var clrX = function(c){ return '<a:srgbClr val="' + c + '">' + (alpha < 1 ? '<a:alpha val="' + Math.round(alpha * 100000) + '"/>' : "") + '</a:srgbClr>'; };
+            var ln = '<a:ln w="' + Math.round(lw) + '" cap="rnd"><a:solidFill>' + clrX(col) + '</a:solidFill><a:round/>' + (o.type === "arrow" ? '<a:tailEnd type="triangle"/>' : "") + '</a:ln>';
+            var fill = (o.fill && !isLine) ? (o.grad ? '<a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0">' + clrX(col) + '</a:gs><a:gs pos="100000">' + clrX(hex6(o.grad.c2, "FFFFFF")) + '</a:gs></a:gsLst><a:lin ang="' + (o.grad.dir === "v" ? 5400000 : o.grad.dir === "d" ? 2700000 : 0) + '" scaled="0"/></a:gradFill>' : '<a:solidFill>' + clrX(col) + '</a:solidFill>') : '<a:noFill/>';
+            var prst = o.type === "ellipse" ? "ellipse" : o.type === "triangle" ? "triangle" : isLine ? "line" : (o.rad > 0 ? "roundRect" : "rect");
+            var flip = (o.fx ? ' flipH="1"' : "") + (o.fy ? ' flipV="1"' : "");
+            var inner = '<p:spPr><a:xfrm' + flip + '><a:off x="' + gx + '" y="' + gy + '"/><a:ext cx="' + Math.max(1, gw) + '" cy="' + Math.max(1, gh) + '"/></a:xfrm><a:prstGeom prst="' + prst + '"><a:avLst/></a:prstGeom>' + (isLine ? "" : fill) + ln + '</p:spPr>';
+            if(isLine) shapesXml.push('<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="' + (nid++) + '" name="線條"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>' + inner + '</p:cxnSp>');
+            else shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="圖案"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>' + inner + '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="zh-TW"/></a:p></p:txBody></p:sp>');
+          } else {
+            var fsU = o.fontSize || 36, lines = String(o.text || "").split("\n"), bold = (o.bold === undefined || o.bold);
+            mc.font = (bold ? "700 " : "400 ") + fsU + 'px "LXGW WenKai TC", serif';
+            var maxW = Math.max.apply(null, lines.map(function(t){ return mc.measureText(t).width; }).concat([fsU])), unit = WE / 640;
+            var padU = (o.bgOn || o.bdW > 0) ? fsU * 0.45 : 0;
+            var tw = (maxW + padU * 2) * unit * 1.08, th = lines.length * fsU * 1.3 * (o.lh || 1) * unit + (padU ? fsU * 0.24 * unit : 0);
+            var tcol = hex6(o.color, "2B2320"), al = o.align === "center" ? "ctr" : o.align === "right" ? "r" : "l";
+            var bg2 = o.bgOn ? '<a:solidFill><a:srgbClr val="' + hex6(o.bgColor, "FFF3B0") + '">' + ((o.bgOp != null && o.bgOp < 1) ? '<a:alpha val="' + Math.round(o.bgOp * 100000) + '"/>' : "") + '</a:srgbClr></a:solidFill>' : '<a:noFill/>';
+            var ln2 = o.bdW > 0 ? '<a:ln w="' + Math.round(o.bdW * 1.5 * 12700) + '"><a:solidFill><a:srgbClr val="' + hex6(o.bdC, "333333") + '"/></a:solidFill></a:ln>' : '<a:ln><a:noFill/></a:ln>';
+            var paras = lines.map(function(t, li){
+              var pre = o.list === "bullet" ? "• " : o.list === "number" ? (li + 1) + ". " : "";
+              return '<a:p><a:pPr algn="' + al + '">' + (o.lh && Math.abs(o.lh - 1) > 0.02 ? '<a:lnSpc><a:spcPct val="' + Math.round(o.lh * 100000) + '"/></a:lnSpc>' : "") + '</a:pPr><a:r><a:rPr lang="zh-TW" sz="' + Math.max(100, Math.round(fsU * 1.5 * 100)) + '" b="' + (bold ? 1 : 0) + '" dirty="0"><a:solidFill><a:srgbClr val="' + tcol + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(pre + t) + '</a:t></a:r></a:p>';
+            }).join("");
+            shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="文字方塊"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(X(o.x) - tw / 2) + '" y="' + Math.round(Y(o.y) - th / 2) + '"/><a:ext cx="' + Math.round(tw) + '" cy="' + Math.round(th) + '"/></a:xfrm><a:prstGeom prst="' + (o.rad > 0 ? "roundRect" : "rect") + '"><a:avLst/></a:prstGeom>' + bg2 + ln2 + '</p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>' + paras + '</p:txBody></p:sp>');
+          }
+        }
+        if(!strokeDone) await addStrokes();
+        // 母片頁尾／頁碼：當成一般文字方塊放在每一頁
+        function footBox(txt, cfg, nm){
+          var fs = (cfg.size || 16), w = WE * 0.3, h = fs * 1.6 * (WE / 640), pos = cfg.pos || "c";
+          var x = pos === "l" ? WE * 0.03 : pos === "r" ? WE * 0.97 - w : (WE - w) / 2, al = pos === "l" ? "l" : pos === "r" ? "r" : "ctr";
+          shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="' + nm + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(x) + '" y="' + Math.round(HE * 0.985 - h) + '"/><a:ext cx="' + Math.round(w) + '" cy="' + Math.round(h) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="b"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="' + al + '"/><a:r><a:rPr lang="zh-TW" sz="' + Math.round(fs * 150) + '"><a:solidFill><a:srgbClr val="' + hex6(cfg.color, "7A7A7A") + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(txt) + '</a:t></a:r></a:p></p:txBody></p:sp>');
+        }
+        if(mm.footer && mm.footer.text) footBox(mm.footer.text, mm.footer, "頁尾");
+        if(mm.pageNum && mm.pageNum.on) footBox((si + 1) + (mm.pageNum.total ? " / " + info.slides.length : ""), mm.pageNum, "頁碼");
+        if(mm.logo && mm.logo.src){ var lw2 = WE * (mm.logo.w || 10) / 100, lim = await loadThumbImg(mm.logo.src), lh2 = lim ? lw2 * lim.naturalHeight / lim.naturalWidth : lw2, c = mm.logo.corner || "tr"; await addPic(mm.logo.src, c[1] === "l" ? WE * 0.02 : WE * 0.98 - lw2, c[0] === "t" ? HE * 0.025 : HE * 0.975 - lh2, lw2, lh2, null, "標誌"); }
+        slideXmls.push('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld>' + bgXml + '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' + shapesXml.join("") + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>');
+        slideRels.push(rels);
+      }
+      var HEmax = slideRatios[0] || Math.round(WE / 1.5);
+      var NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+      var REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+      var ct = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' + (contentImgExt.png ? '<Default Extension="png" ContentType="image/png"/>' : "") + (contentImgExt.jpeg ? '<Default Extension="jpeg" ContentType="image/jpeg"/>' : "") +
+        '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>' +
+        slideXmls.map(function(_, i){ return '<Override PartName="/ppt/slides/slide' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'; }).join("") + '</Types>';
+      zf("[Content_Types].xml", ct);
+      zf("_rels/.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/officeDocument" Target="ppt/presentation.xml"/></Relationships>');
+      zf("ppt/presentation.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation ' + NS + '><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>' + slideXmls.map(function(_, i){ return '<p:sldId id="' + (256 + i) + '" r:id="rId' + (i + 3) + '"/>'; }).join("") + '</p:sldIdLst><p:sldSz cx="' + WE + '" cy="' + HEmax + '"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>');
+      zf("ppt/_rels/presentation.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/slideMaster" Target="slideMasters/slideMaster1.xml"/><Relationship Id="rId2" Type="' + REL + '/theme" Target="theme/theme1.xml"/>' + slideXmls.map(function(_, i){ return '<Relationship Id="rId' + (i + 3) + '" Type="' + REL + '/slide" Target="slides/slide' + (i + 1) + '.xml"/>'; }).join("") + '</Relationships>');
+      var emptyTree = '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree>';
+      zf("ppt/slideMasters/slideMaster1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster ' + NS + '><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>' + emptyTree + '</p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle><a:lvl1pPr><a:defRPr sz="4400"/></a:lvl1pPr></p:titleStyle><p:bodyStyle><a:lvl1pPr><a:defRPr sz="2800"/></a:lvl1pPr></p:bodyStyle><p:otherStyle><a:lvl1pPr><a:defRPr sz="1800"/></a:lvl1pPr></p:otherStyle></p:txStyles></p:sldMaster>');
+      zf("ppt/slideMasters/_rels/slideMaster1.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/slideLayout" Target="../slideLayouts/slideLayout1.xml"/><Relationship Id="rId2" Type="' + REL + '/theme" Target="../theme/theme1.xml"/></Relationships>');
+      zf("ppt/slideLayouts/slideLayout1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldLayout ' + NS + ' type="blank" preserve="1"><p:cSld name="空白">' + emptyTree + '</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>');
+      zf("ppt/slideLayouts/_rels/slideLayout1.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>');
+      zf("ppt/theme/theme1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Mandamy"><a:themeElements><a:clrScheme name="Mandamy"><a:dk1><a:srgbClr val="2B2320"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="B23B32"/></a:accent1><a:accent2><a:srgbClr val="E8825A"/></a:accent2><a:accent3><a:srgbClr val="4C7A5E"/></a:accent3><a:accent4><a:srgbClr val="3A7CA5"/></a:accent4><a:accent5><a:srgbClr val="6B5B95"/></a:accent5><a:accent6><a:srgbClr val="B8763D"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="Mandamy"><a:majorFont><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/><a:cs typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/><a:cs typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="Office"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>');
+      slideXmls.forEach(function(x, i){
+        zf("ppt/slides/slide" + (i + 1) + ".xml", x);
+        zf("ppt/slides/_rels/slide" + (i + 1) + ".xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + REL + '/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' + slideRels[i].join("") + '</Relationships>');
+      });
+      var blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+      mmDownloadBlob(blob, mmSafeName(info.sec.title) + ".pptx");
+    }catch(err){ console.error(err); alert("匯出 PowerPoint 失敗：" + (err && err.message ? err.message : err)); }
+    bar.remove();
+  }
   function renderSidebar(){
     if(isStudent) return;
     sectionTreeListEl.innerHTML = "";
@@ -6913,6 +7117,9 @@
 
   var btnNewSlide = document.getElementById("btn-new-slide");
   if(btnNewSlide) btnNewSlide.onclick = function(){ closeAddSlideMenu(); createBlankSlideSection(); };
+  var btnExpPptx = document.getElementById("btn-export-pptx"), btnExpPdf = document.getElementById("btn-export-pdf");
+  if(btnExpPptx) btnExpPptx.onclick = function(){ closeAddSlideMenu(); exportDeckPptx(); };
+  if(btnExpPdf) btnExpPdf.onclick = function(){ closeAddSlideMenu(); exportDeckPdf(); };
   var btnImportSlidesTop = document.getElementById("btn-import-slides-top");
   var importSlidesTopFileInput = document.getElementById("import-slides-top-file");
   if(btnImportSlidesTop && importSlidesTopFileInput){
