@@ -891,6 +891,7 @@
   .anim-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
   .anim-row select{ font-size:12px; padding:3px 4px; border-radius:6px; border:1.5px solid rgba(28,33,30,.2); background:var(--surface); color:var(--ink); }
   .anim-row button{ font-size:12px; padding:3px 8px; border-radius:6px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; font-weight:700; }
+  .master-layer{ position:absolute; inset:0; pointer-events:none; z-index:0; overflow:hidden; user-select:none; }
   .laser-layer{ position:absolute; inset:0; z-index:60; cursor:none; touch-action:none; }
   .laser-dot{ position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:radial-gradient(circle,#fff 0 12%,#ff1e1e 30%,rgba(255,30,30,.55) 60%,rgba(255,30,30,0) 75%); box-shadow:0 0 14px 4px rgba(255,30,30,.55); pointer-events:none; }
   .laser-trail{ position:absolute; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%; background:rgba(255,40,40,.6); pointer-events:none; animation:laserFade .42s ease-out forwards; }
@@ -8951,11 +8952,40 @@
     // 2026-10-01 投影片設定：背景顏色＋透明度（q.bgColor／q.bgOp；沒設＝預設的淺色底）
     var pageBgColor = String(progress.bgColor || q.bgColor || ""), pageBgOp = Number(progress.bgOp != null ? progress.bgOp : (q.bgOp != null ? q.bgOp : 1));
     if(!(pageBgOp >= 0.05 && pageBgOp <= 1)) pageBgOp = 1;
+    // 母片（整份簡報共用）：背景顏色、標誌、頁尾、頁碼。這一頁自己有設背景就用自己的，沒有才用母片的。
+    function getMaster(){
+      var sc = slideSecInfo && getSections()[slideSecInfo.secId];
+      return (sc && sc.master) || (slideSecInfo && slideSecInfo.sec && slideSecInfo.sec.master) || null;
+    }
     function applyPageBackground(){
-      if(/^#[0-9a-fA-F]{6}$/.test(pageBgColor)){
-        var r = parseInt(pageBgColor.substr(1, 2), 16), g = parseInt(pageBgColor.substr(3, 2), 16), b2 = parseInt(pageBgColor.substr(5, 2), 16);
-        cWrap.style.background = "rgba(" + r + "," + g + "," + b2 + "," + pageBgOp + ")";
+      var m = getMaster(), col = pageBgColor, op = pageBgOp;
+      if(!/^#[0-9a-fA-F]{6}$/.test(col) && m && /^#[0-9a-fA-F]{6}$/.test(m.bgColor || "")){ col = m.bgColor; op = m.bgOp != null ? m.bgOp : 1; }
+      if(/^#[0-9a-fA-F]{6}$/.test(col)){
+        var r = parseInt(col.substr(1, 2), 16), g = parseInt(col.substr(3, 2), 16), b2 = parseInt(col.substr(5, 2), 16);
+        cWrap.style.background = "rgba(" + r + "," + g + "," + b2 + "," + op + ")";
       } else cWrap.style.background = "";
+    }
+    function renderMaster(){
+      var old = cWrap.querySelector(".master-layer"); if(old) old.remove();
+      var m = getMaster(); if(!m) return;
+      var layer = document.createElement("div"); layer.className = "master-layer";
+      var sc = getScaleRatio();
+      if(m.logo && m.logo.src){
+        var im = document.createElement("img"); im.src = m.logo.src; im.draggable = false;
+        var c = m.logo.corner || "tr";
+        im.style.cssText = "position:absolute;width:" + (m.logo.w || 10) + "%;" + (c[0] === "t" ? "top:2.5%;" : "bottom:2.5%;") + (c[1] === "l" ? "left:2%;" : "right:2%;");
+        layer.appendChild(im);
+      }
+      function line(txt, cfg){
+        var d = document.createElement("div"); d.textContent = txt;
+        var pos = cfg.pos || "c";
+        d.style.cssText = "position:absolute;bottom:1.5%;white-space:nowrap;font-size:" + Math.round((cfg.size || 16) * sc) + "px;color:" + (cfg.color || "#7A7A7A") + ";" +
+          (pos === "l" ? "left:3%;" : pos === "r" ? "right:3%;" : "left:50%;transform:translateX(-50%);");
+        layer.appendChild(d);
+      }
+      if(m.footer && m.footer.text) line(m.footer.text, m.footer);
+      if(m.pageNum && m.pageNum.on) line(String(slideIndex + 1) + (m.pageNum.total ? " / " + slideSiblingIds.length : ""), m.pageNum);
+      cWrap.insertBefore(layer, cWrap.firstChild);
     }
 
     var stageArea = document.createElement("div");
@@ -8964,6 +8994,7 @@
     var cWrap = document.createElement("div");
     cWrap.className = "canvas-stage-wrap";
     applyPageBackground();
+    setTimeout(renderMaster, 0);
     // 換頁效果：只有「同一份簡報裡從別頁翻過來」才播（第一次打開、重新整理都不播）。
     var transMode = (slideSecInfo && slideSecInfo.sec.transition) || "none";
     if(transMode !== "none" && lastBoardQId && lastBoardQId !== q.id && slideSecInfo && lastBoardSecId === slideSecInfo.secId){
@@ -10571,6 +10602,7 @@
         traceCanvas.height = ph;
         redrawStrokes();
         renderTexts();
+        renderMaster();
         renderStaticGuide();
         resizePersonalCanvases(); // 個人描紅是自己獨立的一塊畫布，尺寸也要跟著舞台區一起調整
       }
@@ -12356,6 +12388,45 @@
       writeProgress(q.id, { texts: texts, shapes: shapes, images: images, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
       renderTexts();
     }
+    function openMasterDialog(){
+      if(!slideSecInfo) return;
+      var secsM = getSections(), scM = secsM[slideSecInfo.secId]; if(!scM) return;
+      var m = JSON.parse(JSON.stringify(scM.master || {}));
+      m.footer = m.footer || { text: "", pos: "c", size: 16, color: "#7A7A7A" }; m.pageNum = m.pageNum || { on: false, pos: "r", size: 16, color: "#7A7A7A", total: false }; m.logo = m.logo || { src: "", corner: "tr", w: 10 };
+      var back = document.createElement("div"); back.className = "tb-modal-back";
+      var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(520px,94vw)"; back.appendChild(modal);
+      function save(){
+        var ss = getSections(); if(!ss[slideSecInfo.secId]) return;
+        var empty = !m.bgColor && !(m.footer && m.footer.text) && !(m.pageNum && m.pageNum.on) && !(m.logo && m.logo.src);
+        if(empty) delete ss[slideSecInfo.secId].master; else ss[slideSecInfo.secId].master = JSON.parse(JSON.stringify(m));
+        writeSections(ss); applyPageBackground(); renderMaster();
+      }
+      function row(label, html){ var d = document.createElement("div"); d.style.cssText = "display:flex;align-items:center;gap:8px;margin:9px 0;font-size:13px;flex-wrap:wrap;"; d.innerHTML = '<span style="min-width:84px;font-weight:700;">' + label + '</span>' + html; modal.appendChild(d); return d; }
+      modal.innerHTML = '<h3>🎛 母片 Slide Master</h3><div class="tb-hint">這裡的設定會套用到這份簡報的每一頁（學生端也看得到）。</div>';
+      var hasBg = /^#[0-9a-fA-F]{6}$/.test(m.bgColor || "");
+      var r1 = row("背景顏色", '<label><input type="checkbox" class="m-bgon" ' + (hasBg ? "checked" : "") + '> 使用</label><input type="color" class="m-bgc" value="' + (hasBg ? m.bgColor : "#FFF8E6") + '"><input type="range" class="m-bgo" min="5" max="100" value="' + Math.round((m.bgOp == null ? 1 : m.bgOp) * 100) + '" style="width:90px;" title="透明度">');
+      function bgChange(){ if(r1.querySelector(".m-bgon").checked){ m.bgColor = r1.querySelector(".m-bgc").value; m.bgOp = Number(r1.querySelector(".m-bgo").value) / 100; } else { delete m.bgColor; delete m.bgOp; } save(); }
+      ["m-bgon", "m-bgc", "m-bgo"].forEach(function(c){ r1.querySelector("." + c).oninput = bgChange; r1.querySelector("." + c).onchange = bgChange; });
+      var r2 = row("頁尾文字", '<input type="text" class="m-ft" value="' + escapeHtml(m.footer.text || "") + '" placeholder="例如：曼米中文 第一冊" style="flex:1;min-width:140px;padding:4px 6px;"><select class="m-fp"><option value="l">靠左</option><option value="c">置中</option><option value="r">靠右</option></select>');
+      r2.querySelector(".m-fp").value = m.footer.pos || "c";
+      r2.querySelector(".m-ft").oninput = function(e){ m.footer.text = e.target.value; save(); };
+      r2.querySelector(".m-fp").onchange = function(e){ m.footer.pos = e.target.value; save(); };
+      var r3 = row("頁碼", '<label><input type="checkbox" class="m-pn" ' + (m.pageNum.on ? "checked" : "") + '> 顯示頁碼</label><label><input type="checkbox" class="m-pt" ' + (m.pageNum.total ? "checked" : "") + '> 含總頁數</label><select class="m-pp"><option value="l">靠左</option><option value="c">置中</option><option value="r">靠右</option></select>');
+      r3.querySelector(".m-pp").value = m.pageNum.pos || "r";
+      r3.querySelector(".m-pn").onchange = function(e){ m.pageNum.on = e.target.checked; save(); };
+      r3.querySelector(".m-pt").onchange = function(e){ m.pageNum.total = e.target.checked; save(); };
+      r3.querySelector(".m-pp").onchange = function(e){ m.pageNum.pos = e.target.value; save(); };
+      var r4 = row("標誌 Logo", '<button type="button" class="tb-row m-lu" style="cursor:pointer;margin:0;padding:4px 10px;">選擇圖片…</button><select class="m-lc"><option value="tl">左上</option><option value="tr">右上</option><option value="bl">左下</option><option value="br">右下</option></select><input type="range" class="m-lw" min="3" max="30" value="' + (m.logo.w || 10) + '" style="width:90px;" title="大小"><button type="button" class="tb-row m-lx" style="cursor:pointer;margin:0;padding:4px 10px;">移除</button><input type="file" class="m-lf" accept="image/*" style="display:none;">');
+      r4.querySelector(".m-lc").value = m.logo.corner || "tr";
+      r4.querySelector(".m-lu").onclick = function(){ r4.querySelector(".m-lf").click(); };
+      r4.querySelector(".m-lf").onchange = function(e){ var f = e.target.files && e.target.files[0]; if(!f) return; downscaleImageFile(f, function(res){ if(!res){ alert("這張圖片讀不進來。"); return; } m.logo.src = res.src; save(); }); };
+      r4.querySelector(".m-lc").onchange = function(e){ m.logo.corner = e.target.value; save(); };
+      r4.querySelector(".m-lw").oninput = function(e){ m.logo.w = Number(e.target.value); save(); };
+      r4.querySelector(".m-lx").onclick = function(){ m.logo.src = ""; save(); };
+      var foot = document.createElement("div"); foot.className = "tb-foot"; var done = document.createElement("button"); done.className = "primary"; done.textContent = "完成"; done.onclick = function(){ back.remove(); }; foot.appendChild(done); modal.appendChild(foot);
+      back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
+      document.body.appendChild(back);
+    }
     function openSlideSetupDialog(){
       var back = document.createElement("div"); back.className = "tb-modal-back";
       var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(560px,94vw)"; back.appendChild(modal);
@@ -12415,6 +12486,9 @@
           tg.appendChild(bt);
         });
         modal.appendChild(tg);
+        sec("母片 Slide Master（套用到整份簡報）");
+        var mh = document.createElement("div"); mh.className = "tb-hint"; mh.textContent = "設定整份簡報共用的背景顏色、標誌（Logo）、頁尾文字和頁碼；每一頁自己設定的背景優先。"; modal.appendChild(mh);
+        var mb = document.createElement("button"); mb.type = "button"; mb.className = "tb-row"; mb.style.cssText = "cursor:pointer;margin:6px 0;"; mb.textContent = "🎛 編輯母片…"; mb.onclick = function(){ back.remove(); openMasterDialog(); }; modal.appendChild(mb);
         var foot = document.createElement("div"); foot.className = "tb-foot";
         var done = document.createElement("button"); done.className = "primary"; done.textContent = "完成"; done.onclick = function(){ back.remove(); };
         foot.appendChild(done); modal.appendChild(foot);
@@ -12693,6 +12767,7 @@
       var freshBgColor = String(freshProgress.bgColor || q.bgColor || ""), freshBgOp = Number(freshProgress.bgOp != null ? freshProgress.bgOp : (q.bgOp != null ? q.bgOp : 1));
       if(!(freshBgOp >= 0.05 && freshBgOp <= 1)) freshBgOp = 1;
       if(freshBgColor !== pageBgColor || freshBgOp !== pageBgOp){ pageBgColor = freshBgColor; pageBgOp = freshBgOp; applyPageBackground(); }
+      renderMaster();
       var freshFixed = Number(freshProgress.canvasRatio || q.canvasRatio) || 0;
       if(freshFixed !== fixedRatio){
         // 老師改了畫布大小：學生端（和老師的另一台裝置）即時跟著變
