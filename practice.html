@@ -238,7 +238,7 @@
     font-size:11.5px;font-weight:700;background:var(--surface-2);color:var(--ink-soft);
     padding:4px 10px;border-radius:8px;align-self:flex-start;
   }
-  .item-actions-btns{display:flex;gap:8px;justify-content:flex-end;}
+  .item-actions-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
   .item-actions-btns button{white-space:nowrap;}
 
   .item-card.is-folder{
@@ -1542,6 +1542,7 @@
       <div class="lobby-header-btns">
         <a class="btn" id="link-class-games" href="https://zengleiping.github.io/Mandamy-Class/" target="_blank" rel="noopener" style="text-decoration:none;">🎮 課堂遊戲 Class Games</a>
         <button type="button" class="btn" id="btn-import-vocab-cloud" style="border:1.5px solid var(--seal); color:var(--seal); font-weight:700;">☁️ 從生詞雲端匯入</button>
+        <button type="button" class="btn" id="btn-backup-open" title="匯出整個課程庫的備份檔、或匯入備份檔（離線也能用）Backup / Import">📦 備份／匯入 Backup</button>
         <button type="button" class="btn" id="btn-create-folder" style="border:1.5px solid var(--bamboo); color:var(--bamboo); font-weight:700;">＋ 新增資料夾 Add Folder</button>
         <button type="button" class="btn btn-primary" id="btn-create-project">＋ 新增測驗 Add Test</button>
       </div>
@@ -1645,6 +1646,35 @@
       <button type="submit" class="btn btn-primary">儲存 Save</button>
     </div>
   </form>
+</dialog>
+
+<!-- 2026-10-01 離線第三階段：匯出（HTML／PDF／備份檔）與備份匯入。全部在這台裝置上完成，不需要網路。 -->
+<dialog class="dialog-modal" id="export-dialog" style="width:min(520px,94vw);">
+  <div class="dialog-head"><h2 id="export-dialog-title">📤 匯出課程 Export</h2></div>
+  <div class="dialog-body">
+    <p style="font-size:12.5px;color:var(--ink-soft);margin:-4px 0 12px;line-height:1.6;">匯出的是「這台裝置上目前的內容」（含你在投影片上寫的字、畫的圖、貼的圖片）。不需要網路。<br>Exports what is on this device right now. No internet needed.</p>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px;"><input type="checkbox" id="export-include-notes"> 包含老師備註 Include teacher notes</label>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button type="button" class="btn" id="btn-export-html" style="justify-content:flex-start;">🌐 下載 HTML 網頁（單一檔案，用瀏覽器就能打開）Download HTML</button>
+      <button type="button" class="btn" id="btn-export-pdf" style="justify-content:flex-start;">📄 存成 PDF（會開啟列印視窗，目的地選「另存為 PDF」）Save as PDF</button>
+      <button type="button" class="btn" id="btn-export-json" style="justify-content:flex-start;">📦 下載備份檔 .json（可以匯入回來）Backup file</button>
+    </div>
+    <div id="export-status" style="font-size:12.5px;color:var(--ink-soft);margin-top:10px;min-height:18px;"></div>
+  </div>
+  <div class="dialog-foot"><button type="button" class="btn btn-primary" id="btn-export-close">關閉 Close</button></div>
+</dialog>
+<dialog class="dialog-modal" id="backup-dialog" style="width:min(520px,94vw);">
+  <div class="dialog-head"><h2>📦 備份／匯入 Backup &amp; Import</h2></div>
+  <div class="dialog-body">
+    <p style="font-size:12.5px;color:var(--ink-soft);margin:-4px 0 12px;line-height:1.6;">備份檔是一個 .json 檔，包含整個課程庫（所有資料夾和課程）。匯入時<b>不會覆蓋</b>現有課程：匯進來的一律是新的課程；匯入前會先把目前的內容存進「🕘 版本記錄」。<br>Importing never overwrites: everything comes in as new tests, and the current library is saved to Version History first.</p>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button type="button" class="btn" id="btn-backup-export-all" style="justify-content:flex-start;">⬇ 匯出整個課程庫（備份檔 .json）Export whole library</button>
+      <button type="button" class="btn btn-primary" id="btn-backup-import" style="justify-content:flex-start;">⬆ 匯入備份檔… Import a backup file</button>
+      <input type="file" id="backup-import-file" accept=".json,application/json" style="display:none;">
+    </div>
+    <div id="backup-status" style="font-size:12.5px;color:var(--ink-soft);margin-top:10px;min-height:18px;line-height:1.7;white-space:pre-wrap;"></div>
+  </div>
+  <div class="dialog-foot"><button type="button" class="btn btn-primary" id="btn-backup-close">關閉 Close</button></div>
 </dialog>
 
 <!-- 測驗 編輯／新增彈窗 -->
@@ -3738,6 +3768,7 @@
         <div class="item-actions-btns">
           <button type="button" class="btn btn-sm btn-ghost btn-edit-p">編輯 Edit</button>
           <button type="button" class="btn btn-sm btn-ghost btn-dup-p" title="複製這個課程（含所有內容）Duplicate">複製 Copy</button>
+          <button type="button" class="btn btn-sm btn-ghost btn-exp-p" title="匯出成 HTML／PDF／備份檔 Export">匯出 Export</button>
           <button type="button" class="btn btn-sm btn-ghost btn-del-p" style="color:var(--seal);">刪除 Delete</button>
         </div>
       </div>
@@ -3745,6 +3776,7 @@
     card.onclick = function(){ openProject(proj.id); };
     card.querySelector(".btn-edit-p").onclick = function(e){ e.stopPropagation(); openProjectDialog(proj.id); };
     card.querySelector(".btn-dup-p").onclick = function(e){ e.stopPropagation(); duplicateProject(proj.id); };
+    card.querySelector(".btn-exp-p").onclick = function(e){ e.stopPropagation(); openExportDialog(proj.id); };
     card.querySelector(".btn-del-p").onclick = function(e){ e.stopPropagation(); deleteProjectWithBackup(proj); };
     return card;
   }
@@ -4361,6 +4393,261 @@
     if(name === null) return;
     try{ await MO.addVersion(currentLibKey(), (name.trim() || "手動存檔"), fsData, true, { pinned: true }); }catch(e){ notifyLocalSaveFailure(e); }
     refreshVersionsList();
+  };
+
+  /* ================== 2026-10-01 離線第三階段：匯出 HTML／PDF／備份檔、備份匯入 ==================
+     全部在這台裝置上完成（不需要網路）。HTML／PDF 用同一份單檔網頁：每個投影片一頁，畫布內容（底圖、圖片、筆跡、
+     圖案、文字＋注音）照存下來的百分比座標重新排出來；PDF 是開啟這份網頁後用瀏覽器的列印→另存為 PDF。 */
+  var exportDialog = document.getElementById("export-dialog");
+  var backupDialog = document.getElementById("backup-dialog");
+  var exportingProjId = null;
+  function exportSetStatus(msg){ var el = document.getElementById("export-status"); if(el) el.textContent = msg || ""; }
+  function safeFileName(name, ext){ return (String(name || "課程").replace(/[\\/:*?"<>|\r\n]+/g, "_").trim().slice(0, 60) || "課程") + ext; }
+  function downloadTextFile(name, text, mime){
+    var blob = new Blob([text], { type: mime || "text/plain;charset=utf-8" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+  function loadImgSize(src){
+    return new Promise(function(resolve){
+      var im = new Image(); im.onload = function(){ resolve(im.naturalWidth && im.naturalHeight ? { w: im.naturalWidth, h: im.naturalHeight } : null); };
+      im.onerror = function(){ resolve(null); }; im.src = src;
+    });
+  }
+  function sortedByOrder(obj){
+    return Object.keys(obj || {}).map(function(k){ return obj[k]; }).sort(function(a, b){ return (a.order || 0) - (b.order || 0); });
+  }
+  function strokesToPng(strokes, W, H, scale){
+    if(!strokes || !strokes.length) return "";
+    var c = document.createElement("canvas"); c.width = W; c.height = H;
+    var cx = c.getContext("2d");
+    strokes.forEach(function(st){
+      if(!st.points || st.points.length < 2) return;
+      cx.save();
+      if(st.isEraser){ cx.globalCompositeOperation = "destination-out"; cx.lineWidth = Math.max(2, st.size * 2.5 * scale); }
+      else { cx.globalCompositeOperation = "source-over"; cx.strokeStyle = st.color; cx.lineWidth = Math.max(1, st.size * scale); cx.globalAlpha = (st.opacity == null) ? 1 : st.opacity; }
+      cx.lineCap = "round"; cx.lineJoin = "round"; cx.beginPath();
+      cx.moveTo(st.points[0].x * W / 100, st.points[0].y * H / 100);
+      for(var i = 1; i < st.points.length; i++) cx.lineTo(st.points[i].x * W / 100, st.points[i].y * H / 100);
+      cx.stroke(); cx.restore();
+    });
+    try{ return c.toDataURL("image/png"); }catch(e){ return ""; }
+  }
+  function shapeToSvg(sh, W, H, scale){
+    var x = sh.x / 100 * W, y = sh.y / 100 * H, w = sh.w / 100 * W, h = sh.h / 100 * H;
+    var x1 = sh.fx ? x + w : x, y1 = sh.fy ? y + h : y, x2 = sh.fx ? x : x + w, y2 = sh.fy ? y : y + h;
+    var sw = Math.max(1, (sh.sw || 3) * scale), col = sh.color || "#B23B32";
+    var op = (sh.op === undefined || sh.op === null) ? 1 : sh.op;
+    var isLine = sh.type === "line" || sh.type === "arrow";
+    var common = 'stroke="' + col + '" stroke-width="' + sw + '" fill="' + ((sh.fill && !isLine) ? col : "none") + '" stroke-linejoin="round" stroke-linecap="round"';
+    var inner = "";
+    if(sh.type === "ellipse") inner = '<ellipse cx="' + (x + w / 2) + '" cy="' + (y + h / 2) + '" rx="' + (w / 2) + '" ry="' + (h / 2) + '" ' + common + '/>';
+    else if(sh.type === "triangle") inner = '<polygon points="' + (x + w / 2) + ',' + y + ' ' + (x + w) + ',' + (y + h) + ' ' + x + ',' + (y + h) + '" ' + common + '/>';
+    else if(isLine){
+      var ang = Math.atan2(y2 - y1, x2 - x1), L = Math.max(12, sw * 4.5), ex = x2, ey = y2;
+      if(sh.type === "arrow"){ ex = x2 - Math.cos(ang) * L * 0.6; ey = y2 - Math.sin(ang) * L * 0.6; }
+      inner = '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + ex + '" y2="' + ey + '" stroke="' + col + '" stroke-width="' + sw + '" stroke-linecap="round"/>';
+      if(sh.type === "arrow"){
+        var a1 = ang + Math.PI - 0.42, a2 = ang + Math.PI + 0.42;
+        inner += '<polygon points="' + x2 + ',' + y2 + ' ' + (x2 + Math.cos(a1) * L) + ',' + (y2 + Math.sin(a1) * L) + ' ' + (x2 + Math.cos(a2) * L) + ',' + (y2 + Math.sin(a2) * L) + '" fill="' + col + '" stroke="' + col + '" stroke-width="1" stroke-linejoin="round"/>';
+      }
+    } else inner = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + Math.min(6, w / 4, h / 4) + '" ' + common + '/>';
+    return '<g opacity="' + op + '">' + inner + '</g>';
+  }
+  async function exportBoardSlide(q, pr, title){
+    pr = pr || {};
+    var bg = pr.bgImage || q.bgImage || "";
+    var ratio = 3 / 2;
+    if(bg){ var dim = await loadImgSize(bg); if(dim) ratio = Math.max(0.4, Math.min(3, dim.w / dim.h)); }
+    var W = 1200, H = Math.round(W / ratio), scale = W / 640;
+    var h = '<div class="canvas" style="width:' + W + 'px;height:' + H + 'px;">';
+    if(bg) h += '<img class="bg" src="' + bg + '" alt="">';
+    (pr.images || []).forEach(function(im){
+      h += '<img class="pic" src="' + im.src + '" alt="" style="left:' + im.x + '%;top:' + im.y + '%;width:' + im.w + '%;' + (im.h ? 'height:' + im.h + '%;object-fit:fill;' : 'aspect-ratio:1 / ' + (im.ar || 1) + ';') + '">';
+    });
+    var ink = strokesToPng(pr.strokes || [], W, H, scale);
+    if(ink) h += '<img class="ink" src="' + ink + '" alt="">';
+    if((pr.shapes || []).length) h += '<svg class="shp" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + (pr.shapes || []).map(function(sh){ return shapeToSvg(sh, W, H, scale); }).join("") + '</svg>';
+    (pr.texts || []).forEach(function(t){
+      var cls = "mt" + (t.list === "bullet" ? " list-bullet" : (t.list === "number" ? " list-number" : ""));
+      var bold = (t.bold === undefined) ? true : !!t.bold;
+      h += '<div class="' + cls + '" style="left:' + t.x + '%;top:' + t.y + '%;font-size:' + Math.round((t.fontSize || 36) * scale) + 'px;font-weight:' + (bold ? 700 : 400) + ';color:' + escapeHtml(t.color || "#2B2320") + ';text-align:' + (t.align || "left") + ';">' + buildPhoneticHtml(t.text, t.phoneticOverride) + '</div>';
+    });
+    h += '</div>';
+    var kPrint = Math.min(1000 / W, 690 / H);
+    return { W: W, H: H, kPrint: kPrint, html: h };
+  }
+  function genericQuestionHtml(sec, q){
+    var rows = [];
+    if(q.desc) rows.push('<p>' + escapeHtml(q.desc) + '</p>');
+    if(q.pairs){
+      rows.push('<table class="pairs">' + Object.keys(q.pairs).map(function(k){ var p = q.pairs[k]; return '<tr><td>' + escapeHtml(p.left || "") + '</td><td>' + escapeHtml(p.right || "") + '</td></tr>'; }).join("") + '</table>');
+    } else {
+      var skip = { id: 1, order: 1, title: 1, desc: 1, bgImage: 1, teacherNote: 1, media: 1 };
+      Object.keys(q).forEach(function(k){
+        if(skip[k]) return; var v = q[k];
+        if(typeof v === "string" && v) rows.push('<div class="kv"><b>' + escapeHtml(k) + '</b> ' + escapeHtml(v) + '</div>');
+        else if(Array.isArray(v) && v.length && v.every(function(x){ return typeof x === "string"; })) rows.push('<div class="kv"><b>' + escapeHtml(k) + '</b> ' + escapeHtml(v.join(" ／ ")) + '</div>');
+        else if(v && typeof v === "object" && !Array.isArray(v)){
+          var vals = Object.keys(v).map(function(kk){ var x = v[kk]; return (x && typeof x === "object") ? (x.text || x.label || x.value || x.left || "") : String(x); }).filter(Boolean);
+          if(vals.length) rows.push('<div class="kv"><b>' + escapeHtml(k) + '</b> ' + escapeHtml(vals.join(" ／ ")) + '</div>');
+        }
+      });
+    }
+    return '<div class="generic">' + rows.join("") + '</div>';
+  }
+  async function buildExportHtml(proj, opts){
+    opts = opts || {};
+    var pages = [], n = 0;
+    var secs = sortedByOrder(proj.sections);
+    for(var si = 0; si < secs.length; si++){
+      var sec = secs[si], qs = sortedByOrder(sec.questions);
+      for(var qi = 0; qi < qs.length; qi++){
+        var q = qs[qi], pr = (proj.progress || {})[q.id] || {};
+        n++;
+        var title = escapeHtml(q.title || "");
+        var secTitle = escapeHtml(sec.title || "");
+        var body = "", frameStyle = "", kPrint = 0.8, kind = "generic";
+        if(sec.type === "board"){
+          var sl = await exportBoardSlide(q, pr, title); kind = "board";
+          body = sl.html; frameStyle = "--W:" + sl.W + ";--H:" + sl.H + ";--kp:" + sl.kPrint.toFixed(4) + ";";
+        } else {
+          body = genericQuestionHtml(sec, q);
+        }
+        var note = (opts.includeNotes && q.teacherNote && q.teacherNote.trim()) ? '<div class="note">📝 老師備註：' + escapeHtml(q.teacherNote) + '</div>' : "";
+        pages.push('<section class="slide ' + kind + '" style="' + frameStyle + '"><div class="cap"><span class="no">' + n + '</span> <span class="sec">' + (sec.type === "board" && /^投影片/.test(sec.title || "") ? "" : secTitle + " · ") + '</span>' + title + '</div>' +
+          (kind === "board" ? '<div class="frame"><div class="scaler">' + body + '</div></div>' : body) + note + '</section>');
+      }
+    }
+    var css = 'html{background:#f4efe8}body{margin:0;padding:16px;font-family:"LXGW WenKai TC","Noto Serif TC","PingFang TC","Microsoft JhengHei",serif;color:#2B2320}' +
+      'h1{font-size:22px;margin:4px 0 2px}.meta{color:#6B5F55;font-size:12.5px;margin-bottom:16px}' +
+      '.slide{background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.08);padding:14px 16px 18px;margin:0 auto 18px;max-width:1240px;break-inside:avoid;page-break-inside:avoid;page-break-after:always}' +
+      '.cap{font-size:14px;font-weight:700;margin-bottom:8px}.cap .no{display:inline-block;min-width:22px;text-align:center;background:#E8825A;color:#fff;border-radius:999px;padding:0 6px;font-size:12px}.cap .sec{color:#6B5F55;font-weight:500}' +
+      '.frame{--k:1;width:calc(var(--W) * 1px * var(--k));height:calc(var(--H) * 1px * var(--k));border:2px solid rgba(232,130,90,.42);border-radius:14px;overflow:hidden;margin:0 auto;background:#fff}' +
+      '.scaler{transform:scale(var(--k));transform-origin:0 0}' +
+      '.canvas{position:relative;overflow:hidden;background:#fff}.canvas>img,.canvas>svg{position:absolute}' +
+      '.canvas .bg{inset:0;width:100%;height:100%;object-fit:contain}.canvas .pic{transform:translate(-50%,-50%);max-width:none}.canvas .ink,.canvas .shp{inset:0;width:100%;height:100%}' +
+      '.mt{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;line-height:1;width:max-content}.mt .tl{white-space:pre;min-height:1em}' +
+      '.mt:has(ruby){line-height:2.15;padding-top:.3em}.mt ruby{ruby-position:over}.mt rt{font-size:.42em;font-weight:600;opacity:.8;letter-spacing:0}' +
+      '.mt.list-bullet .tl:not(:empty)::before{content:"•";display:inline-block;min-width:1.1em}.mt.list-number{counter-reset:tl}.mt.list-number .tl:not(:empty){counter-increment:tl}.mt.list-number .tl:not(:empty)::before{content:counter(tl) ".";display:inline-block;min-width:1.5em;margin-right:.15em}' +
+      '.generic{font-size:15px;line-height:1.8}.pairs{border-collapse:collapse}.pairs td{border:1px solid #ddd;padding:4px 12px}.kv b{color:#6B5F55;margin-right:6px}' +
+      '.note{margin-top:10px;padding:8px 12px;background:#FFF8E6;border-radius:8px;font-size:13px;white-space:pre-wrap}' +
+      '@page{size:A4 landscape;margin:8mm}@media print{html{background:#fff}body{padding:0}.slide{box-shadow:none;border-radius:0;margin:0;padding:0;max-width:none}.frame{--k:var(--kp)}}';
+    var js = 'function fit(){var k=Math.min(1,(document.documentElement.clientWidth-56)/1200);document.querySelectorAll(".frame").forEach(function(f){f.style.setProperty("--k",k)})}fit();addEventListener("resize",fit);' +
+      'addEventListener("beforeprint",function(){document.querySelectorAll(".frame").forEach(function(f){f.style.removeProperty("--k")})});addEventListener("afterprint",fit);';
+    return '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + escapeHtml(proj.title || "課程") + '</title><style>' + css + '</style></head><body>' +
+      '<h1>' + escapeHtml(proj.title || "課程") + '</h1><div class="meta">' + (proj.desc ? escapeHtml(proj.desc) + ' · ' : '') + '匯出時間 ' + escapeHtml(fmtTime(Date.now())) + ' · 共 ' + n + ' 頁（由「曼米中文」匯出）</div>' +
+      pages.join("") + '<script>' + js + '<\/script></body></html>';
+  }
+  function buildBackupObject(projIds){
+    var projects = {}, folderIds = {};
+    projIds.forEach(function(id){
+      var pr = fsData.projects[id]; if(!pr) return;
+      projects[id] = JSON.parse(JSON.stringify(pr));
+      var cur = pr.folderId, g = 0; while(cur && fsData.folders[cur] && g++ < 30){ folderIds[cur] = 1; cur = fsData.folders[cur].parentId || null; }
+    });
+    var folders = {}; Object.keys(folderIds).forEach(function(id){ folders[id] = JSON.parse(JSON.stringify(fsData.folders[id])); });
+    return { format: "mandamy-backup", version: 1, exportedAt: Date.now(), exportedAtText: fmtTime(Date.now()), projectCount: Object.keys(projects).length, folders: folders, projects: projects };
+  }
+  function openExportDialog(projId){
+    exportingProjId = projId;
+    var pr = fsData.projects[projId]; if(!pr) return;
+    document.getElementById("export-dialog-title").textContent = "📤 匯出「" + pr.title + "」";
+    exportSetStatus("");
+    safeShowModal(exportDialog);
+  }
+  document.getElementById("btn-export-close").onclick = function(){ closeModalDialog(exportDialog); };
+  document.getElementById("btn-export-html").onclick = async function(){
+    var pr = fsData.projects[exportingProjId]; if(!pr) return;
+    exportSetStatus("⏳ 產生中…");
+    try{
+      var html = await buildExportHtml(pr, { includeNotes: document.getElementById("export-include-notes").checked });
+      downloadTextFile(safeFileName(pr.title, ".html"), html, "text/html;charset=utf-8");
+      exportSetStatus("✅ 已下載 " + safeFileName(pr.title, ".html") + "（" + fmtBytes(html.length) + "）");
+    }catch(e){ console.error(e); exportSetStatus("❌ 匯出失敗：" + (e && e.message ? e.message : e)); }
+  };
+  document.getElementById("btn-export-pdf").onclick = async function(){
+    var pr = fsData.projects[exportingProjId]; if(!pr) return;
+    exportSetStatus("⏳ 產生中…");
+    // 要在使用者點擊的當下就先開好視窗（之後才 await 會被瀏覽器當成彈出視窗擋掉）
+    var w = null; try{ w = window.open("", "_blank"); }catch(e){}
+    try{
+      var html = await buildExportHtml(pr, { includeNotes: document.getElementById("export-include-notes").checked });
+      if(w && w.document){
+        w.document.open(); w.document.write(html); w.document.close();
+        exportSetStatus("✅ 已開啟預覽視窗，馬上會跳出列印視窗：目的地請選「另存為 PDF」。若沒有跳出，請在新視窗按 Ctrl/⌘+P。");
+        var go = function(){ try{ w.focus(); w.print(); }catch(e){} };
+        if(w.document.readyState === "complete") setTimeout(go, 700); else w.addEventListener("load", function(){ setTimeout(go, 700); });
+      } else {
+        downloadTextFile(safeFileName(pr.title, ".html"), html, "text/html;charset=utf-8");
+        exportSetStatus("瀏覽器擋住了新視窗，所以改成下載 HTML：用瀏覽器打開它，再按 Ctrl/⌘+P →「另存為 PDF」。");
+      }
+    }catch(e){ console.error(e); try{ if(w) w.close(); }catch(er){} exportSetStatus("❌ 匯出失敗：" + (e && e.message ? e.message : e)); }
+  };
+  document.getElementById("btn-export-json").onclick = function(){
+    var pr = fsData.projects[exportingProjId]; if(!pr) return;
+    var obj = buildBackupObject([exportingProjId]); obj.scope = "project";
+    var text = JSON.stringify(obj);
+    downloadTextFile(safeFileName(pr.title, ".mandamy.json"), text, "application/json");
+    exportSetStatus("✅ 已下載備份檔（" + fmtBytes(text.length) + "）");
+  };
+
+  function backupSetStatus(msg){ document.getElementById("backup-status").textContent = msg || ""; }
+  document.getElementById("btn-backup-open").onclick = function(){ backupSetStatus(""); safeShowModal(backupDialog); };
+  document.getElementById("btn-backup-close").onclick = function(){ closeModalDialog(backupDialog); };
+  document.getElementById("btn-backup-export-all").onclick = function(){
+    var ids = Object.keys(fsData.projects || {});
+    var obj = buildBackupObject(ids); obj.scope = "library";
+    // 沒有放在任何課程裡的空資料夾也一起備份
+    Object.keys(fsData.folders || {}).forEach(function(id){ if(!obj.folders[id]) obj.folders[id] = JSON.parse(JSON.stringify(fsData.folders[id])); });
+    var d = new Date(), stamp = d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + "-" + pad2(d.getHours()) + pad2(d.getMinutes());
+    var text = JSON.stringify(obj);
+    downloadTextFile("曼米課程庫備份-" + stamp + ".mandamy.json", text, "application/json");
+    backupSetStatus("✅ 已下載：" + ids.length + " 個課程、" + Object.keys(obj.folders).length + " 個資料夾（" + fmtBytes(text.length) + "）。");
+  };
+  document.getElementById("btn-backup-import").onclick = function(){ document.getElementById("backup-import-file").click(); };
+  document.getElementById("backup-import-file").onchange = function(e){
+    var file = e.target.files && e.target.files[0]; e.target.value = ""; if(!file) return;
+    var fr = new FileReader();
+    fr.onerror = function(){ backupSetStatus("❌ 讀不到這個檔案。"); };
+    fr.onload = async function(){
+      var obj = null; try{ obj = JSON.parse(fr.result); }catch(er){}
+      if(!obj || obj.format !== "mandamy-backup" || !obj.projects || typeof obj.projects !== "object"){ backupSetStatus("❌ 這不是曼米中文的備份檔（或檔案壞掉了）。"); return; }
+      var ids = Object.keys(obj.projects);
+      if(!ids.length && !Object.keys(obj.folders || {}).length){ backupSetStatus("這個備份檔裡沒有任何課程。"); return; }
+      if(!confirm("匯入「" + file.name + "」：\n· " + ids.length + " 個課程\n· 全部會以「新的課程」加進來，不會覆蓋現有的\n· 匯入前會先把目前內容存進「🕘 版本記錄」\n\n要繼續嗎？\nImport " + ids.length + " test(s) as new copies?")) return;
+      try{
+        if(MO && MO.ok) await MO.addVersion(currentLibKey(), "匯入備份檔前的版本（" + fmtTime(Date.now()) + "）", fsData, true);
+        // 資料夾：同名（同一個上層底下）就沿用，否則新建，保留原本的階層
+        var folderMap = {};
+        var inFolders = obj.folders || {};
+        function mapFolder(fid, guard){
+          if(!fid || !inFolders[fid] || (guard || 0) > 30) return null;
+          if(folderMap[fid] !== undefined) return folderMap[fid];
+          var f = inFolders[fid], parent = mapFolder(f.parentId || null, (guard || 0) + 1);
+          var existing = Object.keys(fsData.folders).filter(function(k){ return (fsData.folders[k].parentId || null) === parent && fsData.folders[k].title === f.title; })[0];
+          if(existing){ folderMap[fid] = existing; return existing; }
+          var nid = uid("f"); fsData.folders[nid] = { id: nid, parentId: parent, title: f.title, desc: f.desc || "" };
+          folderMap[fid] = nid; return nid;
+        }
+        Object.keys(inFolders).forEach(function(fid){ mapFolder(fid, 0); });
+        var added = 0;
+        ids.forEach(function(pid){
+          var src = obj.projects[pid]; if(!src || typeof src !== "object") return;
+          var copy = JSON.parse(JSON.stringify(src));
+          copy.id = uid("proj");
+          copy.folderId = mapFolder(src.folderId || null, 0);
+          var dup = Object.keys(fsData.projects).some(function(k){ return fsData.projects[k].title === copy.title; });
+          if(dup) copy.title = copy.title + "（匯入 Imported）";
+          fsData.projects[copy.id] = copy; added++;
+        });
+        migrateFS(fsData);
+        saveFS(); renderBreadcrumb(); renderLobbyGrid();
+        backupSetStatus("✅ 已匯入 " + added + " 個課程。匯入前的內容保留在「🕘 版本記錄」。");
+      }catch(er){ console.error("匯入失敗", er); backupSetStatus("❌ 匯入失敗：" + (er && er.message ? er.message : er)); }
+    };
+    fr.readAsText(file);
   };
 
   async function createRoom(){
