@@ -839,6 +839,25 @@
      不會不小心點到或拖動它們。 */
   .text-layer:not(.objs-interactive) .movable-text, .text-layer:not(.objs-interactive) .image-proxy{ pointer-events:none; }
   /* 貼上的圖片：圖片本身畫在筆跡下面（可以在圖上寫字圈重點），上面另外疊一個透明的 .image-proxy 負責點選／拖曳／縮放。 */
+
+  /* 2026-09-30 嵌入媒體（YouTube／音檔），全班同步播放 */
+  .media-layer{ position:absolute; inset:0; z-index:4; pointer-events:none; }
+  .media-box{ position:absolute; pointer-events:auto; background:#1d1a17; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.28); overflow:hidden; display:flex; flex-direction:column; min-width:160px; }
+  .media-bar{ display:flex; align-items:center; gap:6px; padding:3px 8px; background:#3a332d; color:#fff; font-size:12px; cursor:grab; user-select:none; touch-action:none; }
+  .media-bar .media-title{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .media-bar button{ background:transparent; border:none; color:#fff; cursor:pointer; font-size:14px; padding:0 4px; }
+  .media-body{ position:relative; width:100%; }
+  .media-yt .media-body{ aspect-ratio:16/9; }
+  .media-yt .media-body iframe, .media-yt .media-body .yt-host{ position:absolute; inset:0; width:100%; height:100%; border:0; }
+  .media-shield{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:transparent; color:#fff; font-weight:700; cursor:default; }
+  .media-shield.need-tap{ background:rgba(0,0,0,.55); cursor:pointer; font-size:18px; }
+  .media-audio-row{ display:flex; align-items:center; gap:8px; padding:8px 10px; color:#fff; }
+  .media-audio-row .ma-play{ width:34px; height:34px; border-radius:50%; border:none; background:var(--seal,#c25b45); color:#fff; font-size:15px; cursor:pointer; flex:none; }
+  .media-audio-row .ma-play:disabled{ opacity:.6; cursor:default; }
+  .media-audio-row input[type=range]{ flex:1; min-width:0; }
+  .media-audio-row .ma-time{ font-size:12px; font-variant-numeric:tabular-nums; flex:none; }
+  .media-resize{ position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.85) 50%); z-index:3; touch-action:none; }
+  .media-opt{ display:block; width:100%; text-align:left; }
   .image-layer{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
   .board-image{ position:absolute; transform:translate(-50%,-50%); height:auto; max-width:none; user-select:none; -webkit-user-drag:none; }
   .board-image.step-hidden{ opacity:0.35; }
@@ -4591,6 +4610,35 @@
   /* 頁面內文字輸入框（避免依賴瀏覽器原生 prompt()，某些預覽環境會封鎖原生彈窗） */
   // multiline=true（文字工具用）：改用 textarea，Enter 確認、Shift+Enter 換行（做段落／清單用）。
   var inlineInputClosedAt = 0;
+
+  /* ===== 嵌入媒體（YouTube／音檔）共用小工具 ===== */
+  function parseYouTubeId(str){
+    str = (str || "").trim();
+    var m = str.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/|v\/))([A-Za-z0-9_-]{11})/);
+    if(m) return m[1];
+    if(/^[A-Za-z0-9_-]{11}$/.test(str)) return str;
+    return null;
+  }
+  var ytApiState = "idle", ytApiWaiters = [];
+  function loadYouTubeApi(cb){
+    if(window.YT && window.YT.Player){ cb(true); return; }
+    ytApiWaiters.push(cb);
+    if(ytApiState === "loading") return;
+    ytApiState = "loading";
+    var prevReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = function(){
+      try{ if(prevReady) prevReady(); }catch(e){}
+      ytApiState = "ready"; var w = ytApiWaiters; ytApiWaiters = []; w.forEach(function(f){ f(true); });
+    };
+    var sc = document.createElement("script"); sc.src = "https://www.youtube.com/iframe_api"; sc.async = true;
+    sc.onerror = function(){ ytApiState = "idle"; var w = ytApiWaiters; ytApiWaiters = []; w.forEach(function(f){ f(false); }); };
+    document.head.appendChild(sc);
+  }
+  function fmtMediaTime(sec){
+    sec = Math.max(0, Math.floor(sec || 0));
+    var m = Math.floor(sec / 60), r = sec % 60;
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  }
   function showInlineTextInput(container, pos, onCommit, initialValue, placeholder, multiline){
     var existing = container.querySelector(".inline-text-input");
     if(existing) existing.remove();
@@ -5968,6 +6016,8 @@
     var progress = getProgress(q.id);
     var strokes = progress.strokes || [];
     var texts = progress.texts || [];
+    var medias = progress.medias || []; // 2026-09-30 嵌入媒體：{ id, kind:'youtube'|'audio', ytId, name, x, y, w }（x／y＝左上角百分比）；音檔本體存在 progress.mediaData[id]
+    var mediaEls = {};
     var images = progress.images || []; // 2026-09-30 貼上的圖片物件：{ id, src, x, y, w, ar, step }（x／y＝中心點百分比、w＝寬度佔畫布寬百分比、ar＝高／寬）
     // 2026-09-29 修正：localSelfSeq 是「這台裝置這次打開這一題以來，自己寫入 strokes 的次數」，
     // 純粹是本機自己記的計數，從 0 開始，只用來擋掉「自己剛剛才寫入的內容，卻被一份還在追上進度、
@@ -6048,6 +6098,15 @@
           <button type="button" class="trans-opt ${(slideSecInfo.sec.transition || 'none') === 'none' ? 'active' : ''}" data-trans="none">無 None</button>
           <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'fade' ? 'active' : ''}" data-trans="fade">淡入 Fade</button>
           <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'slide' ? 'active' : ''}" data-trans="slide">滑動 Slide</button>
+        </div>
+      </div>` : ''}
+      ${!isStudent ? `
+      <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v" id="btn-media" title="嵌入媒體：YouTube／音檔（全班同步播放）Embed media"><span class="tool-btn-v-icon">🎬</span><span class="tool-btn-v-label">媒體</span></button>
+        <div class="color-popover">
+          <div class="color-popover-title">嵌入媒體 Media</div>
+          <button type="button" class="eraser-mode-opt media-opt" id="btn-add-youtube">▶ 加入 YouTube</button>
+          <button type="button" class="eraser-mode-opt media-opt" id="btn-add-audio">🎵 加入音檔</button>
         </div>
       </div>` : ''}
       <div class="tool-v-sep"></div>
@@ -6323,6 +6382,8 @@
     cWrap.appendChild(traceCanvas);
     cWrap.appendChild(canvas);
     cWrap.appendChild(textLayer);
+    var mediaLayer = document.createElement("div"); mediaLayer.className = "media-layer";
+    cWrap.appendChild(mediaLayer);
 
     // 「個人描紅練習」專用的疊層：整塊蓋住 cWrap，只有打開個人描紅模式時才顯示，
     // 裡面又是一份自己的範本畫布＋自己的墨跡畫布，跟外面共用的 canvas/traceCanvas 完全獨立，
@@ -6507,7 +6568,7 @@
     }
     // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition"];
+    var NON_TOOL_BTN_IDS = ["btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media"];
 
     // 目前選定工具「本來該有」的游標樣式——跟放大縮小/自動拖曳無關，單純工具本身的樣子。
     // 抽成函式是因為畫布縮放後的「靠近墨跡才恢復成工具游標」也要用到同一份邏輯（見下面
@@ -6624,6 +6685,9 @@
         writeSections(secsT);
       };
     });
+    var btnAddYt = vToolbar.querySelector("#btn-add-youtube"), btnAddAudio = vToolbar.querySelector("#btn-add-audio");
+    if(btnAddYt) btnAddYt.onclick = function(e){ e.stopPropagation(); promptYouTube(); };
+    if(btnAddAudio) btnAddAudio.onclick = function(e){ e.stopPropagation(); pickAudioFile(); };
     if(btnSlidePrev) btnSlidePrev.onclick = slideStepPrev;
     if(btnSlideNext) btnSlideNext.onclick = slideStepNext;
     updateSlideNavUi();
@@ -7522,6 +7586,7 @@
         textLayer.appendChild(div);
       });
       renderImages();
+      renderMedias();
     }
 
     // ===== 貼上的圖片物件 =====
@@ -7532,6 +7597,218 @@
       var im = images.find(function(x){ return x.id === id; });
       var stepInputSync2 = vToolbar.querySelector(".text-step-input");
       if(stepInputSync2 && im) stepInputSync2.value = String(im.step || 0);
+    }
+
+    /* ===== 嵌入媒體：持久的 mediaLayer，重畫文字時不會重建（不然播放會被打斷） ===== */
+    var mediaSeqLocal = 0;
+    function publishMedia(h, playing, pos){
+      var cur = getProgress(q.id).mediaState || {};
+      var prev = cur[h.m.id] || {};
+      mediaSeqLocal = Math.max(mediaSeqLocal, prev.seq || 0, h.lastSeq || 0) + 1;
+      var ns = Object.assign({}, cur);
+      ns[h.m.id] = { playing: !!playing, pos: Math.round((pos || 0) * 100) / 100, seq: mediaSeqLocal, by: deviceInstanceId };
+      h.lastSeq = mediaSeqLocal; h.expPos = pos || 0; h.expAt = Date.now(); h.expPlaying = !!playing; h.lastPubAt = Date.now();
+      writeProgress(q.id, { mediaState: ns });
+    }
+    function saveMedias(){ writeProgress(q.id, { medias: medias }); }
+    function removeMedia(id){
+      medias = medias.filter(function(m){ return m.id !== id; });
+      var md = Object.assign({}, getProgress(q.id).mediaData || {}); delete md[id];
+      var ms = Object.assign({}, getProgress(q.id).mediaState || {}); delete ms[id];
+      writeProgress(q.id, { medias: medias, mediaData: md, mediaState: ms });
+      renderMedias();
+    }
+    function destroyMediaEl(id){
+      var h = mediaEls[id]; if(!h) return;
+      try{ if(h.timer) clearInterval(h.timer); }catch(e){}
+      try{ if(h.audio){ h.audio.pause(); h.audio.removeAttribute("src"); h.audio.load(); } }catch(e){}
+      try{ if(h.player && h.player.destroy) h.player.destroy(); }catch(e){}
+      if(h.root.parentNode) h.root.parentNode.removeChild(h.root);
+      delete mediaEls[id];
+    }
+    function buildMedia(m){
+      var h = { m: m, lastSeq: -1, lastState: null, expPos: 0, expAt: 0, expPlaying: false, lastPubAt: 0, suppressUntil: 0 };
+      var root = document.createElement("div");
+      root.className = "media-box " + (m.kind === "youtube" ? "media-yt" : "media-audio");
+      root.dataset.mediaId = m.id;
+      h.root = root;
+      var barHtml = isStudent ? "" : '<div class="media-bar" title="拖曳移動位置"><span class="media-title"></span><button type="button" class="media-del" title="移除">✕</button></div>';
+      root.innerHTML = barHtml + '<div class="media-body"></div>' + ((!isStudent && m.kind === "youtube") ? '<div class="media-resize" title="拖曳縮放"></div>' : '');
+      var body = root.querySelector(".media-body");
+      var titleEl = root.querySelector(".media-title"); if(titleEl) titleEl.textContent = (m.kind === "youtube" ? "▶ YouTube" : "🎵 " + (m.name || "音檔"));
+      if(!isStudent){
+        var bar = root.querySelector(".media-bar");
+        root.querySelector(".media-del").onclick = function(e){ e.stopPropagation(); if(confirm("移除這個媒體？\nRemove this media?")) removeMedia(m.id); };
+        bar.onpointerdown = function(e){
+          if(e.target.closest(".media-del")) return;
+          e.preventDefault(); try{ bar.setPointerCapture(e.pointerId); }catch(er){}
+          var cr = cWrap.getBoundingClientRect(); var sx = e.clientX, sy = e.clientY, ox = h.m.x, oy = h.m.y;
+          function mv(ev){ h.m.x = Math.max(0, Math.min(90, ox + (ev.clientX - sx) / cr.width * 100)); h.m.y = Math.max(0, Math.min(90, oy + (ev.clientY - sy) / cr.height * 100)); root.style.left = h.m.x + "%"; root.style.top = h.m.y + "%"; }
+          function up(){ bar.removeEventListener("pointermove", mv); bar.removeEventListener("pointerup", up); bar.removeEventListener("pointercancel", up); h.m.x = Math.round(h.m.x * 10) / 10; h.m.y = Math.round(h.m.y * 10) / 10; saveMedias(); }
+          bar.addEventListener("pointermove", mv); bar.addEventListener("pointerup", up); bar.addEventListener("pointercancel", up);
+        };
+        var rz = root.querySelector(".media-resize");
+        if(rz) rz.onpointerdown = function(e){
+          e.preventDefault(); e.stopPropagation(); try{ rz.setPointerCapture(e.pointerId); }catch(er){}
+          var cr = cWrap.getBoundingClientRect(); var sx = e.clientX, w0 = h.m.w;
+          function mv(ev){ h.m.w = Math.max(15, Math.min(100, w0 + (ev.clientX - sx) / cr.width * 100)); root.style.width = h.m.w + "%"; }
+          function up(){ rz.removeEventListener("pointermove", mv); rz.removeEventListener("pointerup", up); rz.removeEventListener("pointercancel", up); h.m.w = Math.round(h.m.w * 10) / 10; saveMedias(); }
+          rz.addEventListener("pointermove", mv); rz.addEventListener("pointerup", up); rz.addEventListener("pointercancel", up);
+        };
+      }
+      if(m.kind === "audio") buildAudioBody(h, body); else buildYouTubeBody(h, body);
+      return h;
+    }
+    function buildAudioBody(h, body){
+      var m = h.m;
+      body.innerHTML = '<div class="media-audio-row"><button type="button" class="ma-play">▶</button><input type="range" class="ma-seek" min="0" max="0" step="0.1" value="0"><span class="ma-time">0:00</span></div>';
+      var audio = document.createElement("audio"); audio.preload = "auto"; audio.style.display = "none";
+      var src = (getProgress(q.id).mediaData || {})[m.id]; if(src) audio.src = src;
+      body.appendChild(audio); h.audio = audio;
+      var btn = body.querySelector(".ma-play"), seek = body.querySelector(".ma-seek"), tm = body.querySelector(".ma-time");
+      var dragging = false;
+      function ui(){
+        var d = isFinite(audio.duration) ? audio.duration : 0;
+        seek.max = d || 0; if(!dragging) seek.value = audio.currentTime;
+        tm.textContent = fmtMediaTime(audio.currentTime) + " / " + fmtMediaTime(d);
+        btn.textContent = audio.paused ? "▶" : "⏸";
+      }
+      audio.addEventListener("timeupdate", ui); audio.addEventListener("loadedmetadata", ui); audio.addEventListener("play", ui); audio.addEventListener("pause", ui);
+      audio.addEventListener("ended", function(){ ui(); if(!isStudent) publishMedia(h, false, audio.duration || 0); });
+      h.getPos = function(){ return audio.currentTime; };
+      h.applyState = function(st){
+        h.suppressUntil = Date.now() + 800;
+        var target = st.pos || 0;
+        if(Math.abs(audio.currentTime - target) > 1.2 || !st.playing) { try{ audio.currentTime = target; }catch(e){} }
+        if(st.playing){
+          var pr = audio.play(); if(pr && pr.catch) pr.catch(function(){ h.needTap(); });
+        } else audio.pause();
+        ui();
+      };
+      h.needTap = function(){ btn.textContent = "▶ 點我開始"; btn.style.width = "auto"; btn.style.borderRadius = "17px"; btn.style.padding = "0 12px"; btn.disabled = false; h.tapPending = true; };
+      if(isStudent){
+        btn.disabled = true; seek.disabled = true;
+        btn.onclick = function(){ if(h.tapPending && h.lastState && h.lastState.playing){ h.tapPending = false; btn.style.cssText = ""; btn.disabled = true; audio.play().catch(function(){}); } };
+      } else {
+        btn.onclick = function(){
+          if(audio.paused){ audio.play().catch(function(){}); publishMedia(h, true, audio.currentTime); }
+          else { audio.pause(); publishMedia(h, false, audio.currentTime); }
+          ui();
+        };
+        seek.oninput = function(){ dragging = true; tm.textContent = fmtMediaTime(seek.value) + " / " + fmtMediaTime(audio.duration); };
+        seek.onchange = function(){ dragging = false; audio.currentTime = parseFloat(seek.value) || 0; publishMedia(h, !audio.paused, audio.currentTime); ui(); };
+        h.timer = setInterval(function(){ if(!audio.paused && Date.now() - h.lastPubAt > 4000) publishMedia(h, true, audio.currentTime); }, 1000);
+      }
+    }
+    function buildYouTubeBody(h, body){
+      var m = h.m;
+      var host = document.createElement("div"); host.className = "yt-host"; body.appendChild(host);
+      var shield = null;
+      if(isStudent){ shield = document.createElement("div"); shield.className = "media-shield"; body.appendChild(shield); }
+      var pending = null, ready = false;
+      function failMsg(){ body.innerHTML = '<div style="padding:16px;color:#fff;font-size:13px">無法載入 YouTube（網路或被擋住）<br><a style="color:#ffd" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=' + m.ytId + '">在新分頁開啟 Open on YouTube</a></div>'; body.style.aspectRatio = "auto"; }
+      function pubState(playing){ if(Date.now() < h.suppressUntil) return; try{ publishMedia(h, playing, h.player.getCurrentTime()); }catch(e){} }
+      h.getPos = function(){ try{ return h.player.getCurrentTime(); }catch(e){ return 0; } };
+      h.applyState = function(st){
+        if(!ready){ pending = st; return; }
+        h.suppressUntil = Date.now() + 1200;
+        var pl = h.player, cur = 0; try{ cur = pl.getCurrentTime(); }catch(e){}
+        var target = st.pos || 0;
+        if(Math.abs(cur - target) > (st.playing ? 1.5 : 0.4)) pl.seekTo(target, true);
+        if(st.playing){
+          pl.playVideo();
+          if(shield){ setTimeout(function(){ try{ if(h.lastState && h.lastState.playing && pl.getPlayerState() !== 1 && pl.getPlayerState() !== 3){ shield.classList.add("need-tap"); shield.textContent = "▶ 點一下開始播放"; } }catch(e){} }, 1600); }
+        } else {
+          pl.pauseVideo();
+        }
+        if(shield && st.playing === false){ shield.classList.remove("need-tap"); shield.textContent = ""; }
+      };
+      if(shield) shield.onclick = function(){
+        if(!shield.classList.contains("need-tap")) return;
+        shield.classList.remove("need-tap"); shield.textContent = "";
+        try{ h.player.playVideo(); if(h.lastState) h.player.seekTo(h.lastState.pos || 0, true); }catch(e){}
+      };
+      loadYouTubeApi(function(ok){
+        if(!ok){ failMsg(); return; }
+        if(!document.body.contains(root0())) { /* 已被移除 */ }
+        var opts = { videoId: m.ytId, width: "100%", height: "100%",
+          playerVars: { controls: isStudent ? 0 : 1, disablekb: 1, rel: 0, modestbranding: 1, playsinline: 1, fs: 0 },
+          events: {
+            onReady: function(){
+              ready = true;
+              if(pending){ var st = pending; pending = null; h.applyState(st); }
+              if(!isStudent){
+                h.timer = setInterval(function(){
+                  try{
+                    var stt = h.player.getPlayerState();
+                    var pos = h.player.getCurrentTime();
+                    var exp = h.expPos + (h.expPlaying ? (Date.now() - h.expAt) / 1000 : 0);
+                    if(Date.now() < h.suppressUntil) return;
+                    if(Math.abs(pos - exp) > 1.8 && (stt === 1 || stt === 2)) pubState(stt === 1);
+                    else if(stt === 1 && Date.now() - h.lastPubAt > 4000) pubState(true);
+                  }catch(e){}
+                }, 1000);
+              }
+            },
+            onStateChange: function(ev){
+              if(isStudent) return;
+              if(ev.data === 1) pubState(true);
+              else if(ev.data === 2) pubState(false);
+              else if(ev.data === 0) pubState(false);
+            }
+          } };
+        if(/^https?:$/.test(location.protocol)) opts.playerVars.origin = location.origin;
+        h.player = new YT.Player(host, opts);
+      });
+      function root0(){ return h.root; }
+    }
+    function applyMediaState(h, st){
+      if(!h || !st || !h.applyState) return;
+      h.lastState = st;
+      if(st.seq === h.lastSeq) return;
+      if(st.by === deviceInstanceId){ h.lastSeq = st.seq; return; }
+      h.lastSeq = st.seq;
+      h.applyState(st);
+    }
+    function renderMedias(){
+      var live = {};
+      medias.forEach(function(m){
+        live[m.id] = true;
+        var h = mediaEls[m.id];
+        if(!h){ h = mediaEls[m.id] = buildMedia(m); mediaLayer.appendChild(h.root); }
+        h.m = m;
+        h.root.style.left = m.x + "%"; h.root.style.top = m.y + "%"; h.root.style.width = m.w + "%";
+      });
+      Object.keys(mediaEls).forEach(function(id){ if(!live[id]) destroyMediaEl(id); });
+      var stAll = getProgress(q.id).mediaState || {};
+      medias.forEach(function(m){ applyMediaState(mediaEls[m.id], stAll[m.id]); });
+    }
+    function addMedia(obj, dataUrl){
+      var k = medias.length % 4;
+      obj.x = 8 + k * 6; obj.y = 8 + k * 24; obj.id = uid("md");
+      medias.push(obj);
+      var patch = { medias: medias };
+      if(dataUrl){ var md = Object.assign({}, getProgress(q.id).mediaData || {}); md[obj.id] = dataUrl; patch.mediaData = md; }
+      writeProgress(q.id, patch);
+      renderMedias();
+    }
+    function promptYouTube(){
+      showInlineTextInput(cWrap, { x: 50, y: 30 }, function(val){
+        var id = parseYouTubeId(val);
+        if(!id){ if((val || "").trim()) alert("看不懂這個 YouTube 連結。\nCouldn't recognise this YouTube link."); return; }
+        addMedia({ kind: "youtube", ytId: id, w: 46 });
+      }, "", "貼上 YouTube 連結，Enter 確認", false);
+    }
+    function pickAudioFile(){
+      var inp = document.createElement("input"); inp.type = "file"; inp.accept = "audio/*,.mp3,.m4a,.wav,.ogg,.aac";
+      inp.onchange = function(){
+        var f = inp.files && inp.files[0]; if(!f) return;
+        if(f.size > 6 * 1024 * 1024 && !confirm("這個音檔有 " + (f.size / 1048576).toFixed(1) + " MB，即時同步可能會比較慢，建議壓縮或剪短。仍要加入嗎？\nThis file is large; live sync may be slow. Add anyway?")) return;
+        var fr = new FileReader();
+        fr.onload = function(){ if(!document.body.contains(cWrap)) return; addMedia({ kind: "audio", name: f.name.replace(/\.[^.]+$/, ""), w: 34 }, fr.result); };
+        fr.readAsDataURL(f);
+      };
+      inp.click();
     }
     function renderImages(){
       imageLayer.innerHTML = "";
@@ -8128,6 +8405,7 @@
       }
       texts = freshProgress.texts || [];
       images = freshProgress.images || [];
+      medias = freshProgress.medias || [];
       var freshGrid = freshProgress.gridType || q.gridType || "none";
       var freshBg = freshProgress.bgImage || q.bgImage || "";
 
