@@ -1038,9 +1038,9 @@
     position:relative; width:100%; height:100%; flex-grow:1;
     display:flex; align-items:center; justify-content:center; min-width:0; min-height:0;
   }
-  /* 寫字板畫布：2026-09 起改成不管全螢幕與否都直接撐滿整個舞台區可用空間（見 JS 的
-     fitCanvasToViewport），讓整個畫面都能寫字，不再留白——底圖用 object-fit:contain 維持
-     原本比例、不會變形。這裡的 width/height 只是 JS 量測完成前的保底樣式。 */
+  /* 寫字板畫布：固定長寬比（BOARD_ASPECT_RATIO，有底圖時是底圖比例），在舞台區裡置中撐到最大，
+     小畫面與全螢幕內容完全一致、只差大小（見 JS 的 fitCanvasToViewport）。
+     這裡的 width/height 只是 JS 量測完成前的保底樣式。 */
   .canvas-stage-wrap{
     position:relative; width:100%; height:100%; flex-shrink:0;
     background:transparent; border:2.5px solid var(--seal-ring); border-radius:18px; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.06);
@@ -7389,6 +7389,7 @@
       gridOverlay.style.width = side + "px";
       gridOverlay.style.height = side + "px";
     }
+    var lastFitW = 0, lastFitH = 0;
     function fitCanvasToViewport(){
       if(!document.body.contains(cWrap)) return; // 題目已經切換掉了，這份畫布不在畫面上，略過
       var availableHeight, availableWidth;
@@ -7406,14 +7407,23 @@
       stageArea.style.width = Math.floor(availableWidth) + "px";
       stageArea.style.height = Math.floor(availableHeight) + "px";
 
-      // 2026-09：畫布（=可互動書寫範圍）不管是否全螢幕，都直接撐滿整個舞台區的可用空間，不再照
-      // BOARD_ASPECT_RATIO 留白——使用者明確要求「不是全螢幕的時候也要整個畫面都能寫字」，
-      // 底圖本身用 object-fit:contain（見 CSS 的 .bg-img-layer）維持原本比例、不變形，
-      // 多出來的左右／上下空間單純是可以直接下筆的畫布，不會被浪費掉。
-      var w = availableWidth, h = availableHeight;
+      // 2026-10-01：小畫面與全螢幕的畫布內容必須「完全一樣、只差在大小」。物件（文字、圖形、圖片、筆跡）
+      // 的位置都是存「佔畫布寬／高的百分比」，畫布的長寬比如果跟著舞台區的形狀變（小畫面又寬又扁、全螢幕又
+      // 方又高），同一個百分比落在畫面上的位置就不同——老師看到的、學生看到的、小畫面、全螢幕，全部對不齊。
+      // 所以畫布固定用 BOARD_ASPECT_RATIO（有底圖時是底圖自己的比例）這個長寬比，在舞台區裡置中、撐到最大，
+      // 多出來的只是置中留白。這個比例是寫死的常數（或圖檔本身的比例），每個人算出來都一樣，不受螢幕形狀影響。
+      var w = availableWidth, h = availableWidth / BOARD_ASPECT_RATIO;
+      if(h > availableHeight){ h = availableHeight; w = h * BOARD_ASPECT_RATIO; }
       cWrap.style.width = Math.floor(w) + "px";
       cWrap.style.height = Math.floor(h) + "px";
       positionGridOverlay();
+      // 2026-10-01：畫布尺寸變了（進出全螢幕、收合側欄、底圖載入後比例校正…）就要連「筆跡點陣圖」跟
+      // 「文字大小」一起依新尺寸重畫。以前這裡只改 cWrap 的 CSS 尺寸，筆跡點陣圖還是舊大小被拉伸、
+      // 文字字級沒跟著縮放，所以全螢幕看到的內容跟小畫面不一樣（只有真的觸發瀏覽器視窗 resize 才會重畫）。
+      var fitW = Math.floor(w), fitH = Math.floor(h);
+      var fitChanged = (fitW !== lastFitW || fitH !== lastFitH);
+      lastFitW = fitW; lastFitH = fitH;
+      if(fitChanged && typeof resizeCanvas === "function") resizeCanvas();
       if(typeof renderShapeSvg === "function") renderShapeSvg();
       if(typeof applyCanvasZoomPan === "function") applyCanvasZoomPan(); // cWrap 的基準尺寸變了，縮放/平移要重新夾限一次，避免留下超出邊界的舊位移
     }
