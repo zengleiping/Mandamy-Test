@@ -891,6 +891,11 @@
     border:1.5px solid rgba(28,33,30,0.14); border-radius:7px;
   }
   .text-fmt-btn:hover{ border-color:var(--seal); color:var(--seal); }
+  .text-bg-toggle{ display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:600; cursor:pointer; }
+  .text-bg-controls{ display:flex; align-items:center; gap:8px; }
+  .text-bg-controls input[type=color]{ width:34px; height:26px; padding:0; border:1.5px solid rgba(28,33,30,0.2); border-radius:6px; background:none; cursor:pointer; flex:none; }
+  .text-bg-controls input[type=range]{ flex:1; min-width:0; }
+  .text-bg-controls b{ font-size:11.5px; min-width:34px; text-align:right; }
   .text-fmt-btn.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
   /* 物件（文字／圖片）只有在「文字」或「橡皮擦」工具時才可以點、拖、選取；用筆／移動畫面等其他工具時完全穿透，
      不會不小心點到或拖動它們。 */
@@ -5228,6 +5233,7 @@
   function sortedByOrder(obj){
     return Object.keys(obj || {}).map(function(k){ return obj[k]; }).sort(function(a, b){ return (a.order || 0) - (b.order || 0); });
   }
+  function exportRgba(hex, a){ var h = /^#[0-9a-fA-F]{6}$/.test(hex || "") ? hex : "#FFF3B0"; return "rgba(" + parseInt(h.substr(1, 2), 16) + "," + parseInt(h.substr(3, 2), 16) + "," + parseInt(h.substr(5, 2), 16) + "," + (a == null ? 1 : a) + ")"; }
   function strokesToPng(strokes, W, H, scale){
     if(!strokes || !strokes.length) return "";
     var c = document.createElement("canvas"); c.width = W; c.height = H;
@@ -5282,7 +5288,7 @@
     (pr.texts || []).forEach(function(t){
       var cls = "mt" + (t.list === "bullet" ? " list-bullet" : (t.list === "number" ? " list-number" : ""));
       var bold = (t.bold === undefined) ? true : !!t.bold;
-      h += '<div class="' + cls + '" style="left:' + t.x + '%;top:' + t.y + '%;font-size:' + Math.round((t.fontSize || 36) * scale) + 'px;font-weight:' + (bold ? 700 : 400) + ';color:' + escapeHtml(t.color || "#2B2320") + ';text-align:' + (t.align || "left") + ';">' + buildPhoneticHtml(t.text, t.phoneticOverride) + '</div>';
+      h += '<div class="' + cls + '" style="left:' + t.x + '%;top:' + t.y + '%;font-size:' + Math.round((t.fontSize || 36) * scale) + 'px;font-weight:' + (bold ? 700 : 400) + ';color:' + escapeHtml(t.color || "#2B2320") + ';text-align:' + (t.align || "left") + ';' + (t.bgOn ? 'background:' + exportRgba(t.bgColor, t.bgOp) + ';padding:.12em .45em;border-radius:.3em;' : '') + '">' + buildPhoneticHtml(t.text, t.phoneticOverride) + '</div>';
     });
     h += '</div>';
     var kPrint = Math.min(1000 / W, 690 / H);
@@ -8049,7 +8055,7 @@
   // opacity：畫筆濃淡（1 = 全不透明／最濃，數字越小越淡）——老師點重點時可以調淡一點，
   // 學生跟著描的時候才看得出來哪些是老師畫的、哪些是自己描上去的，兩者疊在一起也不會完全分不出來。
   // 2026-09-30：筆刷粗細預設改成 2（使用者要求）；文字新增 bold（加粗）開關，預設不加粗。
-  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false, shapeOpacity: 1 };
+  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false, shapeOpacity: 1, textBgOn: false, textBgColor: "#FFF3B0", textBgOp: 1 };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
   // pinnedExtraTools：工具列精簡後，格線／底圖／移動畫面／錄示範這些非核心工具預設收合，
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
@@ -8267,6 +8273,14 @@
               <span class="fmt-sep"></span>
               <button type="button" class="text-fmt-btn ${boardState.list==='bullet'?'active':''}" data-list="bullet" title="項目符號 Bullets（每一行一個 •）"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><circle cx="2.5" cy="4" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="2.5" cy="12" r="1.4"/><path d="M6 4h8M6 8h8M6 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
               <button type="button" class="text-fmt-btn ${boardState.list==='number'?'active':''}" data-list="number" title="編號 Numbered list（每一行 1. 2. 3.）">1.</button>
+            </div>
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>文字框底色 Box background</span><label class="text-bg-toggle" title="預設不加底色；打勾後可以選顏色和透明度（選取文字方塊時改那一個，也會是之後新打的字的預設）"><input type="checkbox" class="text-bg-on" ${boardState.textBgOn ? "checked" : ""}> 加底色</label></div>
+            <div class="text-bg-controls">
+              <input type="color" class="text-bg-color" value="${boardState.textBgColor}" title="底色">
+              <input type="range" class="text-bg-op" min="10" max="100" step="5" value="${Math.round((boardState.textBgOp == null ? 1 : boardState.textBgOp) * 100)}" title="底色透明度（越右越不透明）">
+              <b class="text-bg-opv">${Math.round((boardState.textBgOp == null ? 1 : boardState.textBgOp) * 100)}%</b>
             </div>
           </div>
           <div class="popover-field-row">
@@ -9387,6 +9401,7 @@
         color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: 0,
         align: boardState.align || "left", list: boardState.list || "none"
       };
+      applyTextBgDefaults(t);
       if(!t.text) return;
       snapshotForUndo();
       assignNewZ("text", t);
@@ -9515,6 +9530,7 @@
           } else if(val){
             snapshotForUndo();
             var nt = { id: uid("t"), text: val, x: newPos.x, y: newPos.y, color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: boardState.step || 0, align: boardState.align || "left", list: boardState.list || "none" };
+            applyTextBgDefaults(nt);
             assignNewZ("text", nt);
             texts.push(nt); writeProgress(q.id, { texts: texts });
           }
@@ -10109,6 +10125,8 @@
     // 2026-09-30：文字加粗。舊資料沒有 bold 欄位，一律當成加粗（跟這個功能上線前的樣子一樣，文字方塊
     // 本來就是 font-weight:700）；新打的字用工具列的「B」開關決定（boardState.bold，預設不加粗）。
     function isTextBold(t){ return t.bold === undefined ? true : !!t.bold; }
+    function applyTextBgDefaults(t){ if(boardState.textBgOn){ t.bgOn = true; t.bgColor = boardState.textBgColor; t.bgOp = boardState.textBgOp == null ? 1 : boardState.textBgOp; } }
+    function textBgRgba(hex, a){ var h = /^#[0-9a-fA-F]{6}$/.test(hex || "") ? hex : "#FFF3B0"; return "rgba(" + parseInt(h.substr(1, 2), 16) + "," + parseInt(h.substr(3, 2), 16) + "," + parseInt(h.substr(5, 2), 16) + "," + (a == null ? 1 : a) + ")"; }
 
     function renderTexts(){
       if(inPlaceEdit){ inPlaceEdit.refreshStyle(); return; } // 正在就地編輯：不要重建文字層（會把正在打字的框搞掉）
@@ -10132,6 +10150,12 @@
         div.style.fontSize = Math.round(baseSize * scale) + "px";
         div.style.fontWeight = isTextBold(t) ? "700" : "400";
         div.style.textAlign = t.align || "left";
+        if(t.bgOn){
+          // 文字框底色：樣式表裡 .movable-text 的 background／padding 都是 !important，行內要用 important 才蓋得過
+          div.style.setProperty("background", textBgRgba(t.bgColor, t.bgOp), "important");
+          div.style.setProperty("padding", "0.12em 0.45em", "important");
+          div.style.setProperty("border-radius", "0.3em", "important");
+        }
         if(t.list === "bullet") div.classList.add("list-bullet"); else if(t.list === "number") div.classList.add("list-number");
 
         div.innerHTML = `
@@ -10240,6 +10264,7 @@
           var stepInputSync = vToolbar.querySelector(".text-step-input");
           if(stepInputSync) stepInputSync.value = String(t.step || 0);
           syncTextFmtUi(t.align || "left", t.list || "none");
+          if(typeof syncTextBgUi === "function") syncTextBgUi(t);
           snapshotForUndo(); // 在拖動開始「之前」存一份快照，上一步就能整個復原成拖動前的位置
 
           var startX = e.clientX, startY = e.clientY;
@@ -11102,6 +11127,32 @@
         }
       });
     }
+
+    // 文字框底色（預設不加）：勾選＝加底色，顏色與透明度可調。選取文字方塊時改那一個，同時記成之後新打的字的預設。
+    var bgOnEl = vToolbar.querySelector(".text-bg-on"), bgColorEl = vToolbar.querySelector(".text-bg-color"), bgOpEl = vToolbar.querySelector(".text-bg-op"), bgOpvEl = vToolbar.querySelector(".text-bg-opv");
+    function selectedTextObj(){ return activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null; }
+    function syncTextBgUi(t){
+      var on = t ? !!t.bgOn : boardState.textBgOn, col = t ? (t.bgColor || boardState.textBgColor) : boardState.textBgColor, op = t ? (t.bgOp == null ? 1 : t.bgOp) : boardState.textBgOp;
+      if(bgOnEl) bgOnEl.checked = on; if(bgColorEl) bgColorEl.value = col;
+      if(bgOpEl) bgOpEl.value = String(Math.round(op * 100)); if(bgOpvEl) bgOpvEl.textContent = Math.round(op * 100) + "%";
+    }
+    function applyTextBgChange(commit){
+      boardState.textBgOn = !!(bgOnEl && bgOnEl.checked);
+      boardState.textBgColor = bgColorEl ? bgColorEl.value : boardState.textBgColor;
+      boardState.textBgOp = bgOpEl ? (Number(bgOpEl.value) / 100) : 1;
+      if(bgOpvEl) bgOpvEl.textContent = Math.round(boardState.textBgOp * 100) + "%";
+      var sel = selectedTextObj();
+      if(sel){
+        if(commit) snapshotForUndo();
+        if(boardState.textBgOn){ sel.bgOn = true; sel.bgColor = boardState.textBgColor; sel.bgOp = boardState.textBgOp; }
+        else { delete sel.bgOn; delete sel.bgColor; delete sel.bgOp; }
+        writeProgress(q.id, { texts: texts });
+        renderTexts();
+      }
+    }
+    if(bgOnEl) bgOnEl.onchange = function(){ applyTextBgChange(true); };
+    if(bgColorEl){ bgColorEl.oninput = function(){ if(bgOnEl && !bgOnEl.checked){ bgOnEl.checked = true; } applyTextBgChange(false); }; bgColorEl.onchange = function(){ applyTextBgChange(false); }; }
+    if(bgOpEl){ bgOpEl.oninput = function(){ if(bgOnEl && !bgOnEl.checked){ bgOnEl.checked = true; } applyTextBgChange(false); }; }
 
     // 加粗：按下切換 boardState.bold（之後新打的字套用）；如果目前有選取的文字方塊，也同步改那一個。
     var boldBtn = vToolbar.querySelector(".text-bold-btn");
