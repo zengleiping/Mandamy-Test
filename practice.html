@@ -894,6 +894,10 @@
   .tb-dragging-src{ opacity:.3; }
   .tb-drop-line{ position:fixed; z-index:30001; pointer-events:none; background:var(--seal); border-radius:2px; box-shadow:0 0 0 2px rgba(255,255,255,.7); }
   .tb-drop-bar{ outline:2.5px dashed var(--seal); outline-offset:2px; }
+  /* 文字就地編輯（像 PPT：直接在原本的文字位置、原本的樣式裡打字） */
+  .movable-text.editing{ user-select:text !important; -webkit-user-select:text !important; cursor:text !important; border-color:var(--seal) !important; }
+  .movable-text.editing .text-content{ outline:none; white-space:pre-wrap; min-width:1em; min-height:1em; caret-color:currentColor; user-select:text; -webkit-user-select:text; }
+  .movable-text.editing .resize-handle, .movable-text.editing .text-step-badge{ display:none !important; }
   .tb-modal-back{ position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:20000; display:flex; align-items:center; justify-content:center; }
   .tb-modal{ background:var(--surface); color:var(--ink); border-radius:16px; padding:18px 20px; width:min(460px,92vw); max-height:86vh; overflow:auto; box-shadow:0 20px 50px rgba(0,0,0,.35); }
   .tb-modal h3{ margin:0 0 4px; font-size:17px; } .tb-modal .tb-hint{ font-size:12px; color:var(--ink-soft); margin-bottom:10px; }
@@ -7314,6 +7318,99 @@
 
     // 修改已經打好的文字：用 id 重新找一次（編輯期間房間同步可能已經把 texts 換成新的一批物件，
     // 直接改舊的物件會白改）。內容清空或沒變＝不動；文字有改就清掉舊的注音修正（字元位置對不上了）。
+
+    // ===== 文字就地編輯：像 PPT，直接在文字原本的位置、原本的樣式裡打字 =====
+    // Enter＝換行；點一下別處／Esc／Ctrl+Enter＝確認。正在編輯時 renderTexts() 不會重建文字層（見上面的 guard）。
+    var inPlaceEdit = null;
+    function applyEditDivStyle(div, src, scale){
+      div.style.color = src.color || "var(--ink)";
+      div.style.fontSize = Math.round((src.fontSize || 36) * scale) + "px";
+      div.style.fontWeight = (src.bold === undefined ? true : !!src.bold) ? "700" : "400";
+      div.style.textAlign = src.align || "left";
+    }
+    function editTextInPlace(textId, newPos, pt){
+      if(inPlaceEdit) inPlaceEdit.finish(true);
+      var scale = getScaleRatio();
+      var t0 = textId ? texts.find(function(x){ return x.id === textId; }) : null;
+      if(textId && !t0) return;
+      var div = null;
+      if(t0) div = textLayer.querySelector('.movable-text[data-text-id="' + textId + '"]');
+      if(!div){
+        div = document.createElement("div"); div.className = "movable-text active";
+        div.style.left = (t0 ? t0.x : newPos.x) + "%"; div.style.top = (t0 ? t0.y : newPos.y) + "%";
+        div.style.zIndex = "99990";
+        div.innerHTML = '<div class="text-content"></div>';
+        textLayer.appendChild(div);
+      }
+      var content = div.querySelector(".text-content");
+      div.classList.remove("list-bullet", "list-number"); div.classList.add("editing", "active");
+      content.textContent = t0 ? t0.text : "";
+      content.contentEditable = "plaintext-only";
+      if(content.contentEditable !== "plaintext-only") content.contentEditable = "true";
+      content.spellcheck = false;
+      var done = false;
+      function readValue(){ return String(content.innerText || "").replace(/ /g, " ").replace(/\r\n?/g, "\n").replace(/\n+$/, "").trim(); }
+      function refreshStyle(){ try{ content.focus(); }catch(er){} applyEditDivStyle(div, t0 ? (texts.find(function(x){ return x.id === textId; }) || t0) : boardState, getScaleRatio()); }
+      applyEditDivStyle(div, t0 || boardState, scale);
+      function outside(ev){
+        var tg = ev.target;
+        if(div.contains(tg)) return;
+        if(tg.closest && tg.closest(".draw-toolbar-vertical, .draw-toolbar-top, .color-popover")) return; // 按工具列（字級／顏色／對齊…）不結束編輯
+        finish(true);
+      }
+      function onKey(ev){
+        if(ev.isComposing || ev.keyCode === 229) return;
+        var inContent = ev.target === content || content.contains(ev.target);
+        if(ev.key === "Escape"){ ev.preventDefault(); ev.stopPropagation(); finish(true); }
+        else if(ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); ev.stopPropagation(); finish(true); }
+        else if(inContent) ev.stopPropagation(); // 打字時不要觸發翻頁／刪除物件等快捷鍵
+      }
+      function onPaste(ev){
+        ev.preventDefault(); ev.stopPropagation();
+        var txt = (ev.clipboardData || window.clipboardData).getData("text/plain") || "";
+        document.execCommand("insertText", false, txt);
+      }
+      function finish(commit){
+        if(done) return; done = true; inPlaceEdit = null;
+        document.removeEventListener("pointerdown", outside, true);
+        document.removeEventListener("keydown", onKey, true);
+        content.removeEventListener("paste", onPaste, true);
+        var val = readValue();
+        inlineInputClosedAt = Date.now();
+        if(commit){
+          if(t0){
+            var target = texts.find(function(x){ return x.id === textId; });
+            if(target){
+              if(val === ""){ snapshotForUndo(); texts = texts.filter(function(x){ return x.id !== textId; }); writeProgress(q.id, { texts: texts }); }
+              else if(val !== target.text){ snapshotForUndo(); target.text = val; delete target.phoneticOverride; writeProgress(q.id, { texts: texts }); }
+            }
+          } else if(val){
+            snapshotForUndo();
+            var nt = { id: uid("t"), text: val, x: newPos.x, y: newPos.y, color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: boardState.step || 0, align: boardState.align || "left", list: boardState.list || "none" };
+            assignNewZ("text", nt);
+            texts.push(nt); writeProgress(q.id, { texts: texts });
+          }
+        }
+        clearObjSelection();
+        renderTexts();
+      }
+      inPlaceEdit = { finish: finish, refreshStyle: refreshStyle };
+      document.addEventListener("pointerdown", outside, true);
+      document.addEventListener("keydown", onKey, true);
+      content.addEventListener("paste", onPaste, true);
+      content.focus();
+      try{
+        var rg = document.createRange(), sl = window.getSelection();
+        rg.selectNodeContents(content); rg.collapse(false); // 預設：游標在最後面
+        if(pt){ // 雙擊改字：游標放在點到的位置（像 PPT）
+          var cr = null;
+          if(document.caretRangeFromPoint) cr = document.caretRangeFromPoint(pt.x, pt.y);
+          else if(document.caretPositionFromPoint){ var cp = document.caretPositionFromPoint(pt.x, pt.y); if(cp){ cr = document.createRange(); cr.setStart(cp.offsetNode, cp.offset); cr.collapse(true); } }
+          if(cr && content.contains(cr.startContainer)) rg = cr;
+        }
+        sl.removeAllRanges(); sl.addRange(rg);
+      }catch(er){}
+    }
     function openTextEditor(textId){
       var cur = texts.find(function(item){ return item.id === textId; });
       if(!cur) return;
@@ -7872,6 +7969,7 @@
     function isTextBold(t){ return t.bold === undefined ? true : !!t.bold; }
 
     function renderTexts(){
+      if(inPlaceEdit){ inPlaceEdit.refreshStyle(); return; } // 正在就地編輯：不要重建文字層（會把正在打字的框搞掉）
       textLayer.innerHTML = "";
       var scale = getScaleRatio();
       var zrT = zRanks();
@@ -7884,6 +7982,7 @@
         div.className = "movable-text" + (t.id === activeSelectedTextId ? " active" : "") + (stepHidden ? " step-hidden" : "");
         div.style.left = t.x + "%";
         div.style.top = t.y + "%";
+        div.dataset.textId = t.id;
         div.style.zIndex = String((zrT.map[t.id] || 0) + 1);
         div.style.color = t.color || "var(--ink)";
 
@@ -7970,6 +8069,7 @@
 
         div.onpointerdown = function(e){
           e.stopPropagation();
+          if(div.classList.contains("editing")) return; // 就地編輯中：讓游標／選取文字正常運作，不要當成拖曳
 
           if(boardState.tool === "stroke-eraser"){
             snapshotForUndo();
@@ -7984,7 +8084,7 @@
           if(lastTextTap.id === t.id && tapNow - lastTextTap.at < 400){
             lastTextTap = { id: null, at: 0 };
             activeSelectedTextId = t.id; activeSelectedImageId = null; activeSelectedShapeId = null;
-            openTextEditor(t.id);
+            editTextInPlace(t.id, null, { x: e.clientX, y: e.clientY });
             return;
           }
           lastTextTap = { id: t.id, at: tapNow };
@@ -8652,6 +8752,8 @@
       }
       if(boardState.tool === "shape"){ startShapeDraw(p); return; }
       if(boardState.tool === "text"){
+        editTextInPlace(null, p);
+        return;
         showInlineTextInput(cWrap, p, function(txt){
           if(txt && txt.trim()){
             snapshotForUndo();
