@@ -53,6 +53,8 @@
      監看（用筆畫資料重畫）不同，這裡是畫面本身的忠實快照，就算學生那邊資料同步正常但畫面其實
      沒顯示出來（圖片沒load出來、當掉），老師這邊也看得出來。 -->
 <script src="vendor/html2canvas.min.js"></script>
+<!-- JSZip：匯入 PowerPoint（.pptx）時解開檔案（.pptx 本質上是 zip）；自託管，離線也能用 -->
+<script src="vendor/jszip.min.js"></script>
 <style>
   :root{
     --paper:#FAF7F2;
@@ -1579,9 +1581,11 @@
           <div class="bank-menu-pop" id="add-slide-menu-pop">
             <button type="button" class="bank-menu-item" id="btn-new-slide" title="新增一張空白投影片（不是題目，是上課內容，可以直接畫記／貼圖）Add a blank slide — not a question, just teaching content you can draw or paste on">🖼️ 空白投影片 Blank Slide</button>
             <button type="button" class="bank-menu-item" id="btn-import-slides-top" title="匯入簡報：上傳 PDF（在簡報軟體另存新檔／匯出成 PDF），每一頁自動變成一張投影片 Import a PDF export of your slides — each page becomes a slide">📥 匯入 PDF Import PDF</button>
+            <button type="button" class="bank-menu-item" id="btn-import-pptx" title="匯入 PowerPoint（.pptx）：文字、圖片、圖案、音檔都會變成可編輯的物件，講者備註變成老師備註 Import a .pptx — text, pictures, shapes and audio become editable objects">📊 匯入 PowerPoint (.pptx) Import PowerPoint</button>
           </div>
         </div>
         <input type="file" id="import-slides-top-file" accept="application/pdf" style="display:none;">
+        <input type="file" id="import-pptx-file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none;">
 
         <div class="bank-menu-wrap" id="bank-menu-wrap">
           <button type="button" class="btn btn-sm" id="btn-bank-menu" style="width:100%; justify-content:center; margin-top:8px; border:1.5px solid var(--bamboo); color:var(--bamboo); font-weight:700;">編輯題庫 Edit Questions</button>
@@ -2112,7 +2116,7 @@
 <script>
 (function(){
   "use strict";
-  var DB_NAME = "mandamy-offline", DB_VER = 1;
+  var DB_NAME = "mandamy-offline", DB_VER = 2;
   var dbPromise = null;
   var ok = !!window.indexedDB;
 
@@ -2129,6 +2133,8 @@
           var vs = db.createObjectStore("versions", { keyPath: "id", autoIncrement: true });
           vs.createIndex("byLib", "libKey", { unique: false });
         }
+        // 2026-10-01：大型媒體（音檔）的本機存放區——課程資料裡只放參照（mm:<key>），不把整個檔案塞進課程庫／雲端資料庫
+        if(!db.objectStoreNames.contains("media")) db.createObjectStore("media", { keyPath: "key" });
       };
       req.onsuccess = function(){ resolve(req.result); };
       req.onerror = function(){ reject(req.error); };
@@ -2198,6 +2204,23 @@
     return reqPut("libs", rec);
   }
   function deleteLib(key){ return reqDelete("libs", key); }
+
+  /* ---- 媒體（音檔）本機存放區 ---- */
+  function sha256Hex(buf){
+    if(window.crypto && crypto.subtle && crypto.subtle.digest){
+      return crypto.subtle.digest("SHA-256", buf).then(function(d){ return Array.prototype.map.call(new Uint8Array(d), function(b){ return (b < 16 ? "0" : "") + b.toString(16); }).join(""); });
+    }
+    var u = new Uint8Array(buf), h = 5381; for(var i = 0; i < u.length; i++) h = (Math.imul(h, 33) + u[i]) | 0;
+    return Promise.resolve((h >>> 0).toString(16) + "x" + u.length.toString(16) + Math.random().toString(16).slice(2, 10));
+  }
+  function putMedia(blob, name){
+    return blob.arrayBuffer().then(sha256Hex).then(function(hex){
+      var key = "m_" + hex.slice(0, 32);
+      return reqPut("media", { key: key, blob: blob, name: name || "", type: blob.type || "", size: blob.size, savedAt: Date.now() }).then(function(){ return key; });
+    });
+  }
+  function putMediaWithKey(key, blob, name){ return reqPut("media", { key: key, blob: blob, name: name || "", type: blob.type || "", size: blob.size, savedAt: Date.now() }); }
+  function getMedia(key){ return reqGet("media", key); }
 
   /* ---- 版本記錄 ----
      自動存檔約每 5 分鐘一份（編輯中才會存，內容沒變就不存）。保留 30 天：
@@ -2309,7 +2332,7 @@
   /* ---- 「離線就緒」檢查：頁面＋函式庫都在快取裡 ---- */
   function checkAssetsReady(){
     if(!("caches" in window)) return Promise.resolve(false);
-    var need = ["practice.html", "vendor/pdf.worker.min.js", "vendor/pinyin-pro.js", "vendor/hanzi-writer.min.js", "vendor/xlsx.full.min.js", "vendor/pdf.min.js", "vendor/html2canvas.min.js"];
+    var need = ["practice.html", "vendor/pdf.worker.min.js", "vendor/pinyin-pro.js", "vendor/hanzi-writer.min.js", "vendor/xlsx.full.min.js", "vendor/pdf.min.js", "vendor/html2canvas.min.js", "vendor/jszip.min.js"];
     return Promise.all(need.map(function(u){ return caches.match(u, { ignoreSearch: true }).then(function(h){ return !!h; }); }))
       .then(function(rs){ return rs.every(Boolean); }).catch(function(){ return false; });
   }
@@ -2317,6 +2340,7 @@
   Object.assign(api, {
     canon: canon, canonHash: canonHash, hashString: hashString,
     getLib: getLib, listLibs: listLibs, putLibNow: putLibNow, deleteLib: deleteLib,
+    putMedia: putMedia, putMediaWithKey: putMediaWithKey, getMedia: getMedia,
     addVersion: addVersion, listVersions: listVersions, getVersion: getVersion, deleteVersion: deleteVersion, setVersionPinned: setVersionPinned, versionsToDrop: versionsToDrop, pruneVersions: pruneVersions,
     scheduleSave: scheduleSave, flush: flush, flushAll: flushAll,
     loadLocalDemo: loadLocalDemo, requestPersist: requestPersist, checkAssetsReady: checkAssetsReady
@@ -2365,6 +2389,14 @@
     });
     window.__firebaseReady = true;
     window.dispatchEvent(new Event("firebase-bridge-ready"));
+    // 2026-10-01：Firebase Storage（存大型媒體，例如匯入簡報裡的音檔）。不影響主流程：載不到（離線、或專案沒開 Storage）
+    // 就只是「音檔只存在這台裝置」，不會讓整個 Firebase 連線失敗。
+    try{
+      import("https://www.gstatic.com/firebasejs/12.18.0/firebase-storage.js").then(function(sm){
+        window.storageApi = { storage: sm.getStorage(fbApp), ref: sm.ref, uploadBytes: sm.uploadBytes, getDownloadURL: sm.getDownloadURL };
+        window.dispatchEvent(new Event("firebase-storage-ready"));
+      }).catch(function(e){ console.warn("Firebase Storage 載入失敗（音檔只會存在這台裝置）", e); });
+    }catch(e){}
   }catch(e){
     console.error("Firebase 連線初始化失敗：", e);
     // 明確失敗（例如沒有網路、SDK 載不到）就立刻通知，不要讓登入畫面乾等 12 秒逾時才發現連不上
@@ -2373,6 +2405,645 @@
   }
 })();
 </script>
+
+<!-- PPTX-MODULE-START -->
+<script>
+/* ============ 2026-10-01 匯入 PowerPoint（.pptx）：直接解析檔案，不經過 PDF ============
+   .pptx 其實是一個 zip：ppt/slides/slideN.xml 是每一頁的內容、_rels 是它引用的圖片／音檔、ppt/media/ 是檔案本身。
+   這裡用 JSZip 解開，把每一頁的「文字方塊、圖片、圖案、音檔、背景」轉成小白板現有的資料格式
+   （texts／images／shapes／medias／bgImage，座標一律是「佔整頁寬高的百分比」），老師匯入後可以直接編輯。
+   座標換算：EMU（914400 = 1 吋，12700 = 1 pt）→ 佔頁面寬／高的百分比；字級換成「640 寬畫布」的單位
+   （跟 texts[].fontSize 一樣，畫布寬度 / 640 倍率），所以不管畫布多大，字跟版面的比例都跟原簡報一致。
+   不處理（會在匯入摘要裡提醒）：動畫、換頁效果、表格／圖表／SmartArt（只撈文字）、影片。
+   解析某一頁失敗時，那一頁會變成「白底＋抽出來的純文字」，不會整份匯入失敗。 */
+(function(){
+  "use strict";
+  var NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+  function parseXml(text){
+    var doc = new DOMParser().parseFromString(text, "application/xml");
+    if(doc.getElementsByTagName("parsererror").length) throw new Error("XML 格式錯誤");
+    return doc;
+  }
+  function kids(node, name){
+    var out = [];
+    if(!node) return out;
+    for(var c = node.firstChild; c; c = c.nextSibling){ if(c.nodeType === 1 && (name === undefined || c.nodeName === name)) out.push(c); }
+    return out;
+  }
+  function kid(node, name){ return kids(node, name)[0] || null; }
+  function path(node){ // kid chain: path(n, "a", "b", "c")
+    var cur = node;
+    for(var i = 1; i < arguments.length && cur; i++) cur = kid(cur, arguments[i]);
+    return cur;
+  }
+  function attr(node, name, dflt){ if(!node) return dflt; var v = node.getAttribute(name); return (v === null || v === "") ? dflt : v; }
+  function num(node, name, dflt){ var v = attr(node, name, null); if(v === null) return dflt; var n = Number(v); return isFinite(n) ? n : dflt; }
+
+  /* ---------- zip／關聯檔（rels）輔助 ---------- */
+  function dirOf(p){ var i = p.lastIndexOf("/"); return i < 0 ? "" : p.slice(0, i); }
+  function resolvePath(baseDir, target){
+    if(/^[a-z]+:/i.test(target)) return null; // 外部連結
+    var parts = (target.charAt(0) === "/" ? target.slice(1) : (baseDir ? baseDir + "/" + target : target)).split("/"), out = [];
+    parts.forEach(function(s){ if(s === "..") out.pop(); else if(s && s !== ".") out.push(s); });
+    return out.join("/");
+  }
+  async function readText(zip, p){ var f = zip.file(p); if(!f) return null; return await f.async("string"); }
+  async function readRels(zip, partPath){
+    var dir = dirOf(partPath), name = partPath.slice(dir.length ? dir.length + 1 : 0);
+    var relsPath = (dir ? dir + "/" : "") + "_rels/" + name + ".rels";
+    var txt = await readText(zip, relsPath), map = {};
+    if(!txt) return map;
+    var doc = parseXml(txt);
+    kids(doc.documentElement, "Relationship").forEach(function(r){
+      var t = attr(r, "Target", ""), mode = attr(r, "TargetMode", "");
+      map[attr(r, "Id", "")] = { type: attr(r, "Type", ""), target: mode === "External" ? null : resolvePath(dir, t), external: mode === "External" ? t : null };
+    });
+    return map;
+  }
+
+  /* ---------- 顏色 ---------- */
+  function hex2(n){ n = Math.max(0, Math.min(255, Math.round(n))); return (n < 16 ? "0" : "") + n.toString(16); }
+  function rgbToHsl(r, g, b){
+    r /= 255; g /= 255; b /= 255; var mx = Math.max(r, g, b), mn = Math.min(r, g, b), h = 0, s = 0, l = (mx + mn) / 2;
+    if(mx !== mn){ var d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      if(mx === r) h = (g - b) / d + (g < b ? 6 : 0); else if(mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h /= 6; }
+    return [h, s, l];
+  }
+  function hslToRgb(h, s, l){
+    function f(p, q, t){ if(t < 0) t += 1; if(t > 1) t -= 1; if(t < 1/6) return p + (q - p) * 6 * t; if(t < 1/2) return q; if(t < 2/3) return p + (q - p) * (2/3 - t) * 6; return p; }
+    if(s === 0){ var v = l * 255; return [v, v, v]; }
+    var q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    return [f(p, q, h + 1/3) * 255, f(p, q, h) * 255, f(p, q, h - 1/3) * 255];
+  }
+  function applyColorMods(hex, node){
+    var r = parseInt(hex.substr(1, 2), 16), g = parseInt(hex.substr(3, 2), 16), b = parseInt(hex.substr(5, 2), 16);
+    var hsl = rgbToHsl(r, g, b), alpha = 1;
+    kids(node).forEach(function(m){
+      var v = num(m, "val", null); if(v === null) return; v /= 100000;
+      if(m.nodeName === "a:lumMod") hsl[2] = Math.min(1, hsl[2] * v);
+      else if(m.nodeName === "a:lumOff") hsl[2] = Math.min(1, Math.max(0, hsl[2] + v));
+      else if(m.nodeName === "a:satMod") hsl[1] = Math.min(1, hsl[1] * v);
+      else if(m.nodeName === "a:tint") hsl[2] = hsl[2] + (1 - hsl[2]) * (1 - v);
+      else if(m.nodeName === "a:shade") hsl[2] = hsl[2] * v;
+      else if(m.nodeName === "a:alpha") alpha = v;
+    });
+    var rgb = hslToRgb(hsl[0], hsl[1], hsl[2]);
+    return { color: "#" + hex2(rgb[0]) + hex2(rgb[1]) + hex2(rgb[2]), alpha: alpha };
+  }
+  // ctx: { theme: {dk1:..,lt1:..,accent1:..}, clrMap: {bg1:"lt1",tx1:"dk1",...} }；回傳 {color, alpha} 或 null
+  function resolveColor(fillNode, ctx){
+    if(!fillNode) return null;
+    var c = kids(fillNode)[0]; if(!c) return null;
+    var base = null;
+    if(c.nodeName === "a:srgbClr") base = "#" + attr(c, "val", "000000").toLowerCase();
+    else if(c.nodeName === "a:sysClr") base = "#" + attr(c, "lastClr", "000000").toLowerCase();
+    else if(c.nodeName === "a:prstClr"){ var pc = { black: "#000000", white: "#ffffff", red: "#ff0000", green: "#008000", blue: "#0000ff", yellow: "#ffff00", gray: "#808080" }; base = pc[attr(c, "val", "black")] || "#000000"; }
+    else if(c.nodeName === "a:schemeClr"){
+      var nm = attr(c, "val", "tx1"), m = (ctx && ctx.clrMap) || {};
+      var key = m[nm] || nm; if(key === "tx1") key = "dk1"; else if(key === "bg1") key = "lt1"; else if(key === "tx2") key = "dk2"; else if(key === "bg2") key = "lt2";
+      base = (ctx && ctx.theme && ctx.theme[key]) || (key === "lt1" ? "#ffffff" : "#000000");
+    }
+    if(!base) return null;
+    if(!/^#[0-9a-f]{6}$/.test(base)) base = "#000000";
+    return applyColorMods(base, c);
+  }
+  function fillOf(spPr, ctx){ // 回傳 { kind:"solid", color, alpha } | { kind:"none" } | { kind:"blip", rid } | null(沒寫)
+    if(!spPr) return null;
+    if(kid(spPr, "a:noFill")) return { kind: "none" };
+    var sf = kid(spPr, "a:solidFill"); if(sf){ var c = resolveColor(sf, ctx); return c ? { kind: "solid", color: c.color, alpha: c.alpha } : null; }
+    var gf = kid(spPr, "a:gradFill"); if(gf){ var gs = path(gf, "a:gsLst"); var first = gs && kids(gs, "a:gs")[0]; if(first){ var gc = resolveColor(first, ctx); if(gc) return { kind: "solid", color: gc.color, alpha: gc.alpha }; } }
+    var bf = kid(spPr, "a:blipFill"); if(bf){ var bl = kid(bf, "a:blip"); if(bl) return { kind: "blip", rid: attr(bl, "r:embed", null) }; }
+    return null;
+  }
+
+  /* ---------- 版面繼承：slide → layout → master ---------- */
+  function getXfrm(spPr){
+    var x = spPr && kid(spPr, "a:xfrm"); if(!x) return null;
+    var off = kid(x, "a:off"), ext = kid(x, "a:ext");
+    if(!off || !ext) return null;
+    return { x: num(off, "x", 0), y: num(off, "y", 0), cx: num(ext, "cx", 0), cy: num(ext, "cy", 0), rot: num(x, "rot", 0), flipH: attr(x, "flipH", "0") === "1", flipV: attr(x, "flipV", "0") === "1" };
+  }
+  function phOf(sp){ // <p:sp> 的 placeholder 資訊
+    var nv = path(sp, "p:nvSpPr", "p:nvPr"); var ph = nv && kid(nv, "p:ph");
+    return ph ? { type: attr(ph, "type", "body"), idx: attr(ph, "idx", null) } : null;
+  }
+  function findPlaceholder(tree, ph){
+    if(!tree || !ph) return null;
+    var list = kids(tree, "p:sp"), byIdx = null, byType = null;
+    list.forEach(function(sp){
+      var p = phOf(sp); if(!p) return;
+      if(ph.idx !== null && p.idx === ph.idx && !byIdx) byIdx = sp;
+      var t1 = ph.type === "ctrTitle" ? "title" : ph.type, t2 = p.type === "ctrTitle" ? "title" : p.type;
+      if(t1 === t2 && !byType) byType = sp;
+    });
+    return byIdx || byType;
+  }
+
+  /* ---------- 文字 ---------- */
+  var EA_RE = /[⺀-鿿豈-﫿＀-￯　-〿぀-ヿ가-힯]/;
+  function charEm(ch){
+    if(EA_RE.test(ch)) return 1.0;
+    if(ch === " ") return 0.3;
+    if(/[A-Z0-9]/.test(ch)) return 0.62;
+    if(/[il.,;:'|!]/.test(ch)) return 0.3;
+    return 0.55;
+  }
+  function measureEm(s){ var w = 0; for(var i = 0; i < s.length; i++) w += charEm(s.charAt(i)); return w; }
+  function wrapLine(text, maxEm){
+    if(!(maxEm > 0.5)) return [text];
+    var out = [], cur = "", curW = 0, chars = Array.from(text);
+    chars.forEach(function(ch){
+      var w = charEm(ch);
+      if(curW + w > maxEm && cur){ out.push(cur); cur = ""; curW = 0; }
+      cur += ch; curW += w;
+    });
+    out.push(cur);
+    return out;
+  }
+  function defRPrOf(node){ return node ? kid(node, "a:defRPr") : null; }
+  // 在一串 list-style 容器（lstStyle 或 txStyles 的 *Style）裡找某個層級的預設 rPr／pPr
+  function lvlNode(styleNode, lvl){ return styleNode ? kid(styleNode, "a:lvl" + (lvl + 1) + "pPr") : null; }
+
+  function paragraphsOf(sp, ctxChain, isTitleLike){
+    // 回傳 [{ text, pt, bold, color, align, list, lvl, marL, indent }]
+    var tb = kid(sp, "p:txBody"); if(!tb) return [];
+    var bodyPr = kid(tb, "a:bodyPr");
+    var fontScale = 1;
+    var na = bodyPr && kid(bodyPr, "a:normAutofit"); if(na){ var fs = num(na, "fontScale", 100000); fontScale = fs / 100000; }
+    var lst = kid(tb, "a:lstStyle");
+    var out = [];
+    kids(tb, "a:p").forEach(function(p){
+      var pPr = kid(p, "a:pPr"), lvl = num(pPr, "lvl", 0);
+      var text = "", firstRun = null, anyBold = false, allBold = true, runCount = 0;
+      kids(p).forEach(function(n){
+        if(n.nodeName === "a:r" || n.nodeName === "a:fld"){
+          var t = kid(n, "a:t"); var s = t ? t.textContent : "";
+          if(s === "") return;
+          text += s;
+          var rPr = kid(n, "a:rPr");
+          if(!firstRun) firstRun = rPr || {};
+          var b = rPr ? attr(rPr, "b", null) : null;
+          if(b === "1") anyBold = true; else if(b === "0") allBold = false;
+          runCount++;
+        } else if(n.nodeName === "a:br"){ text += "\n"; }
+      });
+      var rPr0 = (firstRun && firstRun.nodeType === 1) ? firstRun : null;
+      var endRPr = kid(p, "a:endParaRPr");
+      // 字級：run → 段落 defRPr → shape lstStyle → layout／master placeholder lstStyle → master txStyles → 18pt
+      var sz = rPr0 ? num(rPr0, "sz", null) : null;
+      function firstDefined(getter){
+        var v = null;
+        for(var i = 0; i < ctxChain.length && v === null; i++){ var ln = lvlNode(ctxChain[i], lvl); var d = defRPrOf(ln); v = getter(d, ln); }
+        return v;
+      }
+      if(sz === null && pPr){ var dp = defRPrOf(pPr); if(dp) sz = num(dp, "sz", null); }
+      if(sz === null && lst){ var dl = defRPrOf(lvlNode(lst, lvl)); if(dl) sz = num(dl, "sz", null); }
+      if(sz === null) sz = firstDefined(function(d){ return d ? num(d, "sz", null) : null; });
+      if(sz === null && endRPr) sz = num(endRPr, "sz", null);
+      if(sz === null) sz = 1800;
+      var bold = rPr0 && attr(rPr0, "b", null) !== null ? attr(rPr0, "b", "0") === "1" : null;
+      if(bold === null) bold = firstDefined(function(d){ return d && attr(d, "b", null) !== null ? attr(d, "b", "0") === "1" : null; });
+      var algn = pPr ? attr(pPr, "algn", null) : null;
+      if(algn === null && lst){ var lp = lvlNode(lst, lvl); if(lp) algn = attr(lp, "algn", null); }
+      if(algn === null) algn = firstDefined(function(d, ln){ return ln ? attr(ln, "algn", null) : null; });
+      var list = "none";
+      var buSrc = pPr && (kid(pPr, "a:buNone") ? "none" : (kid(pPr, "a:buChar") ? "bullet" : (kid(pPr, "a:buAutoNum") ? "number" : null)));
+      if(buSrc === null || buSrc === undefined){
+        var ln0 = lst && lvlNode(lst, lvl);
+        if(ln0) buSrc = kid(ln0, "a:buNone") ? "none" : (kid(ln0, "a:buChar") ? "bullet" : (kid(ln0, "a:buAutoNum") ? "number" : null));
+      }
+      if(buSrc === null || buSrc === undefined){
+        buSrc = firstDefined(function(d, ln){ if(!ln) return null; return kid(ln, "a:buNone") ? "none" : (kid(ln, "a:buChar") ? "bullet" : (kid(ln, "a:buAutoNum") ? "number" : null)); });
+      }
+      if(buSrc === "bullet" || buSrc === "number") list = buSrc;
+      out.push({ text: text, pt: (sz / 100) * fontScale, bold: bold === null ? false : bold, rPr: rPr0, endRPr: endRPr, pPr: pPr, lvl: lvl, align: algn || "l", list: list, marL: pPr ? num(pPr, "marL", 0) : 0, indent: pPr ? num(pPr, "indent", 0) : 0 });
+    });
+    return out;
+  }
+
+  function runColor(par, ctx, ctxChain, lst){
+    var fill = null;
+    if(par.rPr){ fill = resolveColor(kid(par.rPr, "a:solidFill"), ctx); }
+    if(!fill && par.pPr){ var d = defRPrOf(par.pPr); if(d) fill = resolveColor(kid(d, "a:solidFill"), ctx); }
+    if(!fill && lst){ var dl = defRPrOf(lvlNode(lst, par.lvl)); if(dl) fill = resolveColor(kid(dl, "a:solidFill"), ctx); }
+    for(var i = 0; i < ctxChain.length && !fill; i++){ var dd = defRPrOf(lvlNode(ctxChain[i], par.lvl)); if(dd) fill = resolveColor(kid(dd, "a:solidFill"), ctx); }
+    return fill ? fill.color : null;
+  }
+
+  /* ---------- 投影片內容 ---------- */
+  function shapeTypeOf(geom){
+    var g = geom ? attr(geom, "prst", "rect") : "rect";
+    if(g === "ellipse") return "ellipse";
+    if(g === "triangle" || g === "rtTriangle") return "triangle";
+    if(g === "line" || g === "straightConnector1" || g === "bentConnector2" || g === "bentConnector3") return "line";
+    if(/Arrow$/.test(g) && g !== "bentArrow") return "arrow";
+    return "rect";
+  }
+
+  async function parseSlide(zip, slidePath, pres, cache, opts){
+    var xml = await readText(zip, slidePath);
+    if(!xml) throw new Error("找不到 " + slidePath);
+    var doc = parseXml(xml);
+    var rels = await readRels(zip, slidePath);
+    // layout → master → theme（有快取）
+    var layoutRel = null; Object.keys(rels).forEach(function(k){ if(/slideLayout$/.test(rels[k].type)) layoutRel = rels[k]; });
+    var layoutPath = layoutRel && layoutRel.target, layout = null, layoutRels = {}, master = null, masterRels = {}, masterPath = null;
+    if(layoutPath){
+      if(!cache.layouts[layoutPath]){
+        var lx = await readText(zip, layoutPath);
+        var lrels = await readRels(zip, layoutPath);
+        var mrel = null; Object.keys(lrels).forEach(function(k){ if(/slideMaster$/.test(lrels[k].type)) mrel = lrels[k]; });
+        var mp = mrel && mrel.target, mobj = null;
+        if(mp){
+          if(!cache.masters[mp]){
+            var mx = await readText(zip, mp), mrels = await readRels(zip, mp);
+            var trel = null; Object.keys(mrels).forEach(function(k){ if(/theme$/.test(mrels[k].type)) trel = mrels[k]; });
+            var theme = {};
+            if(trel && trel.target){
+              var tx = await readText(zip, trel.target);
+              if(tx){ var td = parseXml(tx); var cs = td.getElementsByTagName("a:clrScheme")[0];
+                if(cs) kids(cs).forEach(function(c){ var nm = c.nodeName.replace("a:", ""); var v = kids(c)[0]; if(v) theme[nm] = "#" + (v.nodeName === "a:sysClr" ? attr(v, "lastClr", "000000") : attr(v, "val", "000000")).toLowerCase(); });
+              }
+            }
+            var md = mx ? parseXml(mx) : null;
+            var cm = md && md.getElementsByTagName("p:clrMap")[0]; var clrMap = {};
+            if(cm) for(var ai = 0; ai < cm.attributes.length; ai++) clrMap[cm.attributes[ai].name] = cm.attributes[ai].value;
+            cache.masters[mp] = { doc: md, rels: mrels, theme: theme, clrMap: clrMap };
+          }
+          mobj = cache.masters[mp];
+        }
+        cache.layouts[layoutPath] = { doc: lx ? parseXml(lx) : null, rels: lrels, master: mobj, masterPath: mp };
+      }
+      var L = cache.layouts[layoutPath]; layout = L.doc; layoutRels = L.rels; master = L.master ? L.master.doc : null; masterRels = L.master ? L.master.rels : {}; masterPath = L.masterPath;
+    }
+    var mInfo = layout && cache.layouts[layoutPath].master;
+    var ctx = { theme: (mInfo && mInfo.theme) || {}, clrMap: (mInfo && mInfo.clrMap) || {} };
+    // 版面上可能覆寫 clrMap（a:clrMapOvr/a:overrideClrMapping）
+    var lo = layout && layout.getElementsByTagName("a:overrideClrMapping")[0];
+    if(lo){ var cm2 = {}; for(var bi = 0; bi < lo.attributes.length; bi++) cm2[lo.attributes[bi].name] = lo.attributes[bi].value; ctx.clrMap = cm2; }
+    var so = doc.getElementsByTagName("a:overrideClrMapping")[0];
+    if(so){ var cm3 = {}; for(var ci = 0; ci < so.attributes.length; ci++) cm3[so.attributes[ci].name] = so.attributes[ci].value; ctx.clrMap = cm3; }
+
+    var layoutTree = layout && path(layout.documentElement, "p:cSld", "p:spTree");
+    var masterTree = master && path(master.documentElement, "p:cSld", "p:spTree");
+    var slideTree = path(doc.documentElement, "p:cSld", "p:spTree");
+    var txStyles = master && kid(master.documentElement, "p:txStyles");
+    var W = pres.cx, H = pres.cy;
+    var out = { bg: { color: "#FFFFFF", imagePath: null }, decor: [], texts: [], images: [], shapes: [], audios: [], warnings: [], plainText: [], notes: "" };
+    // 講者備註（ppt/notesSlides/notesSlideN.xml）→ 老師備註
+    try{
+      var nrel = null; Object.keys(rels).forEach(function(k){ if(/notesSlide$/.test(rels[k].type)) nrel = rels[k]; });
+      if(nrel && nrel.target){
+        var nx = await readText(zip, nrel.target);
+        if(nx){
+          var nd = parseXml(nx), nTree = path(nd.documentElement, "p:cSld", "p:spTree"), lines = [];
+          kids(nTree, "p:sp").forEach(function(sp){
+            var ph = phOf(sp); if(!ph || ph.type !== "body") return;
+            var tb = kid(sp, "p:txBody"); if(!tb) return;
+            kids(tb, "a:p").forEach(function(p){ lines.push(kids(p).map(function(r){ var t = (r.nodeName === "a:r" || r.nodeName === "a:fld") ? kid(r, "a:t") : null; return t ? t.textContent : (r.nodeName === "a:br" ? "\n" : ""); }).join("")); });
+          });
+          out.notes = lines.join("\n").trim();
+        }
+      }
+    }catch(e){}
+
+    /* 背景：slide → layout → master */
+    function readBg(root, relsMap){
+      if(!root) return null;
+      var bg = path(root, "p:cSld", "p:bg"); if(!bg) return null;
+      var bgPr = kid(bg, "p:bgPr");
+      if(bgPr){ var f = fillOf(bgPr, ctx); if(f){ if(f.kind === "solid") return { color: f.color }; if(f.kind === "blip" && f.rid && relsMap[f.rid]) return { imagePath: relsMap[f.rid].target }; } }
+      var ref = kid(bg, "p:bgRef"); if(ref){ var c = resolveColor(ref, ctx); if(c) return { color: c.color }; }
+      return null;
+    }
+    var b = readBg(doc.documentElement, rels) || readBg(layout && layout.documentElement, layoutRels) || readBg(master && master.documentElement, masterRels);
+    if(b){ if(b.color) out.bg.color = b.color; if(b.imagePath) out.bg.imagePath = b.imagePath; }
+
+    /* 版面／母片上「不是 placeholder」的圖片與純色圖案 → 畫進背景（每頁都有的 logo、邊框等） */
+    function collectDecor(tree, relsMap, xf){
+      if(!tree) return;
+      kids(tree).forEach(function(n){
+        if(n.nodeName === "p:pic"){
+          var blip = path(n, "p:blipFill", "a:blip"), rid = blip && attr(blip, "r:embed", null), xfm = getXfrm(kid(n, "p:spPr"));
+          if(rid && relsMap[rid] && xfm){ var bx = applyXf(xfm, xf); out.decor.push({ kind: "image", path: relsMap[rid].target, box: bx }); }
+        } else if(n.nodeName === "p:sp" && !phOf(n)){
+          var spPr = kid(n, "p:spPr"), xfm2 = getXfrm(spPr), f = fillOf(spPr, ctx);
+          if(xfm2 && f && f.kind === "solid"){ var bx2 = applyXf(xfm2, xf); out.decor.push({ kind: "rect", color: f.color, alpha: f.alpha, box: bx2, type: shapeTypeOf(path(spPr, "a:prstGeom")) }); }
+        } else if(n.nodeName === "p:grpSp"){
+          collectDecor(n, relsMap, groupXf(n, xf));
+        }
+      });
+    }
+    function identityXf(){ return { ox: 0, oy: 0, sx: 1, sy: 1 }; }
+    function applyXf(x, xf){ return { x: xf.ox + x.x * xf.sx, y: xf.oy + x.y * xf.sy, cx: x.cx * xf.sx, cy: x.cy * xf.sy, rot: x.rot || 0, flipH: x.flipH, flipV: x.flipV }; }
+    function groupXf(g, xf){
+      var gx = path(g, "p:grpSpPr", "a:xfrm"); if(!gx) return xf;
+      var off = kid(gx, "a:off"), ext = kid(gx, "a:ext"), cho = kid(gx, "a:chOff"), che = kid(gx, "a:chExt");
+      if(!off || !ext || !cho || !che) return xf;
+      var cx = num(che, "cx", 1) || 1, cy = num(che, "cy", 1) || 1;
+      var gsx = num(ext, "cx", cx) / cx, gsy = num(ext, "cy", cy) / cy;
+      // 子座標 (x) → 群組外 = off + (x - chOff) * g.scale，再套外層
+      var nox = num(off, "x", 0) - num(cho, "x", 0) * gsx, noy = num(off, "y", 0) - num(cho, "y", 0) * gsy;
+      return { ox: xf.ox + nox * xf.sx, oy: xf.oy + noy * xf.sy, sx: xf.sx * gsx, sy: xf.sy * gsy };
+    }
+    if(!(opts && opts.noDecor)){
+      collectDecor(masterTree, masterRels, identityXf());
+      collectDecor(layoutTree, layoutRels, identityXf());
+    }
+
+    /* 投影片本身的物件 */
+    var txtIdx = 0;
+    function placeholderChain(sp){
+      var ph = phOf(sp); if(!ph) return { styles: [], box: null };
+      var lph = findPlaceholder(layoutTree, ph), mph = findPlaceholder(masterTree, ph);
+      var styles = [];
+      [lph, mph].forEach(function(s){ if(s){ var l = path(s, "p:txBody", "a:lstStyle"); if(l) styles.push(l); } });
+      var isTitle = ph.type === "title" || ph.type === "ctrTitle";
+      if(txStyles){ var tsn = kid(txStyles, isTitle ? "p:titleStyle" : (ph.type === "body" || ph.type === "subTitle" || ph.type === "obj" ? "p:bodyStyle" : "p:otherStyle")); if(tsn) styles.push(tsn); }
+      var box = null;
+      [lph, mph].forEach(function(s){ if(!box && s){ box = getXfrm(kid(s, "p:spPr")); } });
+      return { styles: styles, box: box };
+    }
+    function otherStyleChain(){ var res = []; if(txStyles){ var os = kid(txStyles, "p:otherStyle"); if(os) res.push(os); } return res; }
+
+    async function walk(tree, xf){
+      var nodes = kids(tree);
+      for(var ni = 0; ni < nodes.length; ni++){
+        var n = nodes[ni];
+        try{
+          if(n.nodeName === "p:grpSp"){ await walk(n, groupXf(n, xf)); continue; }
+          if(n.nodeName === "p:pic"){ await handlePic(n, xf); continue; }
+          if(n.nodeName === "p:sp" || n.nodeName === "p:cxnSp"){ handleSp(n, xf); continue; }
+          if(n.nodeName === "p:graphicFrame"){
+            // 表格／圖表／SmartArt：不重建，只撈出文字放在同一個位置，並提醒
+            var txts = []; var ts = n.getElementsByTagName("a:t"); for(var ti = 0; ti < ts.length; ti++){ if(ts[ti].textContent) txts.push(ts[ti].textContent); }
+            var gfx = kid(n, "p:xfrm"); var gb = gfx ? { x: num(kid(gfx, "a:off"), "x", 0), y: num(kid(gfx, "a:off"), "y", 0), cx: num(kid(gfx, "a:ext"), "cx", 0), cy: num(kid(gfx, "a:ext"), "cy", 0) } : null;
+            out.warnings.push("有表格／圖表／SmartArt，只匯入了文字" );
+            if(txts.length && gb){ var bb = applyXf(gb, xf); out.texts.push({ text: txts.join("\n"), pt: 14, bold: false, color: "#2B2320", align: "l", list: "none", cx: bb.x + bb.cx / 2, cy: bb.y + bb.cy / 2, estW: bb.cx, estH: bb.cy }); }
+          }
+        }catch(e){ out.warnings.push("有一個物件無法解析，已略過（" + (e && e.message ? e.message : e) + "）"); }
+      }
+    }
+    async function handlePic(n, xf){
+      var spPr = kid(n, "p:spPr"), xfm = getXfrm(spPr), nvPr = path(n, "p:nvPicPr", "p:nvPr"), cNv = path(n, "p:nvPicPr", "p:cNvPr");
+      var audioFile = nvPr && kid(nvPr, "a:audioFile"), videoFile = nvPr && kid(nvPr, "a:videoFile");
+      var p14 = nvPr && nvPr.getElementsByTagName("p14:media")[0];
+      var box = xfm ? applyXf(xfm, xf) : null;
+      if(audioFile || videoFile || p14){
+        var rid = (p14 && attr(p14, "r:embed", null)) || (audioFile && attr(audioFile, "r:link", null)) || (videoFile && attr(videoFile, "r:link", null));
+        var rel = rid && rels[rid], rtype = rel ? rel.type : "";
+        // 有 embed（p14:media）的話優先用它；link 指向同一個 media 檔
+        var mpath = rel && rel.target;
+        if(!mpath){ var altRid = audioFile && attr(audioFile, "r:link", null); if(altRid && rels[altRid]) mpath = rels[altRid].target; }
+        var isVideo = !!videoFile || /\.(mp4|mov|m4v|wmv|avi|mpg|mpeg)$/i.test(mpath || "");
+        if(isVideo){ out.warnings.push("有影片（" + ((cNv && attr(cNv, "name", "")) || "影片") + "）：目前不支援匯入影片，已略過"); return; }
+        if(mpath && zip.file(mpath)){
+          var nmRaw = cNv ? (attr(cNv, "descr", "") || attr(cNv, "name", "")) : "";
+          var nmClean = String(nmRaw).replace(/\.[^.]+$/, "");
+          var generic = !nmClean || nmClean.length > 40 || /^(audio|media|sound|picture|圖片|音訊|音频|音效|pic_red)\s*\d*$/i.test(nmClean);
+          out.audios.push({ path: mpath, name: nmClean, generic: generic, box: box });
+        } else out.warnings.push("找不到音檔本體，已略過");
+        return;
+      }
+      var blip = path(n, "p:blipFill", "a:blip"), rid2 = blip && attr(blip, "r:embed", null);
+      if(!rid2 || !rels[rid2] || !rels[rid2].target){ return; }
+      if(!box){ var ph = { type: "pic", idx: null }; var nvSp = path(n, "p:nvPicPr", "p:nvPr"); var phn = nvSp && kid(nvSp, "p:ph"); if(phn){ var lp = findPlaceholder(layoutTree, { type: attr(phn, "type", "pic"), idx: attr(phn, "idx", null) }); var lb = lp && getXfrm(kid(lp, "p:spPr")); if(lb) box = applyXf(lb, xf); } }
+      if(!box) return;
+      var src = path(n, "p:blipFill", "a:srcRect");
+      var crop = src ? { l: num(src, "l", 0) / 100000, t: num(src, "t", 0) / 100000, r: num(src, "r", 0) / 100000, b: num(src, "b", 0) / 100000 } : null;
+      out.images.push({ path: rels[rid2].target, box: box, crop: crop, alt: cNv ? attr(cNv, "descr", "") : "" });
+    }
+    function handleSp(n, xf){
+      var isCxn = n.nodeName === "p:cxnSp";
+      var spPr = kid(n, "p:spPr"), xfm = getXfrm(spPr), chain = isCxn ? { styles: otherStyleChain(), box: null } : placeholderChain(n), ph = isCxn ? null : phOf(n);
+      var box0 = xfm || chain.box; if(!box0) return;
+      var box = applyXf(box0, xf);
+      var geom = path(spPr, "a:prstGeom");
+      var fill = fillOf(spPr, ctx), ln = spPr && kid(spPr, "a:ln"), lnFill = ln ? fillOf(ln, ctx) : null;
+      // 沒有明寫顏色時，用 <p:style> 的參照（PowerPoint 插入的預設圖案多半只寫參照，不寫 solidFill）
+      var styleNode = kid(n, "p:style"), styleFontColor = null;
+      if(styleNode){
+        if(fill === null){ var fr = kid(styleNode, "a:fillRef"); if(fr && num(fr, "idx", 0) > 0){ var fc = resolveColor(fr, ctx); if(fc) fill = { kind: "solid", color: fc.color, alpha: fc.alpha }; } }
+        if(lnFill === null){ var lr = kid(styleNode, "a:lnRef"); if(lr && num(lr, "idx", 0) > 0){ var lc = resolveColor(lr, ctx); if(lc) lnFill = { kind: "solid", color: lc.color, alpha: 1 }; } }
+        var fo = kid(styleNode, "a:fontRef"); if(fo){ var fcol = resolveColor(fo, ctx); if(fcol) styleFontColor = fcol.color; }
+      }
+      var st = shapeTypeOf(geom);
+      var hasText = false, tb = kid(n, "p:txBody");
+      if(tb){ kids(tb, "a:p").forEach(function(p){ if(/\S/.test(kids(p).map(function(r){ var t = r.nodeName === "a:r" || r.nodeName === "a:fld" ? kid(r, "a:t") : null; return t ? t.textContent : ""; }).join(""))) hasText = true; }); }
+      // 圖案：有填色或有外框線才算圖案（純文字方塊、placeholder 不畫）
+      var isTextBox = attr(path(n, "p:nvSpPr", "p:cNvSpPr"), "txBox", "0") === "1";
+      var drawn = !isTextBox && !ph && ((fill && fill.kind === "solid") || (lnFill && lnFill.kind === "solid") || st === "line" || st === "arrow") && !(fill && fill.kind === "none" && !(lnFill && lnFill.kind === "solid") && st !== "line" && st !== "arrow");
+      if(isCxn) drawn = true;
+      if(drawn){
+        var lw = ln ? num(ln, "w", 12700) : 12700, color = (lnFill && lnFill.kind === "solid") ? lnFill.color : ((fill && fill.kind === "solid") ? fill.color : "#444444");
+        if(st === "rect" && lnFill === null && fill === null){ /* 沒寫任何顏色：用樣式預設，略過 */ }
+        else out.shapes.push({ type: st, box: box, color: (fill && fill.kind === "solid") ? fill.color : color, lineColor: color, fill: !!(fill && fill.kind === "solid" && st !== "line" && st !== "arrow"), lw: lw, alpha: fill && fill.kind === "solid" ? fill.alpha : 1, flipH: box.flipH, flipV: box.flipV });
+      }
+      if(!hasText) return;
+      var pars = paragraphsOf(n, chain.styles);
+      var lstS = tb ? kid(tb, "a:lstStyle") : null;
+      var bodyPr = kid(tb, "a:bodyPr");
+      var lIns = num(bodyPr, "lIns", 91440), rIns = num(bodyPr, "rIns", 91440), tIns = num(bodyPr, "tIns", 45720), bIns = num(bodyPr, "bIns", 45720);
+      var anchor = attr(bodyPr, "anchor", null);
+      if(anchor === null){ var lphB = ph && findPlaceholder(layoutTree, ph); var lb = lphB && path(lphB, "p:txBody", "a:bodyPr"); if(lb) anchor = attr(lb, "anchor", null); }
+      if(anchor === null){ var mphB = ph && findPlaceholder(masterTree, ph); var mb = mphB && path(mphB, "p:txBody", "a:bodyPr"); if(mb) anchor = attr(mb, "anchor", null); }
+      if(anchor === null) anchor = "t";
+      var wrapNone = attr(bodyPr, "wrap", "square") === "none";
+      var ptToEmu = 12700;
+      // 逐段排版
+      var availW = Math.max(1, box.cx - lIns - rIns);
+      var items = [], totalH = 0;
+      pars.forEach(function(par){
+        var fsEmu = par.pt * ptToEmu; if(!(fsEmu > 0)) return;
+        var textLines = [];
+        String(par.text).split("\n").forEach(function(line){
+          var availForPar = availW - Math.max(0, par.marL) - (par.list !== "none" ? fsEmu * 1.1 : 0);
+          if(wrapNone) textLines.push(line);
+          else wrapLine(line, availForPar / fsEmu).forEach(function(l){ textLines.push(l); });
+        });
+        var hEmu = Math.max(1, textLines.length) * fsEmu * 1.2;
+        var wEm = 0; textLines.forEach(function(l){ wEm = Math.max(wEm, measureEm(l)); });
+        var wEmu = wEm * fsEmu + (par.list !== "none" ? fsEmu * 1.1 : 0);
+        items.push({ par: par, lines: textLines, hEmu: hEmu, wEmu: Math.min(wEmu, availW), fsEmu: fsEmu });
+        totalH += hEmu;
+      });
+      var y0;
+      if(anchor === "ctr") y0 = box.y + box.cy / 2 - totalH / 2; else if(anchor === "b") y0 = box.y + box.cy - bIns - totalH; else y0 = box.y + tIns;
+      var cursor = y0;
+      // 連續、樣式一樣的段落合成同一個文字物件（方便之後整塊編輯）；空段落只佔位置
+      var groups = [], lastKey = null;
+      items.forEach(function(it){
+        var hasTxt = /\S/.test(it.par.text);
+        var color = runColor(it.par, ctx, chain.styles, lstS) || styleFontColor || "#1C1C1C";
+        var key = [it.par.pt.toFixed(1), it.par.bold, color, it.par.align, it.par.list, it.par.marL].join("|");
+        if(hasTxt && lastKey === key && groups.length && groups[groups.length - 1].contiguous){
+          var g = groups[groups.length - 1]; g.lines = g.lines.concat(it.lines); g.h += it.hEmu; g.w = Math.max(g.w, it.wEmu);
+        } else if(hasTxt){
+          groups.push({ par: it.par, lines: it.lines.slice(), y: cursor, h: it.hEmu, w: it.wEmu, color: color, fsEmu: it.fsEmu, contiguous: true });
+          lastKey = key;
+        } else { lastKey = null; if(groups.length) groups[groups.length - 1].contiguous = false; }
+        cursor += it.hEmu;
+      });
+      groups.forEach(function(g){
+        var par = g.par, cxEmu;
+        var indent = Math.max(0, par.marL);
+        if(par.align === "ctr") cxEmu = box.x + box.cx / 2 + (indent / 2);
+        else if(par.align === "r") cxEmu = box.x + box.cx - rIns - g.w / 2;
+        else cxEmu = box.x + lIns + indent + g.w / 2;
+        out.texts.push({ text: g.lines.join("\n"), pt: par.pt, bold: par.bold, color: g.color, align: par.align === "ctr" ? "center" : (par.align === "r" ? "right" : "left"), list: par.list, cx: cxEmu, cy: g.y + g.h / 2, estW: g.w, estH: g.h });
+        out.plainText.push(g.lines.join("\n"));
+      });
+    }
+    if(slideTree) await walk(slideTree, identityXf());
+    return out;
+  }
+
+  /* ---------- 媒體讀取與縮圖 ---------- */
+  function mimeOf(p){
+    var e = (p.split(".").pop() || "").toLowerCase();
+    return { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp", wav: "audio/wav", mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", ogg: "audio/ogg", wma: "audio/x-ms-wma", mp4: "video/mp4", emf: "image/emf", wmf: "image/wmf", tif: "image/tiff", tiff: "image/tiff" }[e] || "application/octet-stream";
+  }
+  async function fileBlob(zip, p){ var f = zip.file(p); if(!f) return null; var data = await f.async("uint8array"); return new Blob([data], { type: mimeOf(p) }); }
+  function blobToImage(blob){
+    return new Promise(function(resolve){
+      var url = URL.createObjectURL(blob), im = new Image();
+      im.onload = function(){ resolve({ img: im, url: url }); };
+      im.onerror = function(){ URL.revokeObjectURL(url); resolve(null); };
+      im.src = url;
+    });
+  }
+  // 讀圖片、（依 srcRect 裁切、）縮到最長邊 maxSide，輸出 dataURL；回傳 { src, ar } 或 null（格式瀏覽器不支援，例如 emf／wmf）
+  async function loadScaledImage(zip, p, maxSide, crop, cache){
+    var ckey = p + "|" + maxSide + "|" + (crop ? [crop.l, crop.t, crop.r, crop.b].join(",") : "");
+    if(cache[ckey] !== undefined) return cache[ckey];
+    var blob = await fileBlob(zip, p);
+    var res = null;
+    if(blob && !/emf|wmf|tiff/.test(blob.type)){
+      var loaded = await blobToImage(blob);
+      if(loaded){
+        var im = loaded.img, sw = im.naturalWidth, sh = im.naturalHeight;
+        if(sw && sh){
+          var sx = 0, sy = 0, cw = sw, ch = sh;
+          if(crop){ sx = Math.round(sw * crop.l); sy = Math.round(sh * crop.t); cw = Math.max(1, Math.round(sw * (1 - crop.l - crop.r))); ch = Math.max(1, Math.round(sh * (1 - crop.t - crop.b))); }
+          var sc = Math.min(1, maxSide / Math.max(cw, ch));
+          var w = Math.max(1, Math.round(cw * sc)), h = Math.max(1, Math.round(ch * sc));
+          var c = document.createElement("canvas"); c.width = w; c.height = h;
+          var cx = c.getContext("2d"); cx.drawImage(im, sx, sy, cw, ch, 0, 0, w, h);
+          var url = c.toDataURL("image/png");
+          if(url.length > 300000){ cx.globalCompositeOperation = "destination-over"; cx.fillStyle = "#FFFFFF"; cx.fillRect(0, 0, w, h); url = c.toDataURL("image/jpeg", 0.85); }
+          res = { src: url, ar: h / w, w: w, h: h, sw: sw, sh: sh };
+        }
+        URL.revokeObjectURL(loaded.url);
+      }
+    }
+    cache[ckey] = res; return res;
+  }
+
+  async function renderBackground(zip, slide, pres, imgCache){
+    // 背景圖（整頁）：底色 → 背景圖 → 版面／母片上每頁都有的圖片與色塊。輸出 JPEG，比例＝簡報頁面比例。
+    var bw = 1200, bh = Math.max(1, Math.round(bw * pres.cy / pres.cx));
+    var c = document.createElement("canvas"); c.width = bw; c.height = bh;
+    var cx = c.getContext("2d");
+    cx.fillStyle = slide.bg.color || "#FFFFFF"; cx.fillRect(0, 0, bw, bh);
+    async function drawImg(pth, box, crop){
+      var blob = await fileBlob(zip, pth); if(!blob || /emf|wmf|tiff/.test(blob.type)) return;
+      var loaded = await blobToImage(blob); if(!loaded) return;
+      var im = loaded.img;
+      var sx = 0, sy = 0, sw = im.naturalWidth, sh = im.naturalHeight;
+      if(crop){ sx = sw * crop.l; sy = sh * crop.t; sw = sw * (1 - crop.l - crop.r); sh = sh * (1 - crop.t - crop.b); }
+      if(box) cx.drawImage(im, sx, sy, sw, sh, box.x / pres.cx * bw, box.y / pres.cy * bh, box.cx / pres.cx * bw, box.cy / pres.cy * bh);
+      else cx.drawImage(im, sx, sy, sw, sh, 0, 0, bw, bh);
+      URL.revokeObjectURL(loaded.url);
+    }
+    try{
+      if(slide.bg.imagePath) await drawImg(slide.bg.imagePath, null, null);
+      for(var i = 0; i < slide.decor.length; i++){
+        var d = slide.decor[i];
+        if(d.kind === "image") await drawImg(d.path, d.box, null);
+        else if(d.kind === "rect"){
+          cx.save(); cx.globalAlpha = d.alpha == null ? 1 : d.alpha; cx.fillStyle = d.color;
+          var x = d.box.x / pres.cx * bw, y = d.box.y / pres.cy * bh, w = d.box.cx / pres.cx * bw, h = d.box.cy / pres.cy * bh;
+          if(d.type === "ellipse"){ cx.beginPath(); cx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2); cx.fill(); }
+          else cx.fillRect(x, y, w, h);
+          cx.restore();
+        }
+      }
+    }catch(e){ /* 背景畫不出來就只剩底色 */ }
+    return c.toDataURL("image/jpeg", 0.85);
+  }
+
+  /* ---------- 主流程 ---------- */
+  async function parsePptx(arrayBuffer, onProgress){
+    if(typeof JSZip === "undefined") throw new Error("缺少 JSZip 元件");
+    var zip;
+    try{ zip = await JSZip.loadAsync(arrayBuffer); }catch(e){ throw new Error("這不是有效的 .pptx 檔案（無法解壓縮）"); }
+    var presXml = await readText(zip, "ppt/presentation.xml");
+    if(!presXml) throw new Error("這不是 PowerPoint 簡報（找不到 ppt/presentation.xml）");
+    var presDoc = parseXml(presXml);
+    var sz = presDoc.getElementsByTagName("p:sldSz")[0];
+    if(!sz) throw new Error("讀不到簡報的頁面尺寸");
+    var pres = { cx: num(sz, "cx", 9144000), cy: num(sz, "cy", 6858000) };
+    var presRels = await readRels(zip, "ppt/presentation.xml");
+    var ids = presDoc.getElementsByTagName("p:sldId"), slidePaths = [];
+    for(var i = 0; i < ids.length; i++){ var rid = attr(ids[i], "r:id", null); if(rid && presRels[rid] && presRels[rid].target) slidePaths.push(presRels[rid].target); }
+    if(!slidePaths.length) throw new Error("這份簡報裡沒有任何投影片");
+    var cache = { layouts: {}, masters: {} }, slides = [];
+    for(var si = 0; si < slidePaths.length; si++){
+      if(onProgress) onProgress("parse", si + 1, slidePaths.length);
+      var s;
+      try{ s = await parseSlide(zip, slidePaths[si], pres, cache); s.path = slidePaths[si]; s.failed = false; }
+      catch(e){
+        console.warn("解析第 " + (si + 1) + " 頁失敗", e);
+        var txtFallback = [];
+        try{ var raw = await readText(zip, slidePaths[si]); if(raw){ var d2 = parseXml(raw); var ts = d2.getElementsByTagName("a:t"); for(var t = 0; t < ts.length; t++) if(ts[t].textContent) txtFallback.push(ts[t].textContent); } }catch(e2){}
+        s = { bg: { color: "#FFFFFF", imagePath: null }, decor: [], texts: [], images: [], shapes: [], audios: [], warnings: ["這一頁無法完整解析（" + (e && e.message ? e.message : e) + "），只匯入了文字"], plainText: txtFallback, notes: "", path: slidePaths[si], failed: true, fallbackText: txtFallback.join("\n") };
+      }
+      slides.push(s);
+    }
+    return { zip: zip, pres: pres, slides: slides };
+  }
+
+  // 解析結果 → 小白板資料（不含 id，由呼叫端配）。每頁：{ title, bgImage, texts[], images[], shapes[], audios[{name, blob, box%}], warnings[] }
+  async function convertSlides(parsed, onProgress){
+    var zip = parsed.zip, pres = parsed.pres, imgCache = {}, out = [];
+    var slideWpt = pres.cx / 12700;
+    function pctX(v){ return Math.round(v / pres.cx * 10000) / 100; }
+    function pctY(v){ return Math.round(v / pres.cy * 10000) / 100; }
+    for(var i = 0; i < parsed.slides.length; i++){
+      if(onProgress) onProgress("convert", i + 1, parsed.slides.length);
+      var s = parsed.slides[i], page = { bgImage: "", texts: [], images: [], shapes: [], audios: [], warnings: s.warnings.slice(), srcIndex: i, notes: s.notes || "" };
+      page.bgImage = await renderBackground(zip, s, pres, imgCache);
+      s.texts.forEach(function(t){
+        var fs = Math.round(t.pt * 640 / slideWpt * 10) / 10;
+        var al = t.align === "center" || t.align === "ctr" ? "center" : (t.align === "right" || t.align === "r" ? "right" : "left");
+        page.texts.push({ text: t.text, x: pctX(t.cx), y: pctY(t.cy), fontSize: Math.max(6, fs), color: t.color, bold: !!t.bold, align: al, list: t.list });
+      });
+      if(s.failed && s.fallbackText){ page.texts.push({ text: s.fallbackText, x: 50, y: 50, fontSize: 14, color: "#1C1C1C", bold: false, align: "left", list: "none" }); }
+      for(var k = 0; k < s.images.length; k++){
+        var im = s.images[k], sc = await loadScaledImage(zip, im.path, 1000, im.crop, imgCache);
+        if(!sc){ page.warnings.push("有一張圖片格式瀏覽器無法顯示（" + im.path.split("/").pop() + "），已略過"); continue; }
+        page.images.push({ src: sc.src, ar: sc.ar, x: pctX(im.box.x + im.box.cx / 2), y: pctY(im.box.y + im.box.cy / 2), w: pctX(im.box.cx), h: pctY(im.box.cy) });
+      }
+      s.shapes.forEach(function(sh){
+        var b = sh.box;
+        page.shapes.push({ type: sh.type, x: pctX(Math.min(b.x, b.x + b.cx)), y: pctY(Math.min(b.y, b.y + b.cy)), w: pctX(Math.abs(b.cx)), h: pctY(Math.abs(b.cy)), fx: !!sh.flipH, fy: !!sh.flipV,
+          color: sh.fill ? sh.color : sh.lineColor, sw: Math.max(1, Math.round(sh.lw / 12700 * 640 / slideWpt * 10) / 10), fill: !!sh.fill, op: sh.alpha == null ? 1 : sh.alpha });
+      });
+      for(var a = 0; a < s.audios.length; a++){
+        var au = s.audios[a], blob = await fileBlob(zip, au.path);
+        if(!blob){ page.warnings.push("找不到音檔 " + au.path.split("/").pop()); continue; }
+        page.audios.push({ name: (au.generic ? "第 " + (i + 1) + " 頁音檔" + (s.audios.length > 1 ? " " + (a + 1) : "") : au.name), file: au.path.split("/").pop(), blob: blob, x: au.box ? pctX(au.box.x) : 8, y: au.box ? pctY(au.box.y) : 8, w: au.box ? Math.max(18, Math.min(40, pctX(au.box.cx) * 3)) : 26 });
+      }
+      out.push(page);
+    }
+    return { pres: pres, pages: out };
+  }
+
+  window.MandamyPptx = { parsePptx: parsePptx, convertSlides: convertSlides, _resolveColor: resolveColor };
+})();
+</script>
+<!-- PPTX-MODULE-END -->
 
 <script>
 (function(){
@@ -3058,6 +3729,132 @@
     importSlidesFromPdf(uid("sec"), file, true);
   }
 
+  /* ================== 2026-10-01 媒體（音檔）參照：mm:<key>[@<雲端網址>] ==================
+     大型媒體不放進課程資料（課程庫整份會寫進雲端資料庫／版本記錄，音檔一多就爆了）。音檔本體存在這台裝置的
+     IndexedDB（MO.putMedia），課程資料裡只放參照字串 "mm:<key>"；登入且有網路時會把音檔再上傳到 Firebase Storage，
+     參照變成 "mm:<key>@<網址>"——這樣換一台裝置（或學生端）也抓得到，抓到後會存一份在該裝置，下次離線也能播。 */
+  var mediaObjUrlCache = {};
+  function parseMediaRef(val){
+    if(typeof val !== "string" || val.indexOf("mm:") !== 0) return null;
+    var rest = val.slice(3), at = rest.indexOf("@");
+    return { key: at < 0 ? rest : rest.slice(0, at), url: at < 0 ? "" : rest.slice(at + 1) };
+  }
+  function resolveMediaSrc(val, name){
+    var ref0 = parseMediaRef(val);
+    if(!ref0) return Promise.resolve(typeof val === "string" ? val : null); // 舊格式：資料網址／一般網址
+    if(mediaObjUrlCache[ref0.key]) return Promise.resolve(mediaObjUrlCache[ref0.key]);
+    if(!MO || !MO.ok) return Promise.resolve(ref0.url || null);
+    return MO.getMedia(ref0.key).then(function(rec){
+      if(rec && rec.blob){ var u = URL.createObjectURL(rec.blob); mediaObjUrlCache[ref0.key] = u; return u; }
+      if(ref0.url){
+        fetch(ref0.url).then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.blob(); }).then(function(bl){ return MO.putMediaWithKey(ref0.key, bl, name || ""); }).catch(function(){});
+        return ref0.url;
+      }
+      return null;
+    }).catch(function(){ return ref0.url || null; });
+  }
+  function eachMediaRef(lib, fn){ // 走訪課程庫裡所有 progress.mediaData 的參照
+    Object.keys((lib && lib.projects) || {}).forEach(function(pid){
+      var pr = lib.projects[pid], prog = pr.progress || {};
+      Object.keys(prog).forEach(function(qid){
+        var md = prog[qid] && prog[qid].mediaData; if(!md) return;
+        Object.keys(md).forEach(function(mid){ fn(md, mid, prog[qid], pr); });
+      });
+    });
+  }
+  var mediaSyncing = false;
+  // 把還沒上傳的音檔傳到 Firebase Storage（登入且有網路、Storage 可用時）。成功的參照會加上 @網址，再存回課程庫。
+  async function syncMediaToCloud(){
+    if(mediaSyncing || !currentTeacher || !MO || !MO.ok || !window.storageApi || navigator.onLine === false) return { uploaded: 0, pending: 0 };
+    mediaSyncing = true;
+    var uploaded = 0, pending = 0, changed = false;
+    try{
+      var jobs = [];
+      eachMediaRef(fsData, function(md, mid){ var r = parseMediaRef(md[mid]); if(r && !r.url) jobs.push({ md: md, mid: mid, key: r.key }); });
+      for(var i = 0; i < jobs.length; i++){
+        var j = jobs[i];
+        try{
+          var rec = await MO.getMedia(j.key);
+          if(!rec || !rec.blob){ pending++; continue; }
+          var sr = window.storageApi.ref(window.storageApi.storage, "teacherMedia/" + currentTeacher.id + "/" + j.key);
+          await window.storageApi.uploadBytes(sr, rec.blob, { contentType: rec.type || "application/octet-stream" });
+          var url = await window.storageApi.getDownloadURL(sr);
+          j.md[j.mid] = "mm:" + j.key + "@" + url; uploaded++; changed = true;
+        }catch(e){ console.warn("音檔上傳失敗（先保留在這台裝置）", e); pending++; }
+      }
+      if(changed) saveFS();
+    } finally { mediaSyncing = false; }
+    return { uploaded: uploaded, pending: pending };
+  }
+  function countUnsyncedMedia(lib){ var n = 0; eachMediaRef(lib, function(md, mid){ var r = parseMediaRef(md[mid]); if(r && !r.url) n++; }); return n; }
+  window.addEventListener("firebase-storage-ready", function(){ setTimeout(function(){ syncMediaToCloud(); }, 3000); });
+
+  /* ================== 匯入 PowerPoint（.pptx） ================== */
+  // 直接解析 .pptx（見上面 MandamyPptx）：每一頁變成一張投影片——底圖＝該頁背景（含母片上每頁都有的 logo），
+  // 文字方塊／圖片／圖案／音檔變成可以直接編輯的物件；講者備註變成老師備註。動畫、換頁效果、影片不匯入。
+  async function importSlidesFromPptx(file){
+    if(isImportingSlides) return;
+    if(!window.MandamyPptx || typeof JSZip === "undefined"){
+      alert("匯入 PowerPoint 所需的元件載入失敗，請重新整理頁面再試一次。\nThe PowerPoint import component failed to load — please reload the page.");
+      return;
+    }
+    if(!/\.pptx$/i.test(file.name || "")){
+      alert("目前只支援 .pptx 檔案（PowerPoint 2007 以後的格式）。舊的 .ppt 請先在 PowerPoint 另存成 .pptx，或匯出成 PDF 再匯入。\nOnly .pptx files are supported (for .ppt, save as .pptx or export to PDF).");
+      return;
+    }
+    isImportingSlides = true;
+    var toast = showImportSlidesToast("讀取 PowerPoint… Reading…");
+    try{
+      var buf = await file.arrayBuffer();
+      var parsed = await MandamyPptx.parsePptx(buf, function(stage, i, n){ toast.textContent = "解析中 Parsing… " + i + "/" + n; });
+      var total = parsed.slides.length;
+      if(total > 150 && !confirm("這份簡報有 " + total + " 頁，匯入需要一點時間，要繼續嗎？\nThis deck has " + total + " slides — continue?")){ isImportingSlides = false; hideImportSlidesToast(toast); return; }
+      var conv = await MandamyPptx.convertSlides(parsed, function(stage, i, n){ toast.textContent = "轉換中 Converting… " + i + "/" + n; });
+      var secs = getSections();
+      var secId = uid("sec"), order = Object.keys(secs).length;
+      var baseName = String(file.name || "簡報").replace(/\.pptx$/i, "").slice(0, 40);
+      var sec = { id: secId, title: baseName || ("投影片 " + (order + 1)), desc: "", type: "board", order: order, collapsed: false, questions: {}, media: [] };
+      secs[secId] = sec;
+      var progressMap = {}, firstQ = null, stats = { slides: 0, texts: 0, images: 0, shapes: 0, audios: 0 }, warnSet = {}, audioFail = 0, notes = 0;
+      for(var i = 0; i < conv.pages.length; i++){
+        var pg = conv.pages[i];
+        toast.textContent = "儲存音檔與內容… " + (i + 1) + "/" + conv.pages.length;
+        var qId = uid("q"); if(!firstQ) firstQ = qId;
+        sec.questions[qId] = { id: qId, order: i, title: "投影片 " + (i + 1) + " Slide " + (i + 1), desc: "", bgImage: pg.bgImage, gridType: "none", media: [], teacherNote: pg.notes || "", weight: 1 };
+        if(pg.notes) notes++;
+        var prog = { texts: [], images: [], shapes: [], medias: [], mediaData: {} };
+        pg.texts.forEach(function(t){ prog.texts.push({ id: uid("t"), text: t.text, x: t.x, y: t.y, color: t.color, fontSize: t.fontSize, bold: !!t.bold, step: 0, align: t.align, list: t.list }); });
+        pg.images.forEach(function(im){ prog.images.push({ id: uid("im"), src: im.src, ar: im.ar, x: im.x, y: im.y, w: im.w, h: im.h, step: 0 }); });
+        pg.shapes.forEach(function(sh){ prog.shapes.push({ id: uid("sh"), type: sh.type, x: sh.x, y: sh.y, w: sh.w, h: sh.h, fx: sh.fx, fy: sh.fy, color: sh.color, sw: sh.sw, fill: sh.fill, op: sh.op, step: 0 }); });
+        for(var a = 0; a < pg.audios.length; a++){
+          var au = pg.audios[a], mid = uid("md"), ref1 = null;
+          try{
+            if(MO && MO.ok){ ref1 = "mm:" + (await MO.putMedia(au.blob, au.name)); }
+            else if(au.blob.size <= 1500000){ ref1 = await new Promise(function(res, rej){ var fr = new FileReader(); fr.onload = function(){ res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(au.blob); }); }
+          }catch(e){ console.warn("音檔存入失敗", e); }
+          if(!ref1){ audioFail++; continue; }
+          prog.medias.push({ id: mid, kind: "audio", name: au.name, x: au.x, y: au.y, w: au.w });
+          prog.mediaData[mid] = ref1; stats.audios++;
+        }
+        if(!prog.medias.length){ delete prog.medias; delete prog.mediaData; }
+        if(!prog.texts.length) delete prog.texts; if(!prog.images.length) delete prog.images; if(!prog.shapes.length) delete prog.shapes;
+        progressMap[qId] = prog;
+        stats.slides++; stats.texts += pg.texts.length; stats.images += pg.images.length; stats.shapes += pg.shapes.length;
+        pg.warnings.forEach(function(w){ warnSet[w] = (warnSet[w] || 0) + 1; });
+      }
+      isImportingSlides = false; hideImportSlidesToast(toast);
+      writeSections(secs, firstQ, progressMap);
+      syncMediaToCloud();
+      var warnLines = Object.keys(warnSet).slice(0, 8).map(function(w){ return "· " + w + (warnSet[w] > 1 ? "（" + warnSet[w] + " 頁）" : ""); });
+      if(audioFail) warnLines.push("· " + audioFail + " 個音檔沒有存成功");
+      alert("✅ 匯入完成：" + stats.slides + " 頁、" + stats.texts + " 個文字、" + stats.images + " 張圖片、" + stats.shapes + " 個圖案、" + stats.audios + " 個音檔" + (notes ? "、" + notes + " 頁講者備註（已放進老師備註）" : "") + "。\n\n不會匯入：動畫、換頁效果、影片。版面可能有些微位移，請抽幾頁檢查。" + (warnLines.length ? "\n\n提醒：\n" + warnLines.join("\n") : "") + "\n\nImported " + stats.slides + " slides. Animations, transitions and videos are not imported; please spot-check the layout.");
+    }catch(err){
+      console.error("匯入 PowerPoint 失敗", err);
+      isImportingSlides = false; hideImportSlidesToast(toast);
+      alert("匯入 PowerPoint 失敗：" + (err && err.message ? err.message : err) + "\n\n可以先在 PowerPoint 裡「另存新檔／匯出」成 PDF，再用「匯入 PDF」。\nImport failed. You can export the deck to PDF and use “Import PDF” instead.");
+    }
+  }
+
   // 最上層「＋ 新增投影片」：投影片不是題目，直接建立一張空白投影片（沒有底圖，可以直接畫記／
   // 貼圖），不跳「新增大題」那個要選題型的彈窗，讓流程單純一點。
   function createBlankSlideSection(){
@@ -3093,10 +3890,19 @@
     return {};
   }
 
-  function writeSections(newSections, newCurrentQId){
+  function writeSections(newSections, newCurrentQId, extraProgress){
+    // extraProgress：{ qId: {texts, images, shapes, medias, mediaData…} }——匯入 PowerPoint 時，每一頁的物件跟著一起寫進去
     if(inRoom()){
       var patch = { "project/sections": newSections };
       if(newCurrentQId !== undefined) patch["project/currentQId"] = newCurrentQId;
+      if(extraProgress){
+        // 房間裡一頁一頁分開寫（一次寫太大的更新容易被資料庫拒絕）
+        var qids = Object.keys(extraProgress);
+        var chain = update(ref(db, "rooms/" + activeRoomId), patch);
+        qids.forEach(function(qid){ chain = chain.then(function(){ return update(ref(db, "rooms/" + activeRoomId + "/sharedProgress/" + qid), extraProgress[qid]); }); });
+        chain.catch(function(err){ console.error("同步匯入的投影片到房間失敗", err); alert("同步失敗，匯入的內容可能沒有完整存到雲端，請檢查網路連線後再試一次。\nSync failed — please check your connection and try again."); });
+        return;
+      }
       // update() 可能同步丟出例外（例如資料被 SDK 判定為無效），也可能非同步被雲端服務拒絕
       // （例如權限或連線問題）——以前兩種都沒有處理，同步例外會讓呼叫端（例如新增小題的
       // 儲存按鈕）整段中斷、對話框卡住又沒有任何提示。這裡同步例外往外拋（讓呼叫端自己的
@@ -3110,7 +3916,11 @@
       }
     } else {
       var proj = getActiveProject();
-      if(proj){ proj.sections = newSections; if(newCurrentQId !== undefined) proj.currentQId = newCurrentQId; saveFS(); renderSidebar(); renderStage(); }
+      if(proj){
+        proj.sections = newSections; if(newCurrentQId !== undefined) proj.currentQId = newCurrentQId;
+        if(extraProgress){ if(!proj.progress) proj.progress = {}; Object.keys(extraProgress).forEach(function(qid){ proj.progress[qid] = Object.assign(proj.progress[qid] || {}, extraProgress[qid]); }); }
+        saveFS(); renderSidebar(); renderStage();
+      }
     }
   }
 
@@ -4550,6 +5360,28 @@
     var folders = {}; Object.keys(folderIds).forEach(function(id){ folders[id] = JSON.parse(JSON.stringify(fsData.folders[id])); });
     return { format: "mandamy-backup", version: 1, exportedAt: Date.now(), exportedAtText: fmtTime(Date.now()), projectCount: Object.keys(projects).length, folders: folders, projects: projects };
   }
+  function blobToDataUrl(blob){ return new Promise(function(res, rej){ var fr = new FileReader(); fr.onload = function(){ res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(blob); }); }
+  // 備份檔要能搬到別台裝置：把「mm:」音檔參照換回真正的資料（資料網址）；找不到本體的只留下空位
+  async function embedMediaInBackup(obj){
+    var jobs = [], missing = 0;
+    eachMediaRef(obj, function(md, mid){ var r = parseMediaRef(md[mid]); if(r) jobs.push({ md: md, mid: mid, r: r }); });
+    for(var i = 0; i < jobs.length; i++){
+      var j = jobs[i], blob = null;
+      try{ var rec = (MO && MO.ok) ? await MO.getMedia(j.r.key) : null; blob = rec && rec.blob; }catch(e){}
+      if(!blob && j.r.url){ try{ var resp = await fetch(j.r.url); if(resp.ok) blob = await resp.blob(); }catch(e){} }
+      if(blob) j.md[j.mid] = await blobToDataUrl(blob); else { delete j.md[j.mid]; missing++; }
+    }
+    return missing;
+  }
+  // 匯入時：太大的音檔資料網址換成本機參照，不要塞進課程庫
+  async function externalizeMediaInLibrary(lib){
+    if(!MO || !MO.ok) return;
+    var jobs = [];
+    eachMediaRef(lib, function(md, mid){ var v = md[mid]; if(typeof v === "string" && v.indexOf("data:") === 0 && v.length > 150000) jobs.push({ md: md, mid: mid, v: v }); });
+    for(var i = 0; i < jobs.length; i++){
+      try{ var bl = await (await fetch(jobs[i].v)).blob(); var key = await MO.putMedia(bl, ""); jobs[i].md[jobs[i].mid] = "mm:" + key; }catch(e){ console.warn("音檔轉存失敗，保留原樣", e); }
+    }
+  }
   function openExportDialog(projId){
     exportingProjId = projId;
     var pr = fsData.projects[projId]; if(!pr) return;
@@ -4585,26 +5417,33 @@
       }
     }catch(e){ console.error(e); try{ if(w) w.close(); }catch(er){} exportSetStatus("❌ 匯出失敗：" + (e && e.message ? e.message : e)); }
   };
-  document.getElementById("btn-export-json").onclick = function(){
+  document.getElementById("btn-export-json").onclick = async function(){
     var pr = fsData.projects[exportingProjId]; if(!pr) return;
-    var obj = buildBackupObject([exportingProjId]); obj.scope = "project";
-    var text = JSON.stringify(obj);
-    downloadTextFile(safeFileName(pr.title, ".mandamy.json"), text, "application/json");
-    exportSetStatus("✅ 已下載備份檔（" + fmtBytes(text.length) + "）");
+    exportSetStatus("⏳ 產生中…");
+    try{
+      var obj = buildBackupObject([exportingProjId]); obj.scope = "project";
+      var missing = await embedMediaInBackup(obj);
+      var text = JSON.stringify(obj);
+      downloadTextFile(safeFileName(pr.title, ".mandamy.json"), text, "application/json");
+      exportSetStatus("✅ 已下載備份檔（" + fmtBytes(text.length) + "）" + (missing ? "；有 " + missing + " 個音檔在這台裝置找不到，沒有放進備份" : ""));
+    }catch(e){ console.error(e); exportSetStatus("❌ 匯出失敗：" + (e && e.message ? e.message : e)); }
   };
 
   function backupSetStatus(msg){ document.getElementById("backup-status").textContent = msg || ""; }
   document.getElementById("btn-backup-open").onclick = function(){ backupSetStatus(""); safeShowModal(backupDialog); };
   document.getElementById("btn-backup-close").onclick = function(){ closeModalDialog(backupDialog); };
-  document.getElementById("btn-backup-export-all").onclick = function(){
+  document.getElementById("btn-backup-export-all").onclick = async function(){
     var ids = Object.keys(fsData.projects || {});
+    backupSetStatus("⏳ 產生中…");
     var obj = buildBackupObject(ids); obj.scope = "library";
+    var missingAudio = 0;
+    try{ missingAudio = await embedMediaInBackup(obj); }catch(e){ console.error(e); }
     // 沒有放在任何課程裡的空資料夾也一起備份
     Object.keys(fsData.folders || {}).forEach(function(id){ if(!obj.folders[id]) obj.folders[id] = JSON.parse(JSON.stringify(fsData.folders[id])); });
     var d = new Date(), stamp = d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + "-" + pad2(d.getHours()) + pad2(d.getMinutes());
     var text = JSON.stringify(obj);
     downloadTextFile("曼米課程庫備份-" + stamp + ".mandamy.json", text, "application/json");
-    backupSetStatus("✅ 已下載：" + ids.length + " 個課程、" + Object.keys(obj.folders).length + " 個資料夾（" + fmtBytes(text.length) + "）。");
+    backupSetStatus("✅ 已下載：" + ids.length + " 個課程、" + Object.keys(obj.folders).length + " 個資料夾（" + fmtBytes(text.length) + "）。" + (missingAudio ? "\n有 " + missingAudio + " 個音檔在這台裝置找不到，沒有放進備份。" : ""));
   };
   document.getElementById("btn-backup-import").onclick = function(){ document.getElementById("backup-import-file").click(); };
   document.getElementById("backup-import-file").onchange = function(e){
@@ -4643,7 +5482,9 @@
           fsData.projects[copy.id] = copy; added++;
         });
         migrateFS(fsData);
+        await externalizeMediaInLibrary(fsData);
         saveFS(); renderBreadcrumb(); renderLobbyGrid();
+        syncMediaToCloud();
         backupSetStatus("✅ 已匯入 " + added + " 個課程。匯入前的內容保留在「🕘 版本記錄」。");
       }catch(er){ console.error("匯入失敗", er); backupSetStatus("❌ 匯入失敗：" + (er && er.message ? er.message : er)); }
     };
@@ -4653,15 +5494,33 @@
   async function createRoom(){
     var rId = String(Math.floor(1000 + Math.random() * 9000));
     activeRoomId = rId; var currentProj = fsData.projects[activeProjectId];
+    // 2026-10-01：老師事先在投影片上準備好的內容（文字、圖片、圖案、音檔，例如匯入 PowerPoint 的結果）要帶進房間，
+    // 學生才看得到；老師以前教課時寫的筆跡、播放狀態不帶（那是上一次上課的紀錄，不是事先準備的內容）。
+    var seededProgress = {};
+    var srcProg = currentProj.progress || {};
+    Object.keys(srcProg).forEach(function(qid){
+      var pp = srcProg[qid] || {}, one = {};
+      ["texts", "images", "shapes", "medias", "mediaData", "gridType"].forEach(function(k){ if(pp[k] !== undefined && pp[k] !== null && !(Array.isArray(pp[k]) && !pp[k].length)) one[k] = pp[k]; });
+      if(pp.bgImage) one.bgImage = pp.bgImage;
+      if(Object.keys(one).length) seededProgress[qid] = JSON.parse(JSON.stringify(one));
+    });
+    // 音檔還沒上傳到雲端的話，學生端聽不到：開房間前先試著補傳一次
+    var unsyncedAudio = 0;
+    if(countUnsyncedMedia({ projects: { x: { progress: seededProgress } } }) > 0){
+      try{ await syncMediaToCloud(); }catch(e){}
+      var syncedNow = fsData.projects[activeProjectId] || currentProj;
+      Object.keys(seededProgress).forEach(function(qid){ var md = seededProgress[qid].mediaData; var live = (syncedNow.progress && syncedNow.progress[qid] && syncedNow.progress[qid].mediaData) || {}; if(md) Object.keys(md).forEach(function(mid){ if(live[mid]) md[mid] = live[mid]; }); });
+      unsyncedAudio = countUnsyncedMedia({ projects: { x: { progress: seededProgress } } });
+    }
     await set(ref(db, "rooms/" + rId), {
-      project: currentProj, sharedProgress: {}, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs,
+      project: currentProj, sharedProgress: seededProgress, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs,
       phoneticMode: (currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off",
       presence: { teacher: { online:true, name:"老師" } }
     });
     attachPresence(rId, "teacher", "老師"); startRoom(rId, "teacher");
     history.replaceState(null, "", "?room=" + rId); renderTopbar();
     var link = location.origin + location.pathname + "?room=" + rId + "&role=student";
-    navigator.clipboard.writeText(link).then(function(){ alert("✅ 房間已開好！學生連結已複製。\nRoom is ready! Student link copied."); });
+    navigator.clipboard.writeText(link).then(function(){ alert("✅ 房間已開好！學生連結已複製。\nRoom is ready! Student link copied." + (unsyncedAudio ? "\n\n⚠ 有 " + unsyncedAudio + " 個音檔還沒上傳到雲端（可能是離線、或雲端儲存無法使用），學生端會聽不到這些音檔；你自己的畫面可以正常播放。\n" + unsyncedAudio + " audio file(s) are not on the cloud yet — students won't hear them." : "")); });
   }
 
   function leaveRoom(){
@@ -5588,6 +6447,15 @@
       var file = e.target.files[0];
       importSlidesTopFileInput.value = ""; // 允許連續兩次選同一個檔案都能觸發 onchange
       if(file) importSlidesAsNewSection(file);
+    };
+  }
+
+  var btnImportPptx = document.getElementById("btn-import-pptx"), importPptxFileInput = document.getElementById("import-pptx-file");
+  if(btnImportPptx && importPptxFileInput){
+    btnImportPptx.onclick = function(){ closeAddSlideMenu(); importPptxFileInput.click(); };
+    importPptxFileInput.onchange = function(e){
+      var file = e.target.files[0]; importPptxFileInput.value = "";
+      if(file) importSlidesFromPptx(file);
     };
   }
 
@@ -9472,9 +10340,16 @@
       var m = h.m;
       body.innerHTML = '<div class="media-audio-row"><button type="button" class="ma-play">▶</button><input type="range" class="ma-seek" min="0" max="0" step="0.1" value="0"><span class="ma-time">0:00</span></div>';
       var audio = document.createElement("audio"); audio.preload = "auto"; audio.style.display = "none";
-      var src = (getProgress(q.id).mediaData || {})[m.id]; if(src) audio.src = src;
+      var srcRaw = (getProgress(q.id).mediaData || {})[m.id];
       body.appendChild(audio); h.audio = audio;
       var btn = body.querySelector(".ma-play"), seek = body.querySelector(".ma-seek"), tm = body.querySelector(".ma-time");
+      // 2026-10-01：音檔本體可能是資料網址（舊）、雲端網址，或「mm:」參照（存在這台裝置的 IndexedDB，見 resolveMediaSrc）
+      if(srcRaw){
+        resolveMediaSrc(srcRaw, m.name).then(function(u){
+          if(u){ audio.src = u; }
+          else { btn.disabled = true; btn.title = "這個音檔不在這台裝置上（匯入時的那台裝置才有），請在原本那台裝置重新打開一次，或重新匯入。"; tm.textContent = "⚠ 音檔不在這台裝置"; }
+        });
+      }
       var dragging = false;
       function ui(){
         var d = isFinite(audio.duration) ? audio.duration : 0;
@@ -9612,6 +10487,16 @@
       var inp = document.createElement("input"); inp.type = "file"; inp.accept = "audio/*,.mp3,.m4a,.wav,.ogg,.aac";
       inp.onchange = function(){
         var f = inp.files && inp.files[0]; if(!f) return;
+        // 2026-10-01：不在房間裡、而且這台裝置有本機儲存時，音檔本體存在 IndexedDB，課程資料只放參照（沒有大小問題）；
+        // 在房間裡（即時同步給學生）仍維持原本的做法：直接放進同步資料，所以保留大小提醒。
+        if(!inRoom() && MO && MO.ok){
+          MO.putMedia(f, f.name).then(function(key){
+            if(!document.body.contains(cWrap)) return;
+            addMedia({ kind: "audio", name: f.name.replace(/\.[^.]+$/, ""), w: 34 }, "mm:" + key);
+            syncMediaToCloud();
+          }).catch(function(err){ alert("音檔存入這台裝置失敗：" + (err && err.message ? err.message : err)); });
+          return;
+        }
         if(f.size > 6 * 1024 * 1024 && !confirm("這個音檔有 " + (f.size / 1048576).toFixed(1) + " MB，即時同步可能會比較慢，建議壓縮或剪短。仍要加入嗎？\nThis file is large; live sync may be slow. Add anyway?")) return;
         var fr = new FileReader();
         fr.onload = function(){ if(!document.body.contains(cWrap)) return; addMedia({ kind: "audio", name: f.name.replace(/\.[^.]+$/, ""), w: 34 }, fr.result); };
