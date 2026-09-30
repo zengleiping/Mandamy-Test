@@ -232,10 +232,40 @@
   .item-card.is-folder:hover{border-color:var(--bamboo);}
 
   /* 教學主舞台佈局 */
-  .layout{flex:1;display:grid;grid-template-columns:300px 1fr;min-height:0; transition:grid-template-columns .2s cubic-bezier(0.16, 1, 0.3, 1);}
+  .layout{flex:1;display:grid;grid-template-columns:var(--sidebar-w, 300px) 1fr;min-height:0; transition:grid-template-columns .2s cubic-bezier(0.16, 1, 0.3, 1);}
   .app.student-mode .layout, .app.present .layout{grid-template-columns:1fr;}
   .app.student-mode .sidebar, .app.present .sidebar{display:none;}
   .layout.sidebar-collapsed{grid-template-columns:44px 1fr;}
+  /* 2026-10-01：左側欄三種狀態——寬（可拖曳調寬度，220~520px）／窄條（只留大題代號＋小題編號）／整個收起（44px 細條） */
+  .layout.sidebar-narrow{grid-template-columns:76px 1fr;}
+  .layout.sidebar-dragging{ transition:none; }
+  .layout.sidebar-dragging, .layout.sidebar-dragging *{ cursor:col-resize !important; user-select:none; }
+  .sidebar{ position:relative; }
+  .layout{ position:relative; }
+  .sidebar-resizer{ position:absolute; top:0; bottom:0; left:calc(var(--sidebar-w, 300px) - 4px); width:9px; cursor:col-resize; z-index:6; touch-action:none; }
+  .sidebar-resizer:hover, .layout.sidebar-dragging .sidebar-resizer{ background:linear-gradient(to right, transparent 3px, var(--seal-ring) 3px, var(--seal-ring) 6px, transparent 6px); }
+  .layout.sidebar-collapsed .sidebar-resizer, .layout.sidebar-narrow .sidebar-resizer, .app.student-mode .sidebar-resizer, .app.present .sidebar-resizer{ display:none; }
+  .sidebar-head-btns{ display:flex; gap:6px; flex:none; }
+  .sidebar-head-btns .sidebar-collapse-btn{ flex:1; min-width:0; }
+  .layout.sidebar-collapsed #btn-narrow-sidebar{ display:none; }
+  .layout.sidebar-collapsed .sidebar-head-btns{ flex-direction:column; }
+  .layout.sidebar-narrow .sidebar{ padding:12px 6px; align-items:stretch; }
+  .layout.sidebar-narrow .sidebar-head-btns{ flex-direction:column; }
+  .layout.sidebar-narrow .sidebar-collapse-btn{ width:100%; padding:8px 0; }
+  .layout.sidebar-narrow .sidebar-collapse-label{ display:none; }
+  .layout.sidebar-narrow .sidebar-inner > :not(.section-list){ display:none; }
+  .layout.sidebar-narrow .section-list{ gap:8px; }
+  .layout.sidebar-narrow .section-head{ padding:6px 4px; align-items:center; }
+  .layout.sidebar-narrow .section-head-meta, .layout.sidebar-narrow .section-head-actions, .layout.sidebar-narrow .drag-handle-icon, .layout.sidebar-narrow .section-head-collapse-icon{ display:none !important; }
+  .layout.sidebar-narrow .section-head-top{ justify-content:center; }
+  .layout.sidebar-narrow .section-head-title-row{ justify-content:center; flex:none; }
+  .layout.sidebar-narrow .section-head-title-text{ display:inline-block; max-width:1.4em; overflow:hidden; white-space:nowrap; text-overflow:clip; font-size:14px; }
+  .layout.sidebar-narrow .section-body{ flex-direction:row; flex-wrap:wrap; gap:4px; padding:5px; justify-content:center; }
+  .layout.sidebar-narrow .question-item-btn{ width:auto; padding:2px; border-radius:8px; justify-content:center; }
+  .layout.sidebar-narrow .q-item-left{ flex:none; gap:0; }
+  .layout.sidebar-narrow .q-item-left > :not(.q-index-badge){ display:none !important; }
+  .layout.sidebar-narrow .question-item-btn .q-action-btns{ display:none !important; }
+  .layout.sidebar-narrow .section-body > :not(.question-item-btn){ display:none; }
 
   .sidebar{
     background:var(--surface); border-right:1px solid var(--grid-line); padding:16px 12px;
@@ -267,7 +297,7 @@
   }
   .sidebar-collapse-btn:hover{ color:var(--seal); border-color:var(--seal-ring); background:var(--seal-soft); }
   .sidebar-collapse-icon{ transition:transform .2s ease; flex:none; }
-  .layout.sidebar-collapsed .sidebar-collapse-btn{ width:32px; padding:8px 0; }
+  .layout.sidebar-collapsed .sidebar-collapse-btn{ width:32px; padding:8px 0; flex:none; }
   .layout.sidebar-collapsed .sidebar-collapse-label{ display:none; }
   .layout.sidebar-collapsed .sidebar-collapse-icon{ transform:rotate(180deg); }
 
@@ -381,7 +411,7 @@
     transition:transform .15s ease-out, max-width .2s ease;
   }
   /* 側欄收合後舞台區有更多可用寬度，讓題目（尤其是寫字板）可以放大使用，而不是維持原本固定寬度 */
-  .layout.sidebar-collapsed .stage{ max-width:1480px; }
+  .layout.sidebar-collapsed .stage, .layout.sidebar-narrow .stage{ max-width:1480px; }
   /* 小白板／生字練習這種畫布類題型，不管側欄收合與否都不要被固定上限卡住——
      這兩種題型的可用寬度完全交給 stage-wrap 的留白決定，畫布才能盡量撐到跟螢幕差不多大，
      不要像其他題型一樣受限在一個偏窄的閱讀寬度裡、兩側留一堆用不到的空白。
@@ -390,7 +420,7 @@
      有三個 class（.layout.sidebar-collapsed .stage），單寫兩個 class 的
      .stage.stage-canvas-type 選擇器特異度不夠高，蓋不掉它，兩種情況都要各寫一條才會真的生效。 */
   .stage.stage-canvas-type,
-  .layout.sidebar-collapsed .stage.stage-canvas-type{ max-width:none; }
+  .layout.sidebar-collapsed .stage.stage-canvas-type, .layout.sidebar-narrow .stage.stage-canvas-type{ max-width:none; }
 
   /* 句子重組專屬樣式 */
   .reorder-container{display:flex;flex-direction:column;gap:24px;max-width:840px;margin:0 auto;}
@@ -1508,7 +1538,10 @@
   <!-- 教學主舞台 -->
   <div class="layout" id="classroom-view" style="display:none;">
     <aside class="sidebar" id="sidebar">
-      <button type="button" class="sidebar-collapse-btn" id="btn-toggle-sidebar" title="收合／展開左側欄 Collapse/Expand"><span class="sidebar-collapse-icon">◀</span><span class="sidebar-collapse-label">收合欄位 Collapse</span></button>
+      <div class="sidebar-head-btns">
+        <button type="button" class="sidebar-collapse-btn" id="btn-narrow-sidebar" title="縮成窄條／展開 Narrow strip / Expand"><span class="sidebar-narrow-icon">⇤</span><span class="sidebar-collapse-label">窄條 Narrow</span></button>
+        <button type="button" class="sidebar-collapse-btn" id="btn-toggle-sidebar" title="收合／展開左側欄 Collapse/Expand"><span class="sidebar-collapse-icon">◀</span><span class="sidebar-collapse-label">收合 Collapse</span></button>
+      </div>
       <div class="sidebar-inner" id="sidebar-inner">
         <button class="btn btn-primary btn-new" id="btn-new-section" type="button">＋ 新增大題 Add Section</button>
 
@@ -1542,6 +1575,7 @@
         <div class="section-list" id="section-tree-list"></div>
       </div>
     </aside>
+    <div class="sidebar-resizer" id="sidebar-resizer" title="拖曳調整側欄寬度（連點兩下恢復預設）Drag to resize sidebar"></div>
 
     <main class="stage-wrap">
       <div class="stage" id="stage"></div>
@@ -3442,22 +3476,67 @@
   // 讓老師可以自行收合成一條窄邊，需要時再點擊展開，並記住上次的收合狀態
   var layoutEl = document.getElementById("classroom-view");
   var btnToggleSidebar = document.getElementById("btn-toggle-sidebar");
-  var sidebarCollapsed = localStorage.getItem("hanyu_sidebar_collapsed") === "1";
-  function applySidebarCollapsed(collapsed){
-    sidebarCollapsed = collapsed;
-    if(layoutEl) layoutEl.classList.toggle("sidebar-collapsed", collapsed);
-    if(btnToggleSidebar) btnToggleSidebar.title = collapsed ? "展開左側欄 Expand" : "收合左側欄 Collapse";
-    localStorage.setItem("hanyu_sidebar_collapsed", collapsed ? "1" : "0");
-    // 收合/展開側欄只是切換一個 CSS class,不是瀏覽器視窗真的變大小,不會自動觸發 resize 事件——
-    // 但小白板／生字練習的畫布是依「目前量到的可用空間」撐到最大（見 fitCanvasToViewport，只在 resize 時重算），
-    // 如果沒有手動觸發，畫布會一直維持收合前量到的舊尺寸，多出來的空間就會變成沒用到的空白。
-    // 廣播一次 resize 事件讓已經掛在畫面上的畫布立刻重新量測；side 欄收合動畫是 0.2s，
-    // 動畫跑完後的寬度才是最終值，所以動畫結束後再廣播一次，抓到真正安定下來的最終尺寸。
+  // 三種狀態：full（寬，可拖曳調寬度）／narrow（窄條）／collapsed（整個收起）。存在這台裝置的 localStorage。
+  var SIDEBAR_MIN_W = 220, SIDEBAR_MAX_W = 520, SIDEBAR_DEFAULT_W = 300; // 寬模式的最小／最大／預設寬度（px）
+  var btnNarrowSidebar = document.getElementById("btn-narrow-sidebar");
+  var sidebarResizer = document.getElementById("sidebar-resizer");
+  var sidebarMode = "full", sidebarPrevMode = "full", sidebarWidth = SIDEBAR_DEFAULT_W;
+  try{
+    var savedMode = localStorage.getItem("hanyu_sidebar_mode");
+    if(savedMode !== "full" && savedMode !== "narrow" && savedMode !== "collapsed") savedMode = localStorage.getItem("hanyu_sidebar_collapsed") === "1" ? "collapsed" : "full"; // 舊版只記「收合與否」
+    sidebarMode = savedMode;
+    var savedPrev = localStorage.getItem("hanyu_sidebar_prev_mode"); sidebarPrevMode = (savedPrev === "narrow") ? "narrow" : "full";
+    var savedW = parseInt(localStorage.getItem("hanyu_sidebar_w"), 10); if(savedW) sidebarWidth = Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, savedW));
+  }catch(e){}
+  function broadcastSidebarResize(){
+    // 收合/展開/調寬側欄不是瀏覽器視窗真的變大小，不會自動觸發 resize 事件，但小白板／生字練習的畫布是依「目前量到的
+    // 可用空間」撐到最大（見 fitCanvasToViewport），要廣播一次 resize 讓已經掛在畫面上的畫布重新量測；
+    // 側欄動畫是 0.2s，動畫跑完後再廣播一次，抓到真正安定下來的最終尺寸。
     window.dispatchEvent(new Event("resize"));
     setTimeout(function(){ window.dispatchEvent(new Event("resize")); }, 220);
   }
-  if(btnToggleSidebar) btnToggleSidebar.onclick = function(){ applySidebarCollapsed(!sidebarCollapsed); };
-  applySidebarCollapsed(sidebarCollapsed);
+  function applySidebarMode(mode, noBroadcast){
+    if(mode !== "full" && mode !== "narrow" && mode !== "collapsed") mode = "full";
+    if(mode === "collapsed" && sidebarMode !== "collapsed") sidebarPrevMode = sidebarMode; // 展開時回到收起之前的狀態
+    sidebarMode = mode;
+    if(layoutEl){
+      layoutEl.classList.toggle("sidebar-collapsed", mode === "collapsed");
+      layoutEl.classList.toggle("sidebar-narrow", mode === "narrow");
+      layoutEl.style.setProperty("--sidebar-w", sidebarWidth + "px");
+    }
+    if(btnToggleSidebar) btnToggleSidebar.title = mode === "collapsed" ? "展開左側欄 Expand" : "整個收起左側欄 Collapse";
+    if(btnNarrowSidebar){
+      btnNarrowSidebar.title = mode === "narrow" ? "展開成寬欄 Expand" : "縮成窄條（只留大題代號和小題編號）Narrow strip";
+      var ni = btnNarrowSidebar.querySelector(".sidebar-narrow-icon"); if(ni) ni.textContent = mode === "narrow" ? "⇥" : "⇤";
+      var nl = btnNarrowSidebar.querySelector(".sidebar-collapse-label"); if(nl) nl.textContent = mode === "narrow" ? "展開 Expand" : "窄條 Narrow";
+    }
+    try{ localStorage.setItem("hanyu_sidebar_mode", mode); localStorage.setItem("hanyu_sidebar_prev_mode", sidebarPrevMode); localStorage.setItem("hanyu_sidebar_collapsed", mode === "collapsed" ? "1" : "0"); }catch(e){}
+    if(!noBroadcast) broadcastSidebarResize();
+  }
+  if(btnToggleSidebar) btnToggleSidebar.onclick = function(){ applySidebarMode(sidebarMode === "collapsed" ? sidebarPrevMode : "collapsed"); };
+  if(btnNarrowSidebar) btnNarrowSidebar.onclick = function(){ applySidebarMode(sidebarMode === "narrow" ? "full" : "narrow"); };
+  if(sidebarResizer){
+    sidebarResizer.addEventListener("pointerdown", function(e){
+      e.preventDefault(); try{ sidebarResizer.setPointerCapture(e.pointerId); }catch(er){}
+      var sx = e.clientX, w0 = sidebarWidth;
+      layoutEl.classList.add("sidebar-dragging");
+      var rafPending = false;
+      function mv(ev){
+        sidebarWidth = Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, Math.round(w0 + ev.clientX - sx)));
+        layoutEl.style.setProperty("--sidebar-w", sidebarWidth + "px");
+        if(!rafPending){ rafPending = true; requestAnimationFrame(function(){ rafPending = false; window.dispatchEvent(new Event("resize")); }); }
+      }
+      function up(){
+        sidebarResizer.removeEventListener("pointermove", mv); sidebarResizer.removeEventListener("pointerup", up); sidebarResizer.removeEventListener("pointercancel", up);
+        layoutEl.classList.remove("sidebar-dragging");
+        try{ localStorage.setItem("hanyu_sidebar_w", String(sidebarWidth)); }catch(er){}
+        window.dispatchEvent(new Event("resize"));
+      }
+      sidebarResizer.addEventListener("pointermove", mv); sidebarResizer.addEventListener("pointerup", up); sidebarResizer.addEventListener("pointercancel", up);
+    });
+    sidebarResizer.addEventListener("dblclick", function(){ sidebarWidth = SIDEBAR_DEFAULT_W; layoutEl.style.setProperty("--sidebar-w", sidebarWidth + "px"); try{ localStorage.setItem("hanyu_sidebar_w", String(sidebarWidth)); }catch(er){} broadcastSidebarResize(); });
+  }
+  applySidebarMode(sidebarMode);
 
   /* ================== 設定彈窗按鈕 ================== */
   var settingsDialog = document.getElementById("settings-dialog");
