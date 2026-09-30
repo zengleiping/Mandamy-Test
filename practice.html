@@ -8859,6 +8859,10 @@
         if(e.button > 0 && e.pointerType === "mouse") return;
         var it = itemOfTarget(e.target); if(!it) return;
         var sx = e.clientX, sy = e.clientY, pid = e.pointerId, timer = null, dragging = false, ghost = null, line = null, target = null;
+        // 2026-10-01 修正：以前「按住超過 0.38 秒」就進入拖曳、放開時那一下點擊被吞掉，結果稍微按久一點（觸控板、
+        // 滑鼠、筆）工具按鈕就完全沒反應。現在：滑鼠要「按住並移動 10px 以上」才算拖曳；觸控／筆長按後要真的移動才算，
+        // 長按但沒有移動、直接放開＝一般的點擊（照常執行按鈕功能）。
+        var isMouse = e.pointerType === "mouse", moved = false;
         function cleanupWatch(){
           clearTimeout(timer);
           document.removeEventListener("pointermove", onMove, true); document.removeEventListener("pointerup", onUp, true); document.removeEventListener("pointercancel", onCancel, true);
@@ -8898,7 +8902,12 @@
         }
         function onMove(ev){
           if(ev.pointerId !== pid) return;
-          if(!dragging){ if(Math.hypot(ev.clientX - sx, ev.clientY - sy) > 9) cleanupWatch(); return; }
+          var dist = Math.hypot(ev.clientX - sx, ev.clientY - sy);
+          if(!dragging){
+            if(isMouse){ if(dist > 10){ begin(); } else return; }
+            else { if(dist > 9) cleanupWatch(); return; }
+          }
+          if(dist > 6) moved = true;
           ev.preventDefault();
           var gr = ghost.getBoundingClientRect();
           ghost.style.left = (ev.clientX - gr.width / 2) + "px"; ghost.style.top = (ev.clientY - gr.height / 2) + "px";
@@ -8912,6 +8921,7 @@
           if(ghost) ghost.remove(); if(line) line.remove();
           [vToolbar, topBar].forEach(function(b){ b.classList.remove("tb-drop-bar"); });
           it.nodes.forEach(function(n){ n.classList.remove("tb-dragging-src"); });
+          if(!moved) return; // 長按但沒有移動：當成一般點擊，不吞掉 click、不改位置
           // 放開之後的那一下 click 不要當成按了按鈕
           function swallow(ce){ ce.stopPropagation(); ce.preventDefault(); }
           document.addEventListener("click", swallow, true);
@@ -8928,7 +8938,7 @@
         }
         function onUp(ev){ if(ev.pointerId !== pid) return; finish(true); }
         function onCancel(ev){ if(ev.pointerId !== pid) return; finish(false); }
-        timer = setTimeout(begin, LONG_MS);
+        if(!isMouse) timer = setTimeout(begin, LONG_MS);
         document.addEventListener("pointermove", onMove, true); document.addEventListener("pointerup", onUp, true); document.addEventListener("pointercancel", onCancel, true);
       }
       [vToolbar, topBar].forEach(function(b){ b.addEventListener("dragstart", function(e){ e.preventDefault(); }); }); // 工具圖示是 <img>，瀏覽器原生拖曳圖片會中斷長按拖曳
