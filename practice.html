@@ -7,18 +7,26 @@
      整頁縮放搶走手勢、跟畫記/平移互相打架，畫布本身也已經用 touch-action:none 各自擋掉。 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>曼米中文 Mandamy</title>
+<!-- 2026-10-01 離線教課：函式庫改成自己託管在 vendor/（不再依賴 CDN），並註冊 Service Worker（sw.js）
+     把頁面與函式庫存進瀏覽器——第一次有網路時打開過，之後沒網路也能開。manifest 讓 iPad 可以「加入主畫面」
+     當成獨立 App 開啟（Safari 對「加入主畫面」的網頁才不會在一週沒用之後清掉離線資料）。 -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="曼米中文">
 <!-- 替換瀏覽器分頁標籤的灰色地球圖示 (Favicon) -->
 <link rel="icon" id="dynamic-favicon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='52' r='38' fill='%2398D7FF' stroke='%231C211E' stroke-width='4'/%3E%3Cpath d='M 14 44 C 20 22, 38 16, 50 16 C 62 16, 80 22, 86 44 C 76 52, 66 38, 50 44 C 34 38, 24 52, 14 44 Z' fill='%2395D165' stroke='%231C211E' stroke-width='3.5'/%3E%3Cpath d='M 22 75 C 36 90, 64 90, 78 75 C 66 78, 34 78, 22 75 Z' fill='%2395D165' stroke='%231C211E' stroke-width='3.5'/%3E%3Cellipse cx='37' cy='36' rx='5.5' ry='3.5' fill='%23FF859A'/%3E%3Cellipse cx='63' cy='36' rx='5.5' ry='3.5' fill='%23FF859A'/%3E%3Crect x='36' y='30' width='2.5' height='5' rx='1.2' fill='%231C211E'/%3E%3Crect x='61.5' y='30' width='2.5' height='5' rx='1.2' fill='%231C211E'/%3E%3Cellipse cx='50' cy='32' rx='4.5' ry='3.5' fill='%231C211E'/%3E%3Cpath d='M 50 67 C 36 55, 31 43, 39 37 C 45 32, 50 37, 50 40 C 50 37, 55 32, 61 37 C 69 43, 64 55, 50 67 Z' fill='%23FF7A8E' stroke='%231C211E' stroke-width='3.5'/%3E%3Cpath d='M 14 56 C 20 48, 38 52, 38 58 C 36 64, 20 64, 14 56 Z' fill='%2398D7FF' stroke='%231C211E' stroke-width='3.5'/%3E%3Cpath d='M 86 56 C 80 48, 62 52, 62 58 C 64 64, 80 64, 86 56 Z' fill='%2398D7FF' stroke='%231C211E' stroke-width='3.5'/%3E%3Cellipse cx='78' cy='18' rx='11' ry='9' fill='%23FFFFFF' stroke='%231C211E' stroke-width='3'/%3E%3Cpath d='M 71 24 L 67 29 L 75 26 Z' fill='%23FFFFFF' stroke='%231C211E' stroke-width='2'/%3E%3C/svg%3E">
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
 <!-- SheetJS: 支援 Excel 匯入與匯出 -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <!-- HanziWriter：生字練習教室用來畫筆順動畫，預設就會自己去 CDN 抓任何漢字的筆順資料，不用自己維護字庫 -->
-<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3/dist/hanzi-writer.min.js"></script>
+<script src="vendor/hanzi-writer.min.js"></script>
 <!-- pinyin-pro：小白板「文字」工具打字加註音（拼音）用，載入後掛在 window.pinyinPro 上；
      注音（Zhuyin/Bopomofo）沒有現成的瀏覽器函式庫，由這個檔案自己的 pinyinSyllableToZhuyin()
      依教育部標準對照表用拼音轉換，不需要額外的 CDN 函式庫 -->
-<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.29.4/dist/index.js"></script>
+<script src="vendor/pinyin-pro.js"></script>
 <script>
   // pinyin-pro 內建字典把「妳」判斷成罕用的「奶」音（nǎi），但教材／老師實際用「妳」的場合
   // （例如「妳好」）就是「你」的女性書寫，讀音要跟「你」一樣是 nǐ。用官方 customPinyin() 蓋掉
@@ -32,11 +40,11 @@
 <!-- pdf.js：小白板大題「匯入簡報」用，把老師上傳的 PDF（簡報軟體另存新檔／匯出成 PDF）每一頁
      轉成一張圖片，各自變成一題小白板小題（背景圖），這樣就能沿用既有的小白板畫記功能，不用
      重新設計一套資料結構。瀏覽器沒辦法直接解析 .pptx 檔案本身，所以請老師先匯出成 PDF。 -->
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="vendor/pdf.min.js"></script>
 <script>
   try{
     if(typeof pdfjsLib !== "undefined"){
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
     }
   } catch(e){}
 </script>
@@ -44,7 +52,7 @@
      圖片悄悄上傳，老師端可以確認學生是不是真的看得到、看得對——跟小白板既有「查看全班寫字」
      監看（用筆畫資料重畫）不同，這裡是畫面本身的忠實快照，就算學生那邊資料同步正常但畫面其實
      沒顯示出來（圖片沒load出來、當掉），老師這邊也看得出來。 -->
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="vendor/html2canvas.min.js"></script>
 <style>
   :root{
     --paper:#FAF7F2;
@@ -1378,6 +1386,12 @@
     outline: 2.5px solid var(--ink) !important; outline-offset: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
   .btn-phonetic-mode.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
+
+  /* 2026-10-01 離線教課：頂部列的小標籤 */
+  .offline-pill{ display:inline-block; font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--ink-soft); white-space:nowrap; }
+  .offline-pill.is-ready{ background:var(--bamboo-soft); color:var(--bamboo); }
+  .offline-pill.is-notready{ background:#FFF3D6; color:#9A6A00; }
+  .offline-pill.is-offline{ background:#FFE4DE; color:#B23B32; }
 </style>
 </head>
 <body>
@@ -1407,13 +1421,16 @@
     <div class="auth-card">
       <div id="auth-connecting-section">
         <p class="auth-hint" style="margin-top:0;">⏳ 正在連線雲端服務…Connecting to cloud service…</p>
+        <!-- 2026-10-01：連線慢（例如連著 Wi-Fi 但其實沒有對外網路）時不用乾等逾時，幾秒後出現這顆按鈕可以直接跳過 -->
+        <button type="button" class="btn" id="btn-auth-skip-wait" style="display:none; width:100%; justify-content:center; margin-top:14px; padding:12px; text-align:center;">⏭ 不等了，直接離線使用 Skip &amp; Use Offline</button>
       </div>
 
       <div id="auth-fail-section" style="display:none;">
         <h2 style="text-align:center;margin:0 0 6px;font-size:20px;">無法連線雲端服務 Can't Reach Cloud Service</h2>
-        <p class="auth-sub">教師帳號與測驗庫需要連線到雲端服務才能使用。請檢查網路連線後重試，或先離線使用本機示範資料（不會同步帳號，僅限這台裝置）。<br>Teacher accounts need an internet connection to the cloud service. Check your connection and retry, or continue offline with local demo data for now (won't sync, this device only).</p>
+        <p class="auth-sub" id="auth-fail-sub">教師帳號與測驗庫需要連線到雲端服務才能使用。請檢查網路連線後重試，或先離線使用本機示範資料（不會同步帳號，僅限這台裝置）。<br>Teacher accounts need an internet connection to the cloud service. Check your connection and retry, or continue offline with local demo data for now (won't sync, this device only).</p>
         <button type="button" class="btn btn-primary" id="btn-auth-retry" style="width:100%; justify-content:center; margin-top:6px; padding:12px;">🔄 重試 Retry</button>
-        <button type="button" class="btn" id="btn-auth-offline" style="width:100%; justify-content:center; margin-top:10px; padding:12px;">📴 離線使用 Continue Offline</button>
+        <button type="button" class="btn" id="btn-auth-offline" style="width:100%; justify-content:center; margin-top:10px; padding:12px; text-align:center;">📴 離線使用 Continue Offline</button>
+        <button type="button" class="btn btn-ghost" id="btn-auth-offline-demo" style="display:none; width:100%; justify-content:center; margin-top:8px; padding:10px; font-size:13px;">改用本機示範資料 Use local demo data instead</button>
       </div>
 
       <div id="auth-form-section" style="display:none;">
@@ -1443,7 +1460,7 @@
     <div class="lobby-header">
       <h2>專案課次大廳 Course Lobby</h2>
       <div class="lobby-header-btns">
-        <a class="btn" href="https://zengleiping.github.io/Mandamy-Class/" target="_blank" rel="noopener" style="text-decoration:none;">🎮 課堂遊戲 Class Games</a>
+        <a class="btn" id="link-class-games" href="https://zengleiping.github.io/Mandamy-Class/" target="_blank" rel="noopener" style="text-decoration:none;">🎮 課堂遊戲 Class Games</a>
         <button type="button" class="btn" id="btn-import-vocab-cloud" style="border:1.5px solid var(--seal); color:var(--seal); font-weight:700;">☁️ 從生詞雲端匯入</button>
         <button type="button" class="btn" id="btn-create-folder" style="border:1.5px solid var(--bamboo); color:var(--bamboo); font-weight:700;">＋ 新增資料夾 Add Folder</button>
         <button type="button" class="btn btn-primary" id="btn-create-project">＋ 新增測驗 Add Test</button>
@@ -1657,6 +1674,36 @@
 </dialog>
 
 <!-- 教師帳號管理彈窗（僅管理員看得到入口） -->
+<!-- 2026-10-01 離線教課：回到網路時，離線期間的修改跟雲端版本不同，一律詢問老師要用哪一份（不自動覆蓋） -->
+<dialog class="dialog-modal" id="offline-conflict-dialog" style="width:min(560px,94vw);">
+  <div class="dialog-head">
+    <h2>📴 偵測到離線期間的修改 Offline Changes Found</h2>
+  </div>
+  <div class="dialog-body">
+    <p style="font-size:13.5px; line-height:1.7; margin:0 0 10px;">這台裝置上有一份離線時編輯的課程，跟雲端上的不一樣。請選擇要用哪一份——<b>沒選的那份不會消失</b>，會保留在「🕘 版本記錄」，之後隨時可以還原。<br><span style="color:var(--ink-soft);font-size:12.5px;">The copy edited offline on this device differs from the cloud copy. Pick which one to keep — the other stays in Version History so you can restore it any time.</span></p>
+    <div id="offline-conflict-summary" style="font-size:13px; line-height:1.8; background:var(--surface-2); border-radius:10px; padding:10px 12px;"></div>
+  </div>
+  <div class="dialog-foot" style="flex-wrap:wrap; gap:8px;">
+    <button type="button" class="btn" id="btn-conflict-use-cloud">☁️ 用雲端版 Use Cloud Copy</button>
+    <button type="button" class="btn btn-primary" id="btn-conflict-use-offline">📴 用離線版（覆蓋雲端）Use Offline Copy</button>
+  </div>
+</dialog>
+
+<!-- 2026-10-01 版本記錄：自動存檔（約每 5 分鐘）、手動存檔、離線／雲端衝突時保留的另一份，都可以在這裡還原 -->
+<dialog class="dialog-modal" id="versions-dialog" style="width:min(640px,94vw);">
+  <div class="dialog-head">
+    <h2>🕘 版本記錄 Version History</h2>
+  </div>
+  <div class="dialog-body">
+    <p style="font-size:12.5px; color:var(--ink-soft); margin:-4px 0 8px; line-height:1.6;">這些版本存在<b>這台裝置</b>的瀏覽器裡（不會上傳雲端）。還原前會自動再存一份「還原前的版本」，所以按錯也能回來。<br>Versions are stored on this device only. Restoring first saves the current state, so you can always undo.</p>
+    <div id="versions-list"></div>
+  </div>
+  <div class="dialog-foot">
+    <button type="button" class="btn" id="btn-version-save-now">💾 現在存一個版本 Save Now</button>
+    <button type="button" class="btn btn-primary" id="btn-versions-close">關閉 Close</button>
+  </div>
+</dialog>
+
 <dialog class="dialog-modal" id="teacher-admin-dialog" style="width:min(640px,94vw);">
   <div class="dialog-head">
     <h2>👥 教師帳號管理 Manage Teacher Accounts</h2>
@@ -1932,6 +1979,213 @@
   </div>
 </dialog>
 
+<!-- ============ 2026-10-01 離線教課：本機儲存（IndexedDB）＋版本記錄＋Service Worker 註冊 ============
+     為什麼不用 localStorage：它只有約 5MB，匯入幾頁簡報圖片就爆了；IndexedDB 容量大很多。
+     資料存兩個地方：
+       libs     ─ 每個教師帳號一份「課程庫鏡像」（key = "teacher:<帳號>"），沒登入的本機示範用 "local-demo"。
+                  dirty = true 代表「這份有還沒確定上傳到雲端的修改」（離線編輯、或上傳還沒收到雲端回應）。
+       versions ─ 版本記錄（自動存檔、手動存檔、衝突時沒被選中的那一份、還原前的版本）。
+     原則：任何「覆蓋」之前，被蓋掉的那份一定先存進 versions，不會無聲消失。 -->
+<script>
+(function(){
+  "use strict";
+  var DB_NAME = "mandamy-offline", DB_VER = 1;
+  var dbPromise = null;
+  var ok = !!window.indexedDB;
+
+  function openDb(){
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise(function(resolve, reject){
+      if(!window.indexedDB){ reject(new Error("此瀏覽器不支援 IndexedDB")); return; }
+      var req;
+      try{ req = indexedDB.open(DB_NAME, DB_VER); }catch(e){ reject(e); return; }
+      req.onupgradeneeded = function(){
+        var db = req.result;
+        if(!db.objectStoreNames.contains("libs")) db.createObjectStore("libs", { keyPath: "key" });
+        if(!db.objectStoreNames.contains("versions")){
+          var vs = db.createObjectStore("versions", { keyPath: "id", autoIncrement: true });
+          vs.createIndex("byLib", "libKey", { unique: false });
+        }
+      };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+      req.onblocked = function(){ reject(new Error("IndexedDB 被其他分頁擋住")); };
+    });
+    dbPromise.catch(function(){ dbPromise = null; });
+    return dbPromise;
+  }
+  function reqGet(store, key){
+    return openDb().then(function(db){ return new Promise(function(resolve, reject){
+      var r = db.transaction(store, "readonly").objectStore(store).get(key);
+      r.onsuccess = function(){ resolve(r.result); }; r.onerror = function(){ reject(r.error); };
+    }); });
+  }
+  function reqAll(store, indexName, key){
+    return openDb().then(function(db){ return new Promise(function(resolve, reject){
+      var st = db.transaction(store, "readonly").objectStore(store);
+      var r = indexName ? st.index(indexName).getAll(key) : st.getAll();
+      r.onsuccess = function(){ resolve(r.result || []); }; r.onerror = function(){ reject(r.error); };
+    }); });
+  }
+  function reqPut(store, val){
+    return openDb().then(function(db){ return new Promise(function(resolve, reject){
+      var t = db.transaction(store, "readwrite"); var r = t.objectStore(store).put(val);
+      t.oncomplete = function(){ resolve(r.result); };
+      t.onerror = t.onabort = function(){ reject(t.error || new Error("IndexedDB 寫入失敗")); };
+    }); });
+  }
+  function reqDelete(store, key){
+    return openDb().then(function(db){ return new Promise(function(resolve, reject){
+      var t = db.transaction(store, "readwrite"); t.objectStore(store).delete(key);
+      t.oncomplete = function(){ resolve(); }; t.onerror = t.onabort = function(){ reject(t.error); };
+    }); });
+  }
+
+  /* ---- 內容比對：Firebase 會把空陣列／空物件／null 丟掉、把 0,1,2… 當鍵的物件讀回成陣列，
+          所以不能直接比 JSON；先「正規化」（丟掉空值、陣列當成以索引為鍵的物件、鍵排序）再算雜湊。 ---- */
+  function canon(x){
+    if(x === null || x === undefined) return undefined;
+    if(Array.isArray(x)){
+      var o = {}; x.forEach(function(v, i){ var c = canon(v); if(c !== undefined) o[i] = c; });
+      return Object.keys(o).length ? o : undefined;
+    }
+    if(typeof x === "object"){
+      var o2 = {}; Object.keys(x).sort().forEach(function(k){ var c = canon(x[k]); if(c !== undefined) o2[k] = c; });
+      return Object.keys(o2).length ? o2 : undefined;
+    }
+    if(typeof x === "number" && !isFinite(x)) return undefined;
+    return x;
+  }
+  function hashString(str){
+    var h1 = 0x811c9dc5, h2 = 5381;
+    for(var i = 0; i < str.length; i++){
+      var c = str.charCodeAt(i);
+      h1 ^= c; h1 = Math.imul(h1, 16777619);
+      h2 = (Math.imul(h2, 33) + c) | 0;
+    }
+    return (h1 >>> 0).toString(16) + "-" + (h2 >>> 0).toString(16) + "-" + str.length;
+  }
+  function canonHash(data){ return hashString(JSON.stringify(canon(data) || {})); }
+
+  /* ---- 課程庫鏡像 ---- */
+  function getLib(key){ return reqGet("libs", key); }
+  function listLibs(){ return reqAll("libs"); }
+  function putLibNow(key, data, meta){
+    var rec = Object.assign({ key: key, fsData: data, savedAt: Date.now() }, meta || {});
+    return reqPut("libs", rec);
+  }
+  function deleteLib(key){ return reqDelete("libs", key); }
+
+  /* ---- 版本記錄 ---- */
+  var MAX_AUTO = 12, MAX_KEPT = 10;
+  function addVersion(libKey, reason, data, keep){
+    var json = JSON.stringify(data);
+    var rec = { libKey: libKey, at: Date.now(), reason: reason, keep: !!keep, bytes: json.length, hash: hashString(json), data: data };
+    return reqPut("versions", rec).then(function(id){ return pruneVersions(libKey).then(function(){ return id; }); });
+  }
+  function listVersions(libKey){
+    return reqAll("versions", "byLib", libKey).then(function(list){
+      // 列表不需要帶整份資料，只留描述（避免一次把所有版本的大資料載進記憶體）
+      return list.map(function(v){ return { id: v.id, libKey: v.libKey, at: v.at, reason: v.reason, keep: v.keep, bytes: v.bytes, hash: v.hash }; })
+                 .sort(function(a, b){ return b.at - a.at; });
+    });
+  }
+  function getVersion(id){ return reqGet("versions", id); }
+  function deleteVersion(id){ return reqDelete("versions", id); }
+  function pruneVersions(libKey){
+    return listVersions(libKey).then(function(list){
+      var autos = list.filter(function(v){ return !v.keep; });
+      var kept = list.filter(function(v){ return v.keep; });
+      var drop = autos.slice(MAX_AUTO).concat(kept.slice(MAX_KEPT));
+      return Promise.all(drop.map(function(v){ return deleteVersion(v.id); }));
+    });
+  }
+
+  /* ---- 延遲寫入：頻繁編輯時不要每一筆都寫整份（合併成一次），離開頁面時一定補寫 ---- */
+  var timers = {}, pending = {}, lastAutoSnap = {};
+  var AUTO_SNAP_MS = 5 * 60 * 1000;
+  var api = { ok: ok, onSaveError: null };
+
+  function flush(key){
+    var p = pending[key]; if(!p) return Promise.resolve();
+    delete pending[key]; clearTimeout(timers[key]); delete timers[key];
+    var data = p.getData();
+    var meta = p.getMeta ? p.getMeta() : {};
+    return putLibNow(key, data, meta).then(function(){
+      var now = Date.now();
+      if(!lastAutoSnap[key]) lastAutoSnap[key] = now; // 第一次寫入先不存（頁面剛打開時內容還沒變）
+      if(now - lastAutoSnap[key] >= AUTO_SNAP_MS){
+        lastAutoSnap[key] = now;
+        return listVersions(key).then(function(list){
+          var json = JSON.stringify(data);
+          if(list.length && list[0].hash === hashString(json)) return; // 跟上一個版本一樣就不重複存
+          return addVersion(key, "自動存檔", data, false);
+        });
+      }
+    }).catch(function(err){
+      console.error("本機儲存失敗", err);
+      if(typeof api.onSaveError === "function") api.onSaveError(err);
+    });
+  }
+  function scheduleSave(key, getData, getMeta, delayMs){
+    pending[key] = { getData: getData, getMeta: getMeta };
+    clearTimeout(timers[key]);
+    timers[key] = setTimeout(function(){ flush(key); }, delayMs == null ? 500 : delayMs);
+  }
+  function flushAll(){ return Promise.all(Object.keys(pending).map(flush)); }
+  window.addEventListener("pagehide", flushAll);
+  document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "hidden") flushAll(); });
+
+  /* ---- 沒登入的本機示範資料：先看 IndexedDB，沒有再看舊版 localStorage ---- */
+  var LEGACY_LS_KEY = "hanyu-mandamy-v11";
+  function loadLocalDemo(){
+    var fromLegacy = function(){
+      try{
+        var raw = localStorage.getItem(LEGACY_LS_KEY);
+        if(raw){ var parsed = JSON.parse(raw); if(parsed && parsed.folders && parsed.projects) return parsed; }
+      }catch(e){}
+      return null;
+    };
+    if(!ok) return Promise.resolve(fromLegacy());
+    return getLib("local-demo").then(function(rec){
+      if(rec && rec.fsData && rec.fsData.folders && rec.fsData.projects) return rec.fsData;
+      return fromLegacy();
+    }).catch(function(){ return fromLegacy(); });
+  }
+
+  function requestPersist(){
+    try{
+      if(navigator.storage && navigator.storage.persist){ return navigator.storage.persist().catch(function(){ return false; }); }
+    }catch(e){}
+    return Promise.resolve(false);
+  }
+
+  /* ---- 「離線就緒」檢查：頁面＋函式庫都在快取裡 ---- */
+  function checkAssetsReady(){
+    if(!("caches" in window)) return Promise.resolve(false);
+    var need = ["practice.html", "vendor/pdf.worker.min.js", "vendor/pinyin-pro.js", "vendor/hanzi-writer.min.js", "vendor/xlsx.full.min.js", "vendor/pdf.min.js", "vendor/html2canvas.min.js"];
+    return Promise.all(need.map(function(u){ return caches.match(u, { ignoreSearch: true }).then(function(h){ return !!h; }); }))
+      .then(function(rs){ return rs.every(Boolean); }).catch(function(){ return false; });
+  }
+
+  Object.assign(api, {
+    canon: canon, canonHash: canonHash, hashString: hashString,
+    getLib: getLib, listLibs: listLibs, putLibNow: putLibNow, deleteLib: deleteLib,
+    addVersion: addVersion, listVersions: listVersions, getVersion: getVersion, deleteVersion: deleteVersion,
+    scheduleSave: scheduleSave, flush: flush, flushAll: flushAll,
+    loadLocalDemo: loadLocalDemo, requestPersist: requestPersist, checkAssetsReady: checkAssetsReady
+  });
+  window.MandamyOffline = api;
+
+  /* ---- Service Worker：頁面與函式庫存進瀏覽器，沒網路也能開 ---- */
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("sw.js").catch(function(err){ console.warn("Service Worker 註冊失敗（離線功能不可用）", err); });
+    });
+  }
+})();
+</script>
+
 <script>
   window.FIREBASE_CONFIG = {
     apiKey: "AIzaSyC6DjPDuRCdSKuZYKKiCSlbWI_eLVM05oc",
@@ -1967,6 +2221,9 @@
     window.dispatchEvent(new Event("firebase-bridge-ready"));
   }catch(e){
     console.error("Firebase 連線初始化失敗：", e);
+    // 明確失敗（例如沒有網路、SDK 載不到）就立刻通知，不要讓登入畫面乾等 12 秒逾時才發現連不上
+    window.__firebaseFailed = true;
+    window.dispatchEvent(new Event("firebase-bridge-failed"));
   }
 })();
 </script>
@@ -2385,7 +2642,52 @@
   // 一開始先給一個空殼避免任何畫面在登入完成前意外存取 fsData.folders / fsData.projects 時噴錯。
   var fsData = { folders: {}, projects: {} };
   var currentTeacher = null; // 登入中的教師帳號：{ id, username, displayName, isAdmin }
-  var isOfflineMode = false; // true＝連不上雲端服務、選擇離線使用本機示範資料（不會同步、也沒有帳號隔離）
+  var isOfflineMode = false; // true＝連不上雲端服務、選擇離線使用（沒有 offlineTeacher 時是本機示範資料）
+
+  /* ---- 2026-10-01 離線教課 ---- */
+  // 離線進入時沿用的「這台裝置上次同步的教師帳號」：{ id, displayName, syncedAt }；null＝沒有帳號的本機示範資料。
+  // 刻意不把 currentTeacher 設成它——currentTeacher 代表「真的登入雲端」，很多功能（帳號管理、雲端匯入、
+  // 上傳課程庫）都靠它判斷，離線時這些全部都不該動。
+  var offlineTeacher = null;
+  var pendingCloudUploads = 0;   // 已送出、還沒收到雲端確認的上傳數（斷線時會一直卡著，代表「還沒真的存到雲端」）
+  var cloudUploadFailed = false; // 最近一次上傳被雲端拒絕，而且之後還沒有成功的上傳把它蓋過
+  var lastCloudSyncAt = 0;       // 最近一次確定跟雲端一致的時間
+  var MO = window.MandamyOffline || null; // 本機儲存模組（IndexedDB），不支援時為 null／MO.ok=false，退回舊版 localStorage
+
+  function pad2(n){ return (n < 10 ? "0" : "") + n; }
+  function fmtTime(ts){
+    if(!ts) return "未知 unknown";
+    var d = new Date(ts);
+    return d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
+  function currentLibKey(){
+    var t = currentTeacher || offlineTeacher;
+    return t ? "teacher:" + t.id : "local-demo";
+  }
+  // 這份本機鏡像的標記：dirty＝「有還沒確定存到雲端的內容」。雲端登入中＝還有上傳沒收到確認（或被拒絕）；
+  // 離線使用某個帳號的課程＝一律視為有修改（回到網路時會跟雲端比對，內容一樣就不會打擾老師）。
+  function currentLibMeta(){
+    var t = currentTeacher || offlineTeacher;
+    return {
+      teacherId: t ? t.id : null,
+      teacherName: t ? (t.displayName || t.username || t.id) : null,
+      dirty: currentTeacher ? (pendingCloudUploads > 0 || cloudUploadFailed) : !!offlineTeacher,
+      syncedAt: currentTeacher ? lastCloudSyncAt : (offlineTeacher ? (offlineTeacher.syncedAt || 0) : 0)
+    };
+  }
+  function scheduleLibMirror(delayMs){
+    if(!MO || !MO.ok) return;
+    MO.scheduleSave(currentLibKey(), function(){ return fsData; }, currentLibMeta, delayMs);
+  }
+  var lastLocalSaveAlertAt = 0;
+  function notifyLocalSaveFailure(err){
+    console.error("儲存到這台裝置失敗", err);
+    var now = Date.now();
+    if(now - lastLocalSaveAlertAt < 15000) return;
+    lastLocalSaveAlertAt = now;
+    alert("儲存到這台裝置失敗，剛剛的變更可能沒有存起來。可能是裝置儲存空間不足（例如匯入了很多投影片圖片），請先清出空間，或把重要內容匯出備份。\nSaving to this device failed — the latest change may not be saved. The device may be low on storage.\n(" + (err && err.message ? err.message : err) + ")");
+  }
+  if(MO) MO.onSaveError = notifyLocalSaveFailure;
 
   // 2026-09-29：儲存失敗（不管是同步例外還是雲端非同步拒絕）以前完全被 try/catch 吞掉、
   // 使用者不會看到任何提示，看起來就像「按了儲存沒反應」。這裡改成至少印出錯誤，並且用
@@ -2401,9 +2703,21 @@
   function saveFS(){
     if(currentTeacher){
       try{
+        pendingCloudUploads++;
         var p = set(ref(db, "teacherLibraries/" + currentTeacher.id), fsData);
-        if(p && typeof p.catch === "function") p.catch(notifySaveFsFailure);
-      }catch(e){ notifySaveFsFailure(e); }
+        if(p && typeof p.then === "function"){
+          p.then(function(){
+            pendingCloudUploads = Math.max(0, pendingCloudUploads - 1); cloudUploadFailed = false; lastCloudSyncAt = Date.now();
+            scheduleLibMirror(1500); // 雲端確認收到了：把本機鏡像更新成「已同步」
+          }, function(err){
+            pendingCloudUploads = Math.max(0, pendingCloudUploads - 1); cloudUploadFailed = true;
+            notifySaveFsFailure(err);
+          });
+        } else { pendingCloudUploads = Math.max(0, pendingCloudUploads - 1); }
+      }catch(e){ pendingCloudUploads = Math.max(0, pendingCloudUploads - 1); cloudUploadFailed = true; notifySaveFsFailure(e); }
+      scheduleLibMirror(3000); // 同時存一份在這台裝置（離線時就靠這份）
+    } else if(MO && MO.ok){
+      scheduleLibMirror(400);  // 離線／本機示範：只存這台裝置（IndexedDB，容量比 localStorage 大很多）
     } else {
       try{ localStorage.setItem(STORAGE_FS_KEY, JSON.stringify(fsData)); }catch(e){ notifySaveFsFailure(e); }
     }
@@ -3166,6 +3480,10 @@
   function showLobby(){
     activeProjectId = null; lobbyView.style.display = "block"; classroomView.style.display = "none";
     document.getElementById("brand-sub").textContent = "專案課次大廳 Course Lobby";
+    // 離線時沒有「從雲端匯入生詞」「課堂遊戲」（都要連線）這兩個入口
+    var cgLink = document.getElementById("link-class-games"), vocabBtn = document.getElementById("btn-import-vocab-cloud");
+    if(cgLink) cgLink.style.display = isOfflineMode ? "none" : "";
+    if(vocabBtn) vocabBtn.style.display = isOfflineMode ? "none" : "";
     renderBreadcrumb(); renderLobbyGrid(); renderTopbar(); renderTimerWidget();
   }
 
@@ -3459,13 +3777,26 @@
         manageBtn.onclick = openTeacherAdminDialog;
         topbarActions.appendChild(manageBtn);
       }
+      var readyPill = document.createElement("span"); readyPill.className = "offline-pill"; readyPill.id = "offline-ready-pill";
+      readyPill.textContent = "📴 檢查離線準備…"; teacherCluster.appendChild(readyPill);
+      updateOfflineReadyPill();
       var logoutBtn = document.createElement("button"); logoutBtn.className = "btn btn-sm btn-ghost"; logoutBtn.textContent = "登出 Log Out";
       logoutBtn.onclick = logoutTeacher;
       topbarActions.appendChild(logoutBtn);
     } else if(!isStudent && isOfflineMode){
+      var offPill = document.createElement("span"); offPill.className = "offline-pill is-offline";
+      offPill.textContent = "📴 離線模式" + (offlineTeacher ? "（" + offlineTeacher.displayName + "）" : "（本機示範）");
+      offPill.title = offlineTeacher ? "修改先存在這台裝置；回到網路後重新整理頁面，會問你要用離線版還是雲端版。" : "沒有登入帳號，資料只存在這台裝置。";
+      topbarActions.appendChild(offPill);
       var reconnectBtn = document.createElement("button"); reconnectBtn.className = "btn btn-sm btn-ghost"; reconnectBtn.textContent = "🔌 連線登入 Connect & Log In";
-      reconnectBtn.onclick = function(){ location.reload(); };
+      reconnectBtn.onclick = function(){ if(MO) MO.flushAll(); location.reload(); };
       topbarActions.appendChild(reconnectBtn);
+    }
+    if(!isStudent && !inRoom()){
+      var verBtn = document.createElement("button"); verBtn.className = "btn btn-sm btn-ghost"; verBtn.textContent = "🕘 版本記錄 Versions";
+      verBtn.title = "看這台裝置存的舊版本，可以還原 See saved versions on this device and restore one";
+      verBtn.onclick = openVersionsDialog;
+      topbarActions.appendChild(verBtn);
     }
     if(!isStudent && activeProjectId && !inRoom()){
       var backBtn = document.createElement("button"); backBtn.className = "btn btn-sm btn-ghost"; backBtn.textContent = "◀ 課次大廳 Lobby"; backBtn.onclick = showLobby; topbarActions.appendChild(backBtn);
@@ -3502,7 +3833,7 @@
         topbarActions.appendChild(shareBtn);
         var leaveBtn = document.createElement("button"); leaveBtn.className = "btn btn-sm btn-ghost"; leaveBtn.textContent = "結束連線 End Session"; leaveBtn.onclick = leaveRoom; topbarActions.appendChild(leaveBtn);
       }
-    } else if(activeProjectId){
+    } else if(activeProjectId && !isOfflineMode){
       var btn = document.createElement("button"); btn.className = "btn btn-primary"; btn.textContent = "🔗 開新房間 Start Room"; btn.onclick = createRoom; topbarActions.appendChild(btn);
     }
     if(!isStudent){
@@ -3511,6 +3842,91 @@
       topbarActions.appendChild(setBtn);
     }
   }
+
+  /* ================== 2026-10-01 離線就緒提示 ＋ 版本記錄 ================== */
+  async function updateOfflineReadyPill(){
+    var pill = document.getElementById("offline-ready-pill");
+    if(!pill) return;
+    var assetsOk = false, libOk = false;
+    try{
+      if(MO){ assetsOk = await MO.checkAssetsReady(); }
+      if(MO && MO.ok && currentTeacher){ var rec = await MO.getLib("teacher:" + currentTeacher.id); libOk = !!(rec && rec.fsData); }
+    }catch(e){}
+    pill = document.getElementById("offline-ready-pill"); if(!pill) return;
+    if(assetsOk && libOk){
+      pill.textContent = "📴 離線就緒 ✓"; pill.className = "offline-pill is-ready";
+      pill.title = "頁面、函式庫和你的課程都已存在這台裝置，沒有網路也能打開教課。";
+    } else {
+      pill.textContent = "📴 離線尚未就緒"; pill.className = "offline-pill is-notready";
+      pill.title = !assetsOk ? "頁面還在存進這台裝置，請保持連線、稍等一下再重新整理。" : "課程還在存進這台裝置，請稍等一下。";
+      if(!assetsOk) setTimeout(updateOfflineReadyPill, 4000);
+    }
+  }
+
+  var versionsDialog = document.getElementById("versions-dialog");
+  var versionsListEl = document.getElementById("versions-list");
+  function fmtBytes(n){ return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+  async function refreshVersionsList(){
+    if(!MO || !MO.ok){
+      versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">這個瀏覽器不支援本機儲存，沒有版本記錄。This browser has no local storage support.</p>';
+      return;
+    }
+    versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">載入中…Loading…</p>';
+    var key = currentLibKey();
+    var list = [];
+    try{ list = await MO.listVersions(key); }catch(e){ versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--seal);">讀取失敗 Failed to load.</p>'; return; }
+    if(!list.length){
+      versionsListEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">目前還沒有版本。編輯約 5 分鐘後會自動存檔，也可以按下面的「現在存一個版本」。<br>No versions yet. One is saved automatically about every 5 minutes of editing, or use “Save Now”.</p>';
+      return;
+    }
+    versionsListEl.innerHTML = "";
+    list.forEach(function(v){
+      var row = document.createElement("div"); row.className = "teacher-admin-row";
+      row.innerHTML = '<div class="ta-row-main"><span class="ta-row-name">' + escapeHtml(v.reason || "版本") + '</span>' +
+        '<span class="ta-row-username">' + escapeHtml(fmtTime(v.at)) + ' · ' + fmtBytes(v.bytes || 0) + '</span>' +
+        (v.keep ? '<span class="ta-badge">保留 Kept</span>' : '') + '</div>' +
+        '<div class="ta-row-actions"><button type="button" class="btn btn-sm btn-ghost ver-restore">還原 Restore</button>' +
+        '<button type="button" class="btn btn-sm btn-ghost ver-del" style="color:var(--seal);">刪除 Delete</button></div>';
+      row.querySelector(".ver-restore").onclick = function(){ restoreVersion(v.id, v); };
+      row.querySelector(".ver-del").onclick = async function(){
+        if(!confirm("刪除這個版本？（只刪這個備份，不影響目前的課程）\nDelete this saved version?")) return;
+        try{ await MO.deleteVersion(v.id); }catch(e){}
+        refreshVersionsList();
+      };
+      versionsListEl.appendChild(row);
+    });
+  }
+  async function restoreVersion(id, meta){
+    var v = null;
+    try{ v = await MO.getVersion(id); }catch(e){}
+    if(!v || !v.data){ alert("讀不到這個版本。Couldn't read this version."); return; }
+    if(!confirm("還原到「" + (meta.reason || "版本") + "」（" + fmtTime(meta.at) + "）？\n目前的內容會先自動存成「還原前的版本」，不會消失。\nRestore this version? The current state is saved first.")) return;
+    try{
+      await MO.addVersion(currentLibKey(), "還原前的版本（" + fmtTime(Date.now()) + "）", fsData, true);
+      fsData = migrateFS(JSON.parse(JSON.stringify(v.data)));
+      activeProjectId = null; currentFolderId = null;
+      saveFS();
+      closeModalDialog(versionsDialog);
+      showLobby();
+      alert("✅ 已還原。Restored.");
+    }catch(e){
+      console.error("還原失敗", e);
+      alert("還原失敗：" + (e && e.message ? e.message : e));
+    }
+  }
+  function openVersionsDialog(){
+    if(MO) MO.flushAll();
+    safeShowModal(versionsDialog);
+    refreshVersionsList();
+  }
+  document.getElementById("btn-versions-close").onclick = function(){ closeModalDialog(versionsDialog); };
+  document.getElementById("btn-version-save-now").onclick = async function(){
+    if(!MO || !MO.ok) return;
+    var name = prompt("幫這個版本取個名字（例如：課堂版）\nName this version (e.g. “class copy”)", "手動存檔");
+    if(name === null) return;
+    try{ await MO.addVersion(currentLibKey(), (name.trim() || "手動存檔"), fsData, true); }catch(e){ notifyLocalSaveFailure(e); }
+    refreshVersionsList();
+  };
 
   async function createRoom(){
     var rId = String(Math.floor(1000 + Math.random() * 9000));
@@ -9825,9 +10241,21 @@
   function waitForFirebase(){
     return new Promise(function(resolve){
       if(window.__firebaseReady){ resolve(true); return; }
+      if(window.__firebaseFailed){ resolve(false); return; }
       var settled = false;
-      var to = setTimeout(function(){ if(!settled){ settled = true; resolve(false); } }, FIREBASE_WAIT_TIMEOUT_MS);
-      window.addEventListener("firebase-bridge-ready", function(){ if(!settled){ settled = true; clearTimeout(to); resolve(true); } }, { once: true });
+      function done(v){ if(!settled){ settled = true; clearTimeout(to); clearTimeout(offlineTo); resolve(v); } }
+      var to = setTimeout(function(){ done(false); }, FIREBASE_WAIT_TIMEOUT_MS);
+      // 2026-10-01：瀏覽器明確知道沒有網路時，不用乾等 12 秒才顯示「連不上」
+      var offlineTo = setTimeout(function(){ if(navigator.onLine === false) done(false); }, 1500);
+      window.addEventListener("firebase-bridge-ready", function(){ done(true); }, { once: true });
+      window.addEventListener("firebase-bridge-failed", function(){ done(false); }, { once: true });
+    });
+  }
+  // 雲端讀取加上逾時：SDK 在「看起來有連線其實斷線」的情況下 get() 可能一直不回應，不能讓登入畫面卡死
+  function withTimeout(promise, ms){
+    return new Promise(function(resolve, reject){
+      var t = setTimeout(function(){ reject(new Error("雲端服務沒有回應 timeout")); }, ms);
+      promise.then(function(v){ clearTimeout(t); resolve(v); }, function(e){ clearTimeout(t); reject(e); });
     });
   }
 
@@ -9846,7 +10274,72 @@
       data = freshDefaultFS();
       try{ await set(ref(db, "teacherLibraries/" + teacherId), data); }catch(e){}
     }
-    return migrateFS(data);
+    return await reconcileWithOffline(teacherId, migrateFS(data));
+  }
+
+  /* ---- 2026-10-01 離線教課：回到網路時，把「離線期間的修改」跟雲端版本對帳 ----
+     規則（老師的要求）：本機與雲端內容不同，一律詢問要用哪一份，絕對不自動覆蓋。
+     而且不管選哪一份，沒被選中的那份（以及對帳前的雲端版）都先存進「版本記錄」，不會無聲消失。 */
+  function summarizeFS(fs){
+    var projects = Object.keys((fs && fs.projects) || {}); var qn = 0;
+    projects.forEach(function(pid){
+      var secs = fs.projects[pid].sections || {};
+      Object.keys(secs).forEach(function(sid){ qn += Object.keys(secs[sid].questions || {}).length; });
+    });
+    return { projects: projects.length, questions: qn };
+  }
+  function askOfflineConflict(rec, cloudData){
+    return new Promise(function(resolve){
+      var dlg = document.getElementById("offline-conflict-dialog");
+      var o = summarizeFS(rec.fsData), c = summarizeFS(cloudData);
+      document.getElementById("offline-conflict-summary").innerHTML =
+        '📴 <b>離線版 Offline copy</b>（最後編輯 ' + fmtTime(rec.savedAt) + '）：' + o.projects + ' 個課程、' + o.questions + ' 小題<br>' +
+        '☁️ <b>雲端版 Cloud copy</b>：' + c.projects + ' 個課程、' + c.questions + ' 小題';
+      var done = false;
+      function finish(choice){ if(done) return; done = true; closeModalDialog(dlg); resolve(choice); }
+      document.getElementById("btn-conflict-use-cloud").onclick = function(){ finish("cloud"); };
+      document.getElementById("btn-conflict-use-offline").onclick = function(){
+        if(confirm("確定用離線版覆蓋雲端？雲端現有的內容會先保留在「🕘 版本記錄」，之後可以還原。\nOverwrite the cloud with the offline copy? The current cloud copy is kept in Version History.")) finish("offline");
+      };
+      dlg.oncancel = function(e){ e.preventDefault(); }; // 一定要選一個，不能按 Esc 略過
+      safeShowModal(dlg);
+    });
+  }
+  async function reconcileWithOffline(teacherId, cloudData){
+    var chosen = cloudData;
+    if(!MO || !MO.ok) return chosen;
+    var key = "teacher:" + teacherId;
+    var wantedOffline = false;
+    try{
+      var rec = await MO.getLib(key);
+      if(rec && rec.dirty && rec.fsData && rec.fsData.folders && rec.fsData.projects){
+        var same = MO.canonHash(rec.fsData) === MO.canonHash(cloudData);
+        if(!same){
+          await MO.addVersion(key, "離線期間的版本（" + fmtTime(rec.savedAt) + "）", rec.fsData, true);
+          await MO.addVersion(key, "雲端版（對帳前）", cloudData, true);
+          var choice = await askOfflineConflict(rec, cloudData);
+          if(choice === "offline"){
+            wantedOffline = true;
+            var off = migrateFS(JSON.parse(JSON.stringify(rec.fsData)));
+            await set(ref(db, "teacherLibraries/" + teacherId), off);
+            chosen = off; wantedOffline = false;
+          }
+        }
+      }
+      lastCloudSyncAt = Date.now(); cloudUploadFailed = false;
+      await MO.putLibNow(key, chosen, {
+        teacherId: teacherId,
+        teacherName: (currentTeacher && (currentTeacher.displayName || currentTeacher.username)) || teacherId,
+        dirty: false, syncedAt: lastCloudSyncAt
+      });
+      MO.requestPersist();
+    }catch(e){
+      console.error("整合離線版本失敗", e);
+      if(wantedOffline){
+        alert("把離線版上傳到雲端時失敗了，這次先使用雲端版。離線版仍完整保留在「🕘 版本記錄」，可以稍後再還原。\nUploading the offline copy failed — using the cloud copy for now. The offline copy is safe in Version History.");
+      }
+    }
+    return chosen;
   }
 
   var authView = document.getElementById("auth-view");
@@ -9864,7 +10357,12 @@
   var authLoadingHint = document.getElementById("auth-loading-hint");
   var authMode = "login"; // "login" | "setup"
 
+  var authSkipTimer = null;
   function showAuthStage(stage){
+    clearTimeout(authSkipTimer);
+    var skipBtn = document.getElementById("btn-auth-skip-wait");
+    if(skipBtn) skipBtn.style.display = "none";
+    if(stage === "connecting"){ authSkipTimer = setTimeout(function(){ if(skipBtn && authConnectingSection.style.display !== "none") skipBtn.style.display = "flex"; }, 3000); }
     authView.style.display = "flex"; lobbyView.style.display = "none"; classroomView.style.display = "none";
     authConnectingSection.style.display = stage === "connecting" ? "block" : "none";
     authFailSection.style.display = stage === "fail" ? "block" : "none";
@@ -9904,9 +10402,10 @@
       // 第一次設定管理員帳號時，如果這台瀏覽器本來就有舊版本機資料（老師這學期已經編好的測驗），
       // 就直接把它當成管理員帳號的初始測驗庫，而不是給一份空白示範資料，避免老師的心血不見。
       try{
-        var raw = localStorage.getItem(STORAGE_FS_KEY);
-        if(raw){
-          var parsed = JSON.parse(raw);
+        var parsed = null;
+        if(MO){ try{ parsed = await MO.loadLocalDemo(); }catch(e){} } // 新版存在 IndexedDB，舊版在 localStorage（loadLocalDemo 兩邊都看）
+        else { var raw0 = localStorage.getItem(STORAGE_FS_KEY); if(raw0) parsed = JSON.parse(raw0); }
+        if(parsed){
           if(parsed && parsed.folders && parsed.projects && Object.keys(parsed.projects).length){
             fsData = migrateFS(parsed);
             await set(ref(db, "teacherLibraries/" + currentTeacher.id), fsData);
@@ -9916,6 +10415,10 @@
       }catch(e){}
     }
     if(!seeded) fsData = await loadTeacherLibrary(currentTeacher.id);
+    else if(MO && MO.ok){
+      lastCloudSyncAt = Date.now();
+      try{ await MO.putLibNow("teacher:" + currentTeacher.id, fsData, { teacherId: currentTeacher.id, teacherName: currentTeacher.displayName || currentTeacher.username, dirty: false, syncedAt: lastCloudSyncAt }); MO.requestPersist(); }catch(e){}
+    }
 
     authView.style.display = "none";
     enterAppAfterLogin();
@@ -9957,15 +10460,71 @@
     el.addEventListener("keydown", function(ev){ if(ev.key === "Enter"){ ev.preventDefault(); doAuthSubmit(); } });
   });
   document.getElementById("btn-auth-retry").onclick = function(){ location.reload(); };
-  document.getElementById("btn-auth-offline").onclick = function(){
+  /* ---- 2026-10-01 離線教課：連不上雲端時的進入方式 ----
+     有這台裝置「上次同步的課程」（老師之前在這裡登入過、雲端課程庫有鏡像到本機）→ 直接用那份離線教課；
+     沒有 → 跟以前一樣用本機示範資料。兩種都有時，多給一顆按鈕可以選本機示範資料。 */
+  var AUTH_FAIL_SUB_DEFAULT = document.getElementById("auth-fail-sub").innerHTML;
+  var AUTH_OFFLINE_BTN_DEFAULT = document.getElementById("btn-auth-offline").textContent;
+  async function prepareOfflineChoice(){
+    offlineTeacher = null;
+    var btn = document.getElementById("btn-auth-offline");
+    var demoBtn = document.getElementById("btn-auth-offline-demo");
+    var sub = document.getElementById("auth-fail-sub");
+    var hasDemo = false;
+    if(MO && MO.ok){
+      try{
+        var savedId = null; try{ savedId = localStorage.getItem(TEACHER_SESSION_KEY); }catch(e){}
+        var libs = (await MO.listLibs()).filter(function(r){ return r.key && r.key.indexOf("teacher:") === 0 && r.fsData && r.fsData.projects; });
+        var rec = libs.filter(function(r){ return r.key === "teacher:" + savedId; })[0] || (libs.length === 1 ? libs[0] : null);
+        if(rec){
+          var id = rec.key.slice("teacher:".length);
+          offlineTeacher = { id: id, displayName: rec.teacherName || id, syncedAt: rec.syncedAt || rec.savedAt || 0 };
+        }
+        hasDemo = !!(await MO.loadLocalDemo());
+      }catch(e){ console.warn("讀取離線資料失敗", e); }
+    }
+    if(offlineTeacher){
+      sub.innerHTML = '目前連不上雲端服務（可能沒有網路）。你可以先離線使用這台裝置上「' + escapeHtml(offlineTeacher.displayName) + '」<b>最後一次同步的課程</b>——離線時的修改會先存在這台裝置，回到網路後會問你要用哪一份，<b>不會自動覆蓋雲端</b>。<br>Can\'t reach the cloud. You can keep teaching offline with the library last synced on this device. Changes are kept here and you\'ll be asked which copy to keep when you\'re back online.';
+      btn.textContent = "📴 離線使用「" + offlineTeacher.displayName + "」的課程（上次同步 " + fmtTime(offlineTeacher.syncedAt) + "）";
+      btn.className = "btn btn-primary";
+    } else {
+      sub.innerHTML = AUTH_FAIL_SUB_DEFAULT;
+      btn.textContent = AUTH_OFFLINE_BTN_DEFAULT;
+      btn.className = "btn";
+    }
+    demoBtn.style.display = (offlineTeacher && hasDemo) ? "flex" : "none";
+  }
+  async function showAuthFail(){
+    await prepareOfflineChoice();
+    showAuthStage("fail");
+  }
+  async function loadLocalOfflineFSAsync(useDemo){
+    if(offlineTeacher && !useDemo && MO && MO.ok){
+      var rec = await MO.getLib("teacher:" + offlineTeacher.id);
+      if(rec && rec.fsData && rec.fsData.folders && rec.fsData.projects) return migrateFS(rec.fsData);
+    }
+    if(MO){ try{ var d = await MO.loadLocalDemo(); if(d) return migrateFS(d); }catch(e){} }
+    return loadLocalOfflineFS();
+  }
+  async function enterOfflineMode(useDemo){
     currentTeacher = null; isOfflineMode = true;
-    fsData = loadLocalOfflineFS();
+    if(useDemo) offlineTeacher = null;
+    fsData = await loadLocalOfflineFSAsync(useDemo);
     authView.style.display = "none";
     enterAppAfterLogin();
+  }
+  document.getElementById("btn-auth-offline").onclick = function(){ enterOfflineMode(false); };
+  document.getElementById("btn-auth-offline-demo").onclick = function(){ enterOfflineMode(true); };
+  document.getElementById("btn-auth-skip-wait").onclick = async function(){
+    authRunId++;            // 作廢還在等雲端的啟動流程
+    currentTeacher = null;
+    await showAuthFail();   // 跟「連不上」是同一個畫面，上面有離線使用的按鈕
   };
 
   function logoutTeacher(){
-    currentTeacher = null; isOfflineMode = false;
+    if(MO) MO.flushAll();
+    currentTeacher = null; isOfflineMode = false; offlineTeacher = null;
+    pendingCloudUploads = 0; cloudUploadFailed = false;
     try{ localStorage.removeItem(TEACHER_SESSION_KEY); }catch(e){}
     fsData = { folders: {}, projects: {} };
     activeProjectId = null; activeRoomId = null; roomData = null;
@@ -10086,14 +10645,19 @@
   }
 
   function enterAppAfterLogin(){
-    if(urlRoom){ startRoom(urlRoom, "teacher"); } else { showLobby(); }
+    // 離線時沒有房間可以開（房間靠雲端即時同步）：網址帶著 ?room=… 也直接回大廳，不要去連雲端
+    if(urlRoom && !isOfflineMode){ startRoom(urlRoom, "teacher"); }
+    else { if(urlRoom) history.replaceState(null, "", location.pathname); showLobby(); }
   }
 
+  var authRunId = 0; // 每次啟動流程一個編號；老師按「不等了」會讓舊的流程作廢，避免它稍後又把畫面蓋回登入頁
   async function initTeacherAuthAndStart(){
+    var myRun = ++authRunId;
     showAuthStage("connecting");
     var ready = await waitForFirebase();
+    if(myRun !== authRunId) return;
     if(!ready){
-      showAuthStage("fail");
+      await showAuthFail();
       // 逾時不代表永遠連不上，很可能只是比預期慢——背景繼續留意連線狀態，
       // 如果老師還停在這個「連不上」畫面（還沒按離線使用、也還沒登入），連線一旦真的連上了就自動重試一次，
       // 不用要求老師自己按重試或重新整理頁面。
@@ -10107,7 +10671,8 @@
       return;
     }
     try{
-      var accounts = await fetchAllTeacherAccounts();
+      var accounts = await withTimeout(fetchAllTeacherAccounts(), navigator.onLine === false ? 2000 : 10000);
+      if(myRun !== authRunId) return;
       var hasAnyAccount = accounts && Object.keys(accounts).length > 0;
       if(!hasAnyAccount){ renderAuthView("setup"); return; }
 
@@ -10116,16 +10681,19 @@
       if(savedId && accounts[savedId] && !accounts[savedId].disabled){
         var acc = accounts[savedId];
         currentTeacher = { id: acc.id, username: acc.username, displayName: acc.displayName || acc.username, isAdmin: !!acc.isAdmin };
-        isOfflineMode = false;
+        isOfflineMode = false; offlineTeacher = null;
         fsData = await loadTeacherLibrary(currentTeacher.id);
+        if(myRun !== authRunId){ currentTeacher = null; return; }
         authView.style.display = "none";
         enterAppAfterLogin();
         return;
       }
       renderAuthView("login");
     }catch(e){
-      console.error("讀取教師帳號資料失敗（常見原因：Firebase 資料庫規則沒有開放 teacherAccounts／teacherLibraries 這兩個路徑，只給了 rooms/{roomId}）：", e);
-      showAuthStage("fail");
+      console.error("讀取教師帳號資料失敗（常見原因：Firebase 資料庫規則沒有開放 teacherAccounts／teacherLibraries 這兩個路徑，只給了 rooms/{roomId}；或是沒有網路）：", e);
+      if(myRun !== authRunId) return; // 老師已經按了「不等了」或進入離線模式：這個過期的流程不要再把畫面蓋回「連不上」
+      currentTeacher = null; // 讀取課程庫途中才失敗的話，不要留下「半登入」狀態
+      await showAuthFail();
     }
   }
 
