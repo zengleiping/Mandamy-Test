@@ -10612,6 +10612,17 @@
     function applyTextBgDefaults(t){ if(boardState.lineH && Math.abs(boardState.lineH - 1) > 0.001) t.lh = boardState.lineH; if(boardState.textBgOn){ t.bgOn = true; t.bgColor = boardState.textBgColor; t.bgOp = boardState.textBgOp == null ? 1 : boardState.textBgOp; } }
     function textBgRgba(hex, a){ var h = /^#[0-9a-fA-F]{6}$/.test(hex || "") ? hex : "#FFF3B0"; return "rgba(" + parseInt(h.substr(1, 2), 16) + "," + parseInt(h.substr(3, 2), 16) + "," + parseInt(h.substr(5, 2), 16) + "," + (a == null ? 1 : a) + ")"; }
 
+    // 物件格式（框線／陰影／圓角／圖片裁剪）：文字方塊和圖片共用。框線用 box-shadow 畫在外面，不會改變版面大小。
+    function applyObjFmt(el, o, scale){
+      var sh = [];
+      if(o.bdW > 0) sh.push("0 0 0 " + Math.max(1, o.bdW * scale) + "px " + (o.bdC || "#333333"));
+      if(o.shd) sh.push("0 " + Math.round(5 * scale) + "px " + Math.round(14 * scale) + "px rgba(0,0,0,.38)");
+      if(sh.length) el.style.setProperty("box-shadow", sh.join(","), "important");
+      if(o.rad > 0) el.style.setProperty("border-radius", Math.round(o.rad * scale) + "px", "important");
+      if(o.bdW > 0 && el.classList.contains("movable-text") && !o.bgOn) el.style.setProperty("padding", "0.12em 0.45em", "important");
+      var c = o.crop;
+      if(c && (c.l || c.t || c.r || c.b)) el.style.clipPath = "inset(" + (c.t || 0) + "% " + (c.r || 0) + "% " + (c.b || 0) + "% " + (c.l || 0) + "%" + (o.rad > 0 ? " round " + Math.round(o.rad * scale) + "px" : "") + ")";
+    }
     var lastRevSeen = null, revealAnim = null, revealAnimTimer = 0;
     function syncRevealAnim(){
       var rv = getProgress(q.id).revealStep || 0;
@@ -10657,6 +10668,7 @@
           div.style.setProperty("padding", "0.12em 0.45em", "important");
           div.style.setProperty("border-radius", "0.3em", "important");
         }
+        applyObjFmt(div, t, scale);
         if(t.list === "bullet") div.classList.add("list-bullet"); else if(t.list === "number") div.classList.add("list-number");
 
         div.innerHTML = `
@@ -11110,6 +11122,15 @@
       var col = sh.color || "#B23B32";
       function mk(tag, attrs){ var el = document.createElementNS(SHAPE_NS, tag); Object.keys(attrs).forEach(function(k){ el.setAttribute(k, attrs[k]); }); return el; }
       var common = { stroke: col, "stroke-width": sw, fill: (sh.fill && sh.type !== "line" && sh.type !== "arrow") ? col : "none", "stroke-linejoin": "round", "stroke-linecap": "round" };
+      if(sh.shd) g.style.filter = "drop-shadow(0 " + Math.round(4 * getScaleRatio()) + "px " + Math.round(6 * getScaleRatio()) + "px rgba(0,0,0,.4))";
+      if(sh.grad && common.fill !== "none"){
+        var gid = "gr" + String(sh.id).replace(/[^a-z0-9]/gi, "");
+        var defs = document.createElementNS(SHAPE_NS, "defs"), lg = document.createElementNS(SHAPE_NS, "linearGradient");
+        lg.setAttribute("id", gid);
+        var d = sh.grad.dir || "h"; lg.setAttribute("x1", "0"); lg.setAttribute("y1", "0"); lg.setAttribute("x2", d === "v" ? "0" : "1"); lg.setAttribute("y2", d === "h" ? "0" : "1");
+        [[0, col], [1, sh.grad.c2 || "#FFFFFF"]].forEach(function(st){ var sp = document.createElementNS(SHAPE_NS, "stop"); sp.setAttribute("offset", String(st[0])); sp.setAttribute("stop-color", st[1]); lg.appendChild(sp); });
+        defs.appendChild(lg); g.appendChild(defs); common.fill = "url(#" + gid + ")";
+      }
       if(sh.type === "ellipse"){
         g.appendChild(mk("ellipse", Object.assign({ cx: gm.x + gm.w / 2, cy: gm.y + gm.h / 2, rx: gm.w / 2, ry: gm.h / 2 }, common)));
       } else if(sh.type === "triangle"){
@@ -11125,7 +11146,7 @@
           g.appendChild(mk("polygon", { points: gm.x2 + "," + gm.y2 + " " + (gm.x2 + Math.cos(a1) * L) + "," + (gm.y2 + Math.sin(a1) * L) + " " + (gm.x2 + Math.cos(a2) * L) + "," + (gm.y2 + Math.sin(a2) * L), fill: col, stroke: col, "stroke-width": 1, "stroke-linejoin": "round" }));
         }
       } else {
-        g.appendChild(mk("rect", Object.assign({ x: gm.x, y: gm.y, width: gm.w, height: gm.h, rx: Math.min(6, gm.w / 4, gm.h / 4) }, common)));
+        g.appendChild(mk("rect", Object.assign({ x: gm.x, y: gm.y, width: gm.w, height: gm.h, rx: sh.rad > 0 ? Math.min(gm.w / 2, gm.h / 2, sh.rad * getScaleRatio()) : Math.min(6, gm.w / 4, gm.h / 4) }, common)));
       }
       return g;
     }
@@ -11289,7 +11310,7 @@
         var el = document.createElement("img");
         el.className = "board-image" + (stepHidden ? " step-hidden" : "");
         el.dataset.imgId = im.id; el.draggable = false; setImgSrc(el, im.src);
-        applyAnim(el, im);
+        applyAnim(el, im); applyObjFmt(el, im, getScaleRatio());
         el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
         if(im.h){ el.style.height = im.h + "%"; el.style.objectFit = "fill"; }
         var rI = zrI.map[im.id] || 0;
@@ -11852,6 +11873,73 @@
       writeProgress(q.id, patch);
       renderTexts(); renderSelection();
     }
+    // ===== 物件格式：框線／陰影／圓角（文字方塊、圖片、圖案）、圖片裁剪／去背、圖案漸層填色 =====
+    function openObjFormat(){
+      var items = expandGroups(selSet).filter(function(it){ return it.k !== "stroke"; });
+      var objs = items.map(function(it){ return { k: it.k, o: selItemObj(it) }; }).filter(function(x){ return x.o; });
+      if(!objs.length) return;
+      snapshotForUndo();
+      var has = function(k){ return objs.some(function(x){ return x.k === k; }); };
+      var first = objs[0].o;
+      var back = document.createElement("div"); back.className = "tb-modal-back";
+      var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(460px,94vw)"; back.appendChild(modal);
+      function commit(){
+        var patch = {}; if(has("text")) patch.texts = texts; if(has("image")) patch.images = images; if(has("shape")) patch.shapes = shapes;
+        writeProgress(q.id, patch); renderTexts(); renderSelection();
+      }
+      function each(fn){ objs.forEach(function(x){ fn(x.o, x.k); }); commit(); }
+      function row(label, html){ var d = document.createElement("div"); d.style.cssText = "display:flex;align-items:center;gap:8px;margin:9px 0;font-size:13px;flex-wrap:wrap;"; d.innerHTML = '<span style="min-width:74px;font-weight:700;">' + label + '</span>' + html; modal.appendChild(d); return d; }
+      modal.innerHTML = '<h3>🎨 物件格式 Format</h3><div class="tb-hint">套用到選取的 ' + objs.length + ' 個物件，即時生效；不滿意可以按「復原」。</div>';
+      var r1 = row("框線", '<input type="range" class="f-bw" min="0" max="12" step="1" value="' + (first.bdW || 0) + '" style="flex:1;min-width:90px;"><input type="color" class="f-bc" value="' + (first.bdC || "#333333") + '"><b class="f-bwv">' + (first.bdW || 0) + '</b>');
+      r1.querySelector(".f-bw").oninput = function(e){ r1.querySelector(".f-bwv").textContent = e.target.value; each(function(o){ o.bdW = Number(e.target.value) || undefined; o.bdC = r1.querySelector(".f-bc").value; if(objs.length && has("shape") && !has("text") && !has("image")){ if(o.bdW) o.sw = o.bdW; } }); };
+      r1.querySelector(".f-bc").oninput = function(e){ each(function(o, k){ o.bdC = e.target.value; if(k === "shape") o.color = e.target.value; }); };
+      var r2 = row("陰影", '<label><input type="checkbox" class="f-sh" ' + (first.shd ? "checked" : "") + '> 加上陰影</label>');
+      r2.querySelector(".f-sh").onchange = function(e){ each(function(o){ o.shd = e.target.checked || undefined; }); };
+      var r3 = row("圓角", '<input type="range" class="f-rad" min="0" max="60" step="1" value="' + (first.rad || 0) + '" style="flex:1;min-width:90px;"><b class="f-radv">' + (first.rad || 0) + '</b>');
+      r3.querySelector(".f-rad").oninput = function(e){ r3.querySelector(".f-radv").textContent = e.target.value; each(function(o){ o.rad = Number(e.target.value) || undefined; }); };
+      if(has("shape")){
+        var g0 = first.grad || null;
+        var r4 = row("漸層填色", '<label><input type="checkbox" class="f-gr" ' + (g0 ? "checked" : "") + '> 啟用</label><input type="color" class="f-gc" value="' + ((g0 && g0.c2) || "#FFFFFF") + '"><select class="f-gd"><option value="h">左→右</option><option value="v">上→下</option><option value="d">斜向</option></select>');
+        if(g0) r4.querySelector(".f-gd").value = g0.dir || "h";
+        var applyGr = function(){ var on = r4.querySelector(".f-gr").checked; each(function(o, k){ if(k !== "shape") return; if(on){ o.fill = true; o.grad = { c2: r4.querySelector(".f-gc").value, dir: r4.querySelector(".f-gd").value }; } else delete o.grad; }); };
+        r4.querySelector(".f-gr").onchange = applyGr; r4.querySelector(".f-gc").oninput = applyGr; r4.querySelector(".f-gd").onchange = applyGr;
+      }
+      if(has("image")){
+        var cr = first.crop || {};
+        ["l:左", "r:右", "t:上", "b:下"].forEach(function(d){
+          var kx = d.split(":")[0], lb = d.split(":")[1];
+          var rr = row("裁剪・" + lb, '<input type="range" class="f-cr" min="0" max="45" step="1" value="' + (cr[kx] || 0) + '" style="flex:1;min-width:90px;"><b>' + (cr[kx] || 0) + '%</b>');
+          rr.querySelector(".f-cr").oninput = function(e){ rr.querySelector("b").textContent = e.target.value + "%"; each(function(o, k){ if(k !== "image") return; o.crop = Object.assign({}, o.crop || {}); o.crop[kx] = Number(e.target.value) || 0; }); };
+        });
+        var rb = row("去背", '<span style="font-size:12px;">把接近白色的地方變透明</span><input type="range" class="f-tol" min="8" max="80" value="36" style="width:90px;"><button type="button" class="tb-row f-rmbg" style="cursor:pointer;margin:0;padding:4px 12px;">去背</button><button type="button" class="tb-row f-rsbg" style="cursor:pointer;margin:0;padding:4px 12px;">還原原圖</button>');
+        rb.querySelector(".f-rmbg").onclick = async function(e){
+          var btn = e.target; btn.disabled = true; btn.textContent = "處理中…";
+          var tol = Number(rb.querySelector(".f-tol").value);
+          for(var i = 0; i < objs.length; i++){
+            if(objs[i].k !== "image") continue;
+            var im = objs[i].o, url = await refToDataUrl(im.srcOrig || im.src); if(!url) continue;
+            var img = new Image(); img.src = url; try{ await img.decode(); }catch(_){ continue; }
+            var cv = document.createElement("canvas"); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+            var cx = cv.getContext("2d"); cx.drawImage(img, 0, 0);
+            var dt = cx.getImageData(0, 0, cv.width, cv.height), d = dt.data;
+            for(var p = 0; p < d.length; p += 4){
+              var dist = Math.sqrt((255 - d[p]) * (255 - d[p]) + (255 - d[p + 1]) * (255 - d[p + 1]) + (255 - d[p + 2]) * (255 - d[p + 2]));
+              if(dist < tol) d[p + 3] = 0; else if(dist < tol * 1.6) d[p + 3] = Math.round(d[p + 3] * (dist - tol) / (tol * 0.6));
+            }
+            cx.putImageData(dt, 0, 0);
+            var blob = await new Promise(function(r){ cv.toBlob(r, "image/png"); });
+            var ref = await storeMediaBlob(blob); if(!ref) continue;
+            if(!im.srcOrig) im.srcOrig = im.src; im.src = ref;
+          }
+          btn.disabled = false; btn.textContent = "去背"; commit();
+        };
+        rb.querySelector(".f-rsbg").onclick = function(){ each(function(o, k){ if(k === "image" && o.srcOrig){ o.src = o.srcOrig; delete o.srcOrig; } }); };
+        var nt = document.createElement("div"); nt.className = "tb-hint"; nt.textContent = "小提醒：圖片有裁剪時，框線和陰影會被裁掉；需要框線請先不要裁剪。去背只處理接近白色的背景。"; modal.appendChild(nt);
+      }
+      var ok = document.createElement("button"); ok.type = "button"; ok.className = "tb-row"; ok.style.cssText = "cursor:pointer;margin:12px 0 0;padding:6px 18px;"; ok.textContent = "完成"; ok.onclick = function(){ back.remove(); }; modal.appendChild(ok);
+      back.addEventListener("click", function(e){ if(e.target === back) back.remove(); });
+      document.body.appendChild(back);
+    }
     function renderSelection(){
       selectLayer.innerHTML = "";
       if(!selSet.length) return;
@@ -11875,6 +11963,7 @@
         (inGroup ? '<button type="button" data-act="ungroup" title="解散群組（Ctrl/⌘+Shift+G）">解散群組</button>' : '') +
         '<button type="button" data-act="copy" title="複製（Ctrl/⌘+C）；貼上 Ctrl/⌘+V、重複製作 Ctrl/⌘+D">⧉ 複製</button>' +
         '<button type="button" data-act="dup" title="重複製作（Ctrl/⌘+D）">重複製作</button>' +
+        (items.some(function(x){ return x.k !== "stroke"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
         '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>' +
         (selUnits().length >= 2 ? '<span class="sb-sep"></span>' +
           [["l","⇤","靠左對齊"],["c","⇔","水平置中"],["r","⇥","靠右對齊"],["t","⤒","靠上對齊"],["m","⇕","垂直置中"],["b","⤓","靠下對齊"]].map(function(a){ return '<button type="button" class="sb-al" data-act="al-' + a[0] + '" title="' + a[2] + '">' + a[1] + '</button>'; }).join("") +
@@ -11888,6 +11977,7 @@
         if(bt.dataset.act === "group") groupSelection(); else if(bt.dataset.act === "ungroup") ungroupSelection(); else if(bt.dataset.act === "delete") deleteSelection();
         else if(bt.dataset.act === "copy"){ copySelection(); bt.textContent = "✓ 已複製"; }
         else if(bt.dataset.act === "dup") duplicateSelection();
+        else if(bt.dataset.act === "fmt") openObjFormat();
         else if(/^al-/.test(bt.dataset.act)) alignSelection(bt.dataset.act.slice(3));
       });
       selectLayer.appendChild(bar);
