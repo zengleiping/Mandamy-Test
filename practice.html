@@ -891,6 +891,15 @@
     border:1.5px solid rgba(28,33,30,0.14); border-radius:7px;
   }
   .text-fmt-btn:hover{ border-color:var(--seal); color:var(--seal); }
+  /* 注音在字右側（直式，像生字本）：字＋右邊一排直的注音符號，聲調符號在注音右邊、輕聲點在注音上方 */
+  .zy-r{ display:inline-flex; align-items:center; vertical-align:middle; }
+  .zy-s{ display:inline-flex; align-items:center; margin-left:.06em; font-family:"Noto Sans TC","Plus Jakarta Sans",sans-serif; font-size:.36em; font-weight:600; line-height:1; opacity:.88; cursor:text; }
+  .zy-col{ display:inline-flex; flex-direction:column; align-items:center; }
+  .zy-m{ display:flex; flex-direction:column; align-items:center; }
+  .zy-ch{ display:block; line-height:1.02; }
+  .zy-n{ line-height:1; margin-bottom:.1em; }
+  .zy-t{ margin-left:.08em; align-self:center; }
+  .zy-s.ph-overridden{ color:var(--seal); opacity:1; }
   .text-bg-toggle{ display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:600; cursor:pointer; }
   .text-bg-controls{ display:flex; align-items:center; gap:8px; }
   .text-bg-controls input[type=color]{ width:34px; height:26px; padding:0; border:1.5px solid rgba(28,33,30,0.2); border-radius:6px; background:none; cursor:pointer; flex:none; }
@@ -1505,7 +1514,7 @@
   .btn-theme-bg.active, .btn-theme-accent.active, .btn-phonetic-mode.active{
     outline: 2.5px solid var(--ink) !important; outline-offset: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
-  .btn-phonetic-mode.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
+  .btn-phonetic-mode.active, .btn-phonetic-layout.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
 
   /* 2026-10-01 離線教課：頂部列的小標籤 */
   .offline-pill{ display:inline-block; font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--ink-soft); white-space:nowrap; }
@@ -1792,6 +1801,12 @@
       <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="pinyin">拼音 Pinyin</button>
       <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="zhuyin">ㄅㄆㄇ 注音 Zhuyin</button>
     </div>
+    <label style="margin-top:12px;display:block;">注音位置 Zhuyin position</label>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+      <button type="button" class="btn btn-sm btn-phonetic-layout" data-layout="top">字的上方 Above</button>
+      <button type="button" class="btn btn-sm btn-phonetic-layout" data-layout="right">字的右側（直式，像生字本）Right, vertical</button>
+    </div>
+    <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">「右側」只對注音有效（拼音一律在字的上方）。想改某個字的讀音：點那個字的注音／拼音，聲調可以直接打數字——1～4＝一～四聲、0＝輕聲（例如 ni3 會自動變成 nǐ，ㄋㄧ3 會變成 ㄋㄧˇ）。</p>
     <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">用「文字」工具在小白板上打字時，字的正上方要不要自動加拼音或注音——第一次用文字工具時會問一次，之後都可以回這裡改。</p>
 
     <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
@@ -2940,7 +2955,7 @@
             first = false;
             var h = (par.lnSpc && par.lnSpc.pts ? par.lnSpc.pts * 12700 : fsEmu * 1.2 * lnMul);
             var wEmu = Math.min((measureEm(piece, st.bold) + bulletEm) * fsEmu, availW);
-            L.push({ par: par, pi: pi, text: piece, pt: st.pt, bold: st.bold, color: color, fsEmu: fsEmu, before: before, h: h, w: wEmu, empty: !/\S/.test(piece) });
+            L.push({ lhMul: 1.2 * lnMul, par: par, pi: pi, text: piece, pt: st.pt, bold: st.bold, color: color, fsEmu: fsEmu, before: before, h: h, w: wEmu, empty: !/\S/.test(piece) });
             totalH += before + h;
           });
         });
@@ -2957,7 +2972,7 @@
         if(!it.empty && g && !g.closed && prevKey === key && (it.pi === prevPi || it.par.list !== "none") && !it.before){
           g.lines.push(it.text); g.h += it.h; g.w = Math.max(g.w, it.w);
         } else if(!it.empty){
-          groups.push({ par: it.par, lines: [it.text], y: cursor, h: it.h, w: it.w, color: it.color, pt: it.pt, bold: it.bold });
+          groups.push({ par: it.par, lines: [it.text], y: cursor, h: it.h, w: it.w, color: it.color, pt: it.pt, bold: it.bold, lhMul: it.lhMul });
         } else if(g){ g.closed = true; }
         prevKey = it.empty ? null : key; prevPi = it.pi;
         cursor += it.h;
@@ -2967,7 +2982,7 @@
         if(par.align === "ctr") cxEmu = box.x + box.cx / 2 + (indent / 2);
         else if(par.align === "r") cxEmu = box.x + box.cx - rIns - g.w / 2;
         else cxEmu = box.x + lIns + indent + g.w / 2;
-        out.texts.push({ text: g.lines.join("\n"), pt: g.pt, bold: g.bold, color: g.color, align: par.align === "ctr" ? "center" : (par.align === "r" ? "right" : "left"), list: par.list, cx: cxEmu, cy: g.y + g.h / 2, estW: g.w, estH: g.h });
+        out.texts.push({ text: g.lines.join("\n"), pt: g.pt, bold: g.bold, color: g.color, align: par.align === "ctr" ? "center" : (par.align === "r" ? "right" : "left"), list: par.list, cx: cxEmu, cy: g.y + g.h / 2, estW: g.w, estH: g.h, lh: g.lines.length > 1 ? g.lhMul : undefined });
         out.plainText.push(g.lines.join("\n"));
       });
     }
@@ -3095,7 +3110,7 @@
       s.texts.forEach(function(t){
         var fs = Math.round(t.pt * 640 / slideWpt * 10) / 10;
         var al = t.align === "center" || t.align === "ctr" ? "center" : (t.align === "right" || t.align === "r" ? "right" : "left");
-        page.texts.push({ text: t.text, x: pctX(t.cx), y: pctY(t.cy), fontSize: Math.max(6, fs), color: t.color, bold: !!t.bold, align: al, list: t.list });
+        page.texts.push({ text: t.text, x: pctX(t.cx), y: pctY(t.cy), fontSize: Math.max(6, fs), color: t.color, bold: !!t.bold, align: al, list: t.list, lh: t.lh });
       });
       if(s.failed && s.fallbackText){ page.texts.push({ text: s.fallbackText, x: 50, y: 50, fontSize: 14, color: "#1C1C1C", bold: false, align: "left", list: "none" }); }
       for(var k = 0; k < s.images.length; k++){
@@ -3177,6 +3192,8 @@
   // 小白板「文字」工具打字加註音：null 表示這台裝置從沒選過（要先跳出一次選擇視窗），
   // 實際的轉換函式（setPhoneticMode／buildPhoneticHtml…）在下面「打字加註音」那段一起定義。
   var currentPhoneticMode = localStorage.getItem("hanyu_phonetic_mode");
+  // 注音位置：top＝字的正上方（預設）；right＝字的右邊、直式排列（跟生字本的寫法一樣，聲調符號在注音右側）。只對注音有效。
+  var currentPhoneticLayout = localStorage.getItem("hanyu_phonetic_layout") === "right" ? "right" : "top";
 
   // 2026-09-29：平板＋觸控筆的「掌心誤觸」問題——一旦偵測到這台裝置有在用觸控筆（Apple Pencil／
   // 電容筆等，pointerType === "pen"），之後畫布上的「手指」輸入就只用來移動畫面（平移），不會被
@@ -3953,7 +3970,7 @@
         sec.questions[qId] = { id: qId, order: i, title: "投影片 " + (i + 1) + " Slide " + (i + 1), desc: "", bgImage: bgRef, gridType: "none", media: [], teacherNote: pg.notes || "", weight: 1, canvasRatio: Math.round(conv.pres.cx / conv.pres.cy * 10000) / 10000 };
         if(pg.notes) notes++;
         var prog = { texts: [], images: [], shapes: [], medias: [], mediaData: {} };
-        pg.texts.forEach(function(t){ prog.texts.push({ id: uid("t"), text: t.text, x: t.x, y: t.y, color: t.color, fontSize: t.fontSize, bold: !!t.bold, step: 0, align: t.align, list: t.list }); });
+        pg.texts.forEach(function(t){ var to = { id: uid("t"), text: t.text, x: t.x, y: t.y, color: t.color, fontSize: t.fontSize, bold: !!t.bold, step: 0, align: t.align, list: t.list }; if(t.lh && Math.abs(t.lh - 1) > 0.02) to.lh = Math.round(t.lh * 100) / 100; prog.texts.push(to); });
         for(var ip = 0; ip < pg.images.length; ip++){
           var im = pg.images[ip], imRef = await storeMediaBlob(im.blob);
           if(imRef) prog.images.push({ id: uid("im"), src: imRef, ar: im.ar, x: im.x, y: im.y, w: im.w, h: im.h, step: 0 });
@@ -4581,6 +4598,10 @@
   document.querySelectorAll(".btn-phonetic-mode").forEach(function(b){
     b.classList.toggle("active", b.dataset.phonetic === (currentPhoneticMode || "off"));
     b.onclick = function(){ setPhoneticMode(b.dataset.phonetic); };
+  });
+  document.querySelectorAll(".btn-phonetic-layout").forEach(function(b){
+    b.classList.toggle("active", b.dataset.layout === currentPhoneticLayout);
+    b.onclick = function(){ setPhoneticLayout(b.dataset.layout); };
   });
 
   var soundStyleSelect = document.getElementById("setting-sound-style");
@@ -5490,6 +5511,7 @@
       '.canvas{position:relative;overflow:hidden;background:#fff}.canvas>img,.canvas>svg{position:absolute}' +
       '.canvas .bg{inset:0;width:100%;height:100%;object-fit:contain}.canvas .pic{transform:translate(-50%,-50%);max-width:none}.canvas .ink,.canvas .shp{inset:0;width:100%;height:100%}' +
       '.mt{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;line-height:1;width:max-content}.mt .tl{white-space:pre;min-height:1em}' +
+      '.zy-r{display:inline-flex;align-items:center;vertical-align:middle}.zy-s{display:inline-flex;align-items:center;margin-left:.06em;font-size:.36em;font-weight:600;line-height:1;opacity:.88}.zy-col{display:inline-flex;flex-direction:column;align-items:center}.zy-m{display:flex;flex-direction:column;align-items:center}.zy-ch{display:block;line-height:1.02}.zy-n{line-height:1;margin-bottom:.1em}.zy-t{margin-left:.08em;align-self:center}' +
       '.mt:has(ruby){line-height:2.15;padding-top:.3em}.mt ruby{ruby-position:over}.mt rt{font-size:.42em;font-weight:600;opacity:.8;letter-spacing:0}' +
       '.mt.list-bullet .tl:not(:empty)::before{content:"•";display:inline-block;min-width:1.1em}.mt.list-number{counter-reset:tl}.mt.list-number .tl:not(:empty){counter-increment:tl}.mt.list-number .tl:not(:empty)::before{content:counter(tl) ".";display:inline-block;min-width:1.5em;margin-right:.15em}' +
       '.generic{font-size:15px;line-height:1.8}.pairs{border-collapse:collapse}.pairs td{border:1px solid #ddd;padding:4px 12px}.kv b{color:#6B5F55;margin-right:6px}' +
@@ -5716,6 +5738,7 @@
     await set(ref(db, "rooms/" + rId), {
       project: roomProject, sharedProgress: seededProgress, isOpen: true, theme: { bgMode: currentBgMode, accent: currentAccentColor }, classMode: currentClassMode, lockNoticeLangs: currentLockNoticeLangs,
       phoneticMode: (currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off",
+      phoneticLayout: currentPhoneticLayout,
       presence: { teacher: { online:true, name:"老師" } }
     });
     attachPresence(rId, "teacher", "老師"); startRoom(rId, "teacher");
@@ -5752,6 +5775,7 @@
       // 看不到，跟文字內容本身是不是同步了無關——這裡把它也變成跟 lockNoticeLangs 一樣的房間設定，
       // 老師改了就同步套用到所有人的畫面（不寫回各自的 localStorage，只影響這次上課的顯示）。
       if(roomData.phoneticMode !== undefined) applyRoomPhoneticMode(roomData.phoneticMode);
+      if(roomData.phoneticLayout !== undefined) applyRoomPhoneticLayout(roomData.phoneticLayout);
 
       if(roomData.broadcastScore && roomData.broadcastTime){
         if(window.__lastBroadcastTime !== roomData.broadcastTime){
@@ -6701,6 +6725,19 @@
      currentPhoneticMode 本身宣告在上面「主題與模式引擎」那段，跟 currentBgMode 等設定放一起，
      這裡開始才是實際的轉換／UI 邏輯。 */
 
+  function setPhoneticLayout(layout){
+    currentPhoneticLayout = layout === "right" ? "right" : "top";
+    localStorage.setItem("hanyu_phonetic_layout", currentPhoneticLayout);
+    document.querySelectorAll(".btn-phonetic-layout").forEach(function(b){ b.classList.toggle("active", b.dataset.layout === currentPhoneticLayout); });
+    if(inRoom() && roomRole === "teacher") update(ref(db, "rooms/" + activeRoomId), { phoneticLayout: currentPhoneticLayout });
+    if(typeof renderStage === "function") renderStage();
+  }
+  function applyRoomPhoneticLayout(layout){
+    layout = layout === "right" ? "right" : "top";
+    if(layout === currentPhoneticLayout) return;
+    currentPhoneticLayout = layout;
+    document.querySelectorAll(".btn-phonetic-layout").forEach(function(b){ b.classList.toggle("active", b.dataset.layout === layout); });
+  }
   function setPhoneticMode(mode){
     currentPhoneticMode = mode;
     localStorage.setItem("hanyu_phonetic_mode", mode);
@@ -6785,6 +6822,32 @@
     return (tone === "0" || tone === "5") ? (mark + body) : (body + mark);
   }
 
+  // 用數字打聲調（習慣用注音鍵盤的輸入法）：1～4＝一～四聲、0（或 5）＝輕聲，自動換成調號。
+  // 拼音：ni3→nǐ、lv4→lǜ、ma0→ma；注音：ㄋㄧ3→ㄋㄧˇ、ㄇㄚ0→˙ㄇㄚ（一聲不標）。可以一次打好幾個音節（空白隔開）。
+  var PINYIN_TONE_TABLE = { a: ["ā","á","ǎ","à"], e: ["ē","é","ě","è"], i: ["ī","í","ǐ","ì"], o: ["ō","ó","ǒ","ò"], u: ["ū","ú","ǔ","ù"], "ü": ["ǖ","ǘ","ǚ","ǜ"] };
+  function addPinyinToneMark(syl, tone){
+    var b = syl.replace(/u:/g, "ü").replace(/v/g, "ü");
+    if(tone < 1 || tone > 4) return b; // 輕聲：拼音不標調號
+    var lower = b.toLowerCase(), idx = -1;
+    if(lower.indexOf("a") !== -1) idx = lower.indexOf("a");
+    else if(lower.indexOf("e") !== -1) idx = lower.indexOf("e");
+    else if(lower.indexOf("ou") !== -1) idx = lower.indexOf("ou");
+    else { for(var i = lower.length - 1; i >= 0; i--){ if(/[aeiouü]/.test(lower.charAt(i))){ idx = i; break; } } }
+    if(idx < 0) return b;
+    var ch = lower.charAt(idx), rep = PINYIN_TONE_TABLE[ch]; if(!rep) return b;
+    var marked = rep[tone - 1]; if(b.charAt(idx) !== lower.charAt(idx)) marked = marked.toUpperCase();
+    return b.slice(0, idx) + marked + b.slice(idx + 1);
+  }
+  function convertToneDigits(str){
+    if(!str) return str;
+    return String(str).split(/(\s+)/).map(function(part){
+      var m = /^([a-züÜvV:]+)([0-5])$/.exec(part);
+      if(m) return addPinyinToneMark(m[1], Number(m[2]));
+      var z = /^([ㄅ-ㄩ]+)([0-5])$/.exec(part);
+      if(z){ var d = Number(z[2]); return d === 0 || d === 5 ? "˙" + z[1] : z[1] + ({ 1: "", 2: "ˊ", 3: "ˇ", 4: "ˋ" }[d] || ""); }
+      return part;
+    }).join("");
+  }
   function isHanChar(ch){
     return /[㐀-䶿一-鿿豈-﫿]/.test(ch);
   }
@@ -6828,6 +6891,12 @@
       var hasOverride = overrides && typeof overrides[baseIdx + i] === "string" && overrides[baseIdx + i] !== "";
       var annotation = hasOverride ? overrides[baseIdx + i]
         : (currentPhoneticMode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i]);
+      if(currentPhoneticMode === "zhuyin" && currentPhoneticLayout === "right"){
+        // 直式、在字右邊：把注音拆成「符號本體」和「聲調符號」，本體直排，聲調放在右邊（輕聲 ˙ 放在上方）
+        var ann = String(annotation || ""), tone = "", neutral = false, main = ann.replace(/[ˊˇˋ˙]/g, function(m){ if(m === "˙") neutral = true; else tone = m; return ""; });
+        html += "<span class=\"zy-r\" data-ph-idx=\"" + (baseIdx + i) + "\"><span class=\"zy-c\">" + escapeHtml(ch) + "</span><span class=\"zy-s" + (hasOverride ? " ph-overridden" : "") + "\"><span class=\"zy-col\">" + (neutral ? "<span class=\"zy-n\">˙</span>" : "") + "<span class=\"zy-m\">" + Array.from(main).map(function(c){ return "<span class=\"zy-ch\">" + escapeHtml(c) + "</span>"; }).join("") + "</span></span>" + (tone ? "<span class=\"zy-t\">" + tone + "</span>" : "") + "</span></span>";
+        continue;
+      }
       html += "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt" + (hasOverride ? " class=\"ph-overridden\"" : "") + ">" + escapeHtml(annotation || "") + "</rt></ruby>";
     }
     return html;
@@ -8249,7 +8318,7 @@
   // opacity：畫筆濃淡（1 = 全不透明／最濃，數字越小越淡）——老師點重點時可以調淡一點，
   // 學生跟著描的時候才看得出來哪些是老師畫的、哪些是自己描上去的，兩者疊在一起也不會完全分不出來。
   // 2026-09-30：筆刷粗細預設改成 2（使用者要求）；文字新增 bold（加粗）開關，預設不加粗。
-  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false, shapeOpacity: 1, textBgOn: false, textBgColor: "#FFF3B0", textBgOp: 1 };
+  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false, shapeOpacity: 1, textBgOn: false, textBgColor: "#FFF3B0", textBgOp: 1, lineH: 1 };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
   // pinnedExtraTools：工具列精簡後，格線／底圖／移動畫面／錄示範這些非核心工具預設收合，
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
@@ -8472,6 +8541,10 @@
               <button type="button" class="text-fmt-btn ${boardState.list==='bullet'?'active':''}" data-list="bullet" title="項目符號 Bullets（每一行一個 •）"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><circle cx="2.5" cy="4" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="2.5" cy="12" r="1.4"/><path d="M6 4h8M6 8h8M6 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
               <button type="button" class="text-fmt-btn ${boardState.list==='number'?'active':''}" data-list="number" title="編號 Numbered list（每一行 1. 2. 3.）">1.</button>
             </div>
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="100%＝預設；數字越大行與行之間離得越開（選取文字方塊時改那一個，也會是之後新打的字的預設）">行距 Line spacing（%）</span></div>
+            ${sizeComboHtml("text-lh-input", Math.round((boardState.lineH || 1) * 100), 60, 400, [80,100,115,150,200,250])}
           </div>
           <div class="popover-field-row">
             <div class="popover-field-row-label"><span>文字框底色 Box background</span><label class="text-bg-toggle" title="預設不加底色；打勾後可以選顏色和透明度（選取文字方塊時改那一個，也會是之後新打的字的預設）"><input type="checkbox" class="text-bg-on" ${boardState.textBgOn ? "checked" : ""}> 加底色</label></div>
@@ -10337,7 +10410,7 @@
     // 2026-09-30：文字加粗。舊資料沒有 bold 欄位，一律當成加粗（跟這個功能上線前的樣子一樣，文字方塊
     // 本來就是 font-weight:700）；新打的字用工具列的「B」開關決定（boardState.bold，預設不加粗）。
     function isTextBold(t){ return t.bold === undefined ? true : !!t.bold; }
-    function applyTextBgDefaults(t){ if(boardState.textBgOn){ t.bgOn = true; t.bgColor = boardState.textBgColor; t.bgOp = boardState.textBgOp == null ? 1 : boardState.textBgOp; } }
+    function applyTextBgDefaults(t){ if(boardState.lineH && Math.abs(boardState.lineH - 1) > 0.001) t.lh = boardState.lineH; if(boardState.textBgOn){ t.bgOn = true; t.bgColor = boardState.textBgColor; t.bgOp = boardState.textBgOp == null ? 1 : boardState.textBgOp; } }
     function textBgRgba(hex, a){ var h = /^#[0-9a-fA-F]{6}$/.test(hex || "") ? hex : "#FFF3B0"; return "rgba(" + parseInt(h.substr(1, 2), 16) + "," + parseInt(h.substr(3, 2), 16) + "," + parseInt(h.substr(5, 2), 16) + "," + (a == null ? 1 : a) + ")"; }
 
     function renderTexts(){
@@ -10375,6 +10448,8 @@
           <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</div>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
+        // 行距（預設 100%）：有注音（ruby）的文字本來行高就是 2.15，行距是在預設行高上再乘倍數
+        if(t.lh && Math.abs(t.lh - 1) > 0.001){ var baseLh = div.querySelector("ruby") ? 2.15 : 1; div.style.lineHeight = String(Math.round(baseLh * t.lh * 1000) / 1000); }
 
         // 2026-09-30 新增：多音字（例如「誰」）自動產生的拼音／注音不一定是老師要的常用讀音，
         // 點一下字上方的注音就能自己改成想要的讀音，改完存在 t.phoneticOverride（跟 t.text 一起
@@ -10385,10 +10460,10 @@
         // <rt> 之外還包含那個漢字本身的文字節點，瀏覽器 elementFromPoint 對著漢字點下去，命中的
         // 也是外層的 <ruby>，如果整個 <ruby> 都攔截，會連「點在字上準備拖曳整個文字方塊」都被
         // 誤判成要編輯注音，導致文字方塊完全拖不動。
-        div.querySelectorAll(".text-content rt").forEach(function(rtEl){
+        div.querySelectorAll(".text-content rt, .text-content .zy-s").forEach(function(rtEl){
           rtEl.onpointerdown = function(e){
             e.stopPropagation(); e.preventDefault();
-            var rubyEl = rtEl.closest("ruby");
+            var rubyEl = rtEl.closest("ruby, .zy-r");
             var idx = Number(rubyEl.dataset.phIdx);
             var curVal = rtEl.textContent;
             var rubyRect = rubyEl.getBoundingClientRect();
@@ -10400,13 +10475,13 @@
             showInlineTextInput(cWrap, editorPos, function(newVal){
               snapshotForUndo();
               if(!Array.isArray(t.phoneticOverride)) t.phoneticOverride = [];
-              var trimmed = (newVal || "").trim();
+              var trimmed = convertToneDigits((newVal || "").trim()); // ni3 → nǐ（數字聲調自動轉換）
               // 清空輸入框＝恢復自動判斷的讀音，不是「這個字不要注音」——真的不想要這個字有注音，
               // 用橡皮擦把整個文字方塊擦掉重打會更清楚，不會跟「打字漏打」混在一起。
               t.phoneticOverride[idx] = trimmed === "" ? null : trimmed;
               writeProgress(q.id, { texts: texts });
               renderTexts();
-            }, curVal, "自訂這個字的拼音／注音，留空＝恢復自動判斷");
+            }, curVal, "自訂拼音／注音（聲調可打數字：ni3→nǐ；1～4聲、0輕聲），留空＝恢復自動判斷");
           };
         });
 
@@ -10477,6 +10552,7 @@
           if(stepInputSync) stepInputSync.value = String(t.step || 0);
           syncTextFmtUi(t.align || "left", t.list || "none");
           if(typeof syncTextBgUi === "function") syncTextBgUi(t);
+          if(lhInputEl) lhInputEl.value = String(Math.round((t.lh || 1) * 100));
           snapshotForUndo(); // 在拖動開始「之前」存一份快照，上一步就能整個復原成拖動前的位置
 
           var startX = e.clientX, startY = e.clientY;
@@ -11118,8 +11194,21 @@
     // 畫布同樣改用 Pointer Events：iPad 上不管是手指觸控還是 Apple Pencil，都會統一走這一套事件，
     // 不再只認滑鼠事件。按下時用 setPointerCapture 鎖定畫筆事件在 canvas 上，移動再快、再貼近邊緣，
     // 都不會被系統手勢（例如捲動／縮放）打斷這一筆的繪製。
+    // 按住滑鼠「右鍵」拖曳＝框選（跟 PowerPoint 一樣，不管目前是哪個工具）：自動切到「選取」工具並開始框選
+    function switchToSelectTool(){
+      if(boardState.tool === "select") return;
+      boardState.tool = "select";
+      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){ if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active"); });
+      var sb = vToolbar.querySelector('button[data-tool="select"]'); if(sb) sb.classList.add("active");
+      canvas.style.cursor = toolCursor(); clearObjSelection(); syncObjInteractive();
+    }
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
+      if(e.pointerType === "mouse" && e.button === 2){
+        e.preventDefault(); try{ canvas.setPointerCapture(e.pointerId); }catch(er){}
+        switchToSelectTool(); startSelectInteraction(e, getPos(e));
+        return;
+      }
       if(Date.now() - inlineInputClosedAt < 150){ e.preventDefault(); return; } // 這一下點擊只是「確認剛打的文字」，不要順便畫線／開新輸入框
       if(e.pointerType === "pen") stylusEverUsed = true;
 
@@ -11343,6 +11432,20 @@
       });
     }
 
+    // 行距：有選取的文字方塊就改那一個，同時記成之後新打的字的預設
+    var lhInputEl = vToolbar.querySelector(".text-lh-input");
+    if(lhInputEl){
+      bindSizeCombo(lhInputEl.closest(".size-combo"), function(n){
+        boardState.lineH = n / 100;
+        var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
+        if(selObj){
+          snapshotForUndo();
+          if(Math.abs(boardState.lineH - 1) < 0.001) delete selObj.lh; else selObj.lh = boardState.lineH;
+          writeProgress(q.id, { texts: texts });
+          renderTexts();
+        }
+      });
+    }
     // 文字框底色（預設不加）：勾選＝加底色，顏色與透明度可調。選取文字方塊時改那一個，同時記成之後新打的字的預設。
     var bgOnEl = vToolbar.querySelector(".text-bg-on"), bgColorEl = vToolbar.querySelector(".text-bg-color"), bgOpEl = vToolbar.querySelector(".text-bg-op"), bgOpvEl = vToolbar.querySelector(".text-bg-opv");
     function selectedTextObj(){ return activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null; }
