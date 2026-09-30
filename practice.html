@@ -885,6 +885,14 @@
   .draw-toolbar-top.tb-collapsed > *:not(.tb-head){ display:none !important; }
   .draw-toolbar-top.tb-collapsed .tb-head{ margin-right:0; }
   .board-area.canvas-fs-active .draw-toolbar-top.tb-collapsed{ right:auto; }
+  .draw-toolbar-vertical .tool-btn-v, .draw-toolbar-top .tool-btn-v{ touch-action:none; -webkit-touch-callout:none; user-select:none; }
+  body.tb-drag-active .color-popover{ display:none !important; }
+  body.tb-drag-active{ cursor:grabbing; user-select:none; }
+  .tb-drag-ghost{ position:fixed; z-index:30000; pointer-events:none; opacity:.88; transform:scale(1.08); box-shadow:0 8px 22px rgba(0,0,0,.3); border-radius:12px; background:var(--surface); }
+  .tb-drag-ghost .color-popover{ display:none !important; }
+  .tb-dragging-src{ opacity:.3; }
+  .tb-drop-line{ position:fixed; z-index:30001; pointer-events:none; background:var(--seal); border-radius:2px; box-shadow:0 0 0 2px rgba(255,255,255,.7); }
+  .tb-drop-bar{ outline:2.5px dashed var(--seal); outline-offset:2px; }
   .tb-modal-back{ position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:20000; display:flex; align-items:center; justify-content:center; }
   .tb-modal{ background:var(--surface); color:var(--ink); border-radius:16px; padding:18px 20px; width:min(460px,92vw); max-height:86vh; overflow:auto; box-shadow:0 20px 50px rgba(0,0,0,.35); }
   .tb-modal h3{ margin:0 0 4px; font-size:17px; } .tb-modal .tb-hint{ font-size:12px; color:var(--ink-soft); margin-bottom:10px; }
@@ -6608,7 +6616,7 @@
       var back = document.createElement("div"); back.className = "tb-modal-back";
       var modal = document.createElement("div"); modal.className = "tb-modal"; back.appendChild(modal);
       function render(){
-        modal.innerHTML = '<h3>⚙ 自訂工具列 Customize toolbars</h3><div class="tb-hint">每個工具可以放「左側」、「上方」或「隱藏」；用 ↑ ↓ 調整順序。設定只記在這台裝置。</div>';
+        modal.innerHTML = '<h3>⚙ 自訂工具列 Customize toolbars</h3><div class="tb-hint">小技巧：直接「長按」工具圖示就能拖到想要的位置（左側或上方都可以）。這裡也能用按鈕調整，或把工具隱藏。設定只記在這台裝置。</div>';
         [["left", "左側工具列 Left"], ["top", "上方工具列 Top"], ["hidden", "隱藏 Hidden"]].forEach(function(sec){
           var title = document.createElement("div"); title.className = "tb-sec-title"; title.textContent = sec[1]; modal.appendChild(title);
           var keys = c[sec[0]].filter(function(k){ return tbItems[k]; });
@@ -6640,6 +6648,102 @@
     }
     container.insertBefore(topBar, layout);
     applyToolbarLayout();
+
+    // ===== 長按工具圖示就能拖曳：放到左側或上方工具列的任何位置（放開的位置＝新位置）=====
+    (function(){
+      var LONG_MS = 380;
+      function itemOfTarget(t){
+        if(!t || !t.closest || t.closest(".color-popover") || t.closest(".tb-head")) return null;
+        var found = null;
+        Object.keys(tbItems).forEach(function(k){ if(!found && tbItems[k].nodes.some(function(n){ return n.contains(t); })) found = tbItems[k]; });
+        return found;
+      }
+      function visibleKeysIn(bar){
+        var c = loadTbConfig(), list = bar === vToolbar ? c.left : c.top;
+        return list.filter(function(k){ return tbItems[k]; });
+      }
+      function startWatch(e){
+        if(e.button > 0 && e.pointerType === "mouse") return;
+        var it = itemOfTarget(e.target); if(!it) return;
+        var sx = e.clientX, sy = e.clientY, pid = e.pointerId, timer = null, dragging = false, ghost = null, line = null, target = null;
+        function cleanupWatch(){
+          clearTimeout(timer);
+          document.removeEventListener("pointermove", onMove, true); document.removeEventListener("pointerup", onUp, true); document.removeEventListener("pointercancel", onCancel, true);
+        }
+        function begin(){
+          dragging = true;
+          document.body.classList.add("tb-drag-active");
+          var n0 = it.nodes[0], r = n0.getBoundingClientRect();
+          ghost = document.createElement("div"); ghost.className = "tb-drag-ghost";
+          var clone = n0.cloneNode(true); clone.style.width = r.width + "px"; clone.style.margin = "0";
+          ghost.appendChild(clone); ghost.style.width = r.width + "px"; ghost.style.left = (sx - r.width / 2) + "px"; ghost.style.top = (sy - r.height / 2) + "px";
+          document.body.appendChild(ghost);
+          it.nodes.forEach(function(n){ n.classList.add("tb-dragging-src"); });
+          line = document.createElement("div"); line.className = "tb-drop-line"; line.style.display = "none"; document.body.appendChild(line);
+          if(navigator.vibrate){ try{ navigator.vibrate(15); }catch(er){} }
+        }
+        function pickTarget(x, y){
+          target = null; [vToolbar, topBar].forEach(function(b){ b.classList.remove("tb-drop-bar"); });
+          line.style.display = "none";
+          var bar = null;
+          [vToolbar, topBar].forEach(function(b){ var r = b.getBoundingClientRect(); if(b.offsetParent !== null || getComputedStyle(b).position === "fixed" || getComputedStyle(b).position === "absolute"){ if(x >= r.left - 8 && x <= r.right + 8 && y >= r.top - 8 && y <= r.bottom + 8) bar = b; } });
+          if(!bar) return;
+          bar.classList.add("tb-drop-bar");
+          var isLeft = bar === vToolbar;
+          var keys = visibleKeysIn(bar).filter(function(k){ return k !== it.key; });
+          var best = null, bestD = 1e9;
+          keys.forEach(function(k){
+            var n = tbItems[k].nodes[0], r = n.getBoundingClientRect(); if(!r.width && !r.height) return;
+            var cx = r.left + r.width / 2, cy = r.top + r.height / 2, d = Math.hypot(x - cx, y - cy);
+            if(d < bestD){ bestD = d; best = { key: k, r: r, before: isLeft ? y < cy : x < cx }; }
+          });
+          if(!best){ target = { bar: bar, ref: null, before: false }; var br = bar.getBoundingClientRect(); line.style.display = "block"; line.style.left = (br.left + 10) + "px"; line.style.top = (br.top + 10) + "px"; line.style.width = isLeft ? (br.width - 20) + "px" : "4px"; line.style.height = isLeft ? "4px" : (br.height - 20) + "px"; return; }
+          target = { bar: bar, ref: best.key, before: best.before };
+          line.style.display = "block";
+          if(isLeft){ line.style.left = best.r.left + "px"; line.style.width = best.r.width + "px"; line.style.height = "4px"; line.style.top = ((best.before ? best.r.top : best.r.bottom) - 2) + "px"; }
+          else { line.style.top = best.r.top + "px"; line.style.height = best.r.height + "px"; line.style.width = "4px"; line.style.left = ((best.before ? best.r.left : best.r.right) - 2) + "px"; }
+        }
+        function onMove(ev){
+          if(ev.pointerId !== pid) return;
+          if(!dragging){ if(Math.hypot(ev.clientX - sx, ev.clientY - sy) > 9) cleanupWatch(); return; }
+          ev.preventDefault();
+          var gr = ghost.getBoundingClientRect();
+          ghost.style.left = (ev.clientX - gr.width / 2) + "px"; ghost.style.top = (ev.clientY - gr.height / 2) + "px";
+          pickTarget(ev.clientX, ev.clientY);
+        }
+        function finish(commit){
+          var wasDragging = dragging;
+          cleanupWatch();
+          if(!wasDragging) return;
+          document.body.classList.remove("tb-drag-active");
+          if(ghost) ghost.remove(); if(line) line.remove();
+          [vToolbar, topBar].forEach(function(b){ b.classList.remove("tb-drop-bar"); });
+          it.nodes.forEach(function(n){ n.classList.remove("tb-dragging-src"); });
+          // 放開之後的那一下 click 不要當成按了按鈕
+          function swallow(ce){ ce.stopPropagation(); ce.preventDefault(); }
+          document.addEventListener("click", swallow, true);
+          setTimeout(function(){ document.removeEventListener("click", swallow, true); }, 350);
+          if(commit && target){
+            var c = loadTbConfig();
+            ["left", "top", "hidden"].forEach(function(kk){ c[kk] = c[kk].filter(function(x){ return x !== it.key; }); });
+            var arr = target.bar === vToolbar ? c.left : c.top;
+            var idx = target.ref ? arr.indexOf(target.ref) : -1;
+            if(idx === -1) arr.push(it.key); else arr.splice(target.before ? idx : idx + 1, 0, it.key);
+            saveTbConfig(); applyToolbarLayout();
+            requestAnimationFrame(fitCanvasToViewport); setTimeout(fitCanvasToViewport, 60);
+          }
+        }
+        function onUp(ev){ if(ev.pointerId !== pid) return; finish(true); }
+        function onCancel(ev){ if(ev.pointerId !== pid) return; finish(false); }
+        timer = setTimeout(begin, LONG_MS);
+        document.addEventListener("pointermove", onMove, true); document.addEventListener("pointerup", onUp, true); document.addEventListener("pointercancel", onCancel, true);
+      }
+      [vToolbar, topBar].forEach(function(b){ b.addEventListener("dragstart", function(e){ e.preventDefault(); }); }); // 工具圖示是 <img>，瀏覽器原生拖曳圖片會中斷長按拖曳
+      vToolbar.addEventListener("pointerdown", startWatch);
+      topBar.addEventListener("pointerdown", startWatch);
+      vToolbar.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+      topBar.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+    })();
     requestAnimationFrame(fitCanvasToViewport);
 
     // 2026-09-29：套用／更新「鎖定作答」的視覺狀態——工具列變暗＋游標變成禁止符號＋畫布正中央
