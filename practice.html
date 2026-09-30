@@ -858,6 +858,20 @@
   .media-audio-row .ma-time{ font-size:12px; font-variant-numeric:tabular-nums; flex:none; }
   .media-resize{ position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.85) 50%); z-index:3; touch-action:none; }
   .media-opt{ display:block; width:100%; text-align:left; }
+  /* 圖形（矩形／圓／三角形／線／箭頭）：SVG 畫在圖片上面、筆跡下面，另外疊透明的 .shape-proxy 負責選取／拖曳／縮放 */
+  .shape-layer{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
+  .shape-layer svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .shape-proxy{ position:absolute; pointer-events:auto; box-sizing:border-box; border:1.5px dashed transparent; cursor:grab; touch-action:none; }
+  .shape-proxy:hover{ border-color:#1E88E5; }
+  .shape-proxy.active{ border-color:var(--seal); cursor:grabbing; }
+  .shape-proxy:hover .resize-handle, .shape-proxy.active .resize-handle{ display:block; }
+  .text-layer:not(.objs-interactive) .shape-proxy{ pointer-events:none; }
+  .shape-popover{ min-width:214px; }
+  .shape-type-row{ display:flex; gap:4px; flex-wrap:nowrap; }
+  .shape-type-btn{ width:34px; height:34px; border-radius:8px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); cursor:pointer; font-size:17px; line-height:1; color:var(--ink); padding:0; display:flex; align-items:center; justify-content:center; }
+  .shape-type-btn.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
+  .shape-fill-btn{ width:100%; padding:6px 8px; font-size:12px; font-weight:600; border-radius:8px; border:1.5px solid rgba(28,33,30,0.14); background:var(--surface); color:var(--ink); cursor:pointer; }
+  .shape-fill-btn.active{ background:var(--seal); color:#fff; border-color:var(--seal); }
   .image-layer{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
   .board-image{ position:absolute; transform:translate(-50%,-50%); height:auto; max-width:none; user-select:none; -webkit-user-drag:none; }
   .board-image.step-hidden{ opacity:0.35; }
@@ -3894,6 +3908,16 @@
         var w = im.w / 100 * W, h = w * (im.ar || 1);
         x.drawImage(el, im.x / 100 * W - w / 2, im.y / 100 * H - h / 2, w, h);
       });
+      (prog.shapes || []).forEach(function(sh){
+        var gx = sh.x / 100 * W, gy = sh.y / 100 * H, gw = sh.w / 100 * W, gh = sh.h / 100 * H;
+        x.save(); x.strokeStyle = sh.color || "#B23B32"; x.fillStyle = sh.color || "#B23B32"; x.lineWidth = Math.max(0.8, (sh.sw || 3) * W / 640); x.lineJoin = "round"; x.lineCap = "round"; x.beginPath();
+        if(sh.type === "ellipse") x.ellipse(gx + gw / 2, gy + gh / 2, Math.abs(gw / 2), Math.abs(gh / 2), 0, 0, Math.PI * 2);
+        else if(sh.type === "triangle"){ x.moveTo(gx + gw / 2, gy); x.lineTo(gx + gw, gy + gh); x.lineTo(gx, gy + gh); x.closePath(); }
+        else if(sh.type === "line" || sh.type === "arrow"){ x.moveTo(sh.fx ? gx + gw : gx, sh.fy ? gy + gh : gy); x.lineTo(sh.fx ? gx : gx + gw, sh.fy ? gy : gy + gh); }
+        else x.rect(gx, gy, gw, gh);
+        if(sh.fill && sh.type !== "line" && sh.type !== "arrow") x.fill();
+        x.stroke(); x.restore();
+      });
       var sc = W / 640;
       var lc = document.createElement("canvas"); lc.width = W; lc.height = H;
       var l = lc.getContext("2d");
@@ -5943,7 +5967,7 @@
   // opacity：畫筆濃淡（1 = 全不透明／最濃，數字越小越淡）——老師點重點時可以調淡一點，
   // 學生跟著描的時候才看得出來哪些是老師畫的、哪些是自己描上去的，兩者疊在一起也不會完全分不出來。
   // 2026-09-30：筆刷粗細預設改成 2（使用者要求）；文字新增 bold（加粗）開關，預設不加粗。
-  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke" };
+  var boardState = { tool: "pen", color: "#B23B32", size: 2, opacity: 1, fontSize: 36, bold: false, step: 0, align: "left", list: "none", eraserMode: "stroke", shapeType: "rect", shapeSize: 3, shapeFill: false };
   var boardResizeHandler = null; // 記住上一次掛的 resize 監聽器，每次重繪寫字板前先移除，避免每畫一筆就累積一個監聽器
   // pinnedExtraTools：工具列精簡後，格線／底圖／移動畫面／錄示範這些非核心工具預設收合，
   // 使用者從「➕更多」點加入之後記在這裡（模組層級，換題目後還記得），下次換題目就自動接著顯示，
@@ -6018,6 +6042,7 @@
     var texts = progress.texts || [];
     var medias = progress.medias || []; // 2026-09-30 嵌入媒體：{ id, kind:'youtube'|'audio', ytId, name, x, y, w }（x／y＝左上角百分比）；音檔本體存在 progress.mediaData[id]
     var mediaEls = {};
+    var shapes = progress.shapes || []; // 2026-10-01 圖形：{ id, type:'rect'|'ellipse'|'triangle'|'line'|'arrow', x,y,w,h（左上角＋大小，百分比）, fx,fy（線／箭頭起點在右／下）, color, sw, fill, step }
     var images = progress.images || []; // 2026-09-30 貼上的圖片物件：{ id, src, x, y, w, ar, step }（x／y＝中心點百分比、w＝寬度佔畫布寬百分比、ar＝高／寬）
     // 2026-09-29 修正：localSelfSeq 是「這台裝置這次打開這一題以來，自己寫入 strokes 的次數」，
     // 純粹是本機自己記的計數，從 0 開始，只用來擋掉「自己剛剛才寫入的內容，卻被一份還在追上進度、
@@ -6153,6 +6178,29 @@
           <div class="popover-field-row">
             <div class="popover-field-row-label"><span title="0＝一開始就顯示；1＝老師按第 1 次「▶」才出現，以此類推">出現時機 Appears at step</span></div>
             ${sizeComboHtml("text-step-input", boardState.step, 0, 30, [0,1,2,3,4,5,6,7,8,9,10])}
+          </div>
+        </div>
+      </div>
+      <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v ${boardState.tool==='shape'?'active':''}" data-tool="shape" title="圖形 Shapes（滑鼠移入選形狀／顏色／線條粗細；拖曳畫出來，或點一下放預設大小）"><span class="tool-btn-v-icon">🔷</span><span class="tool-btn-v-label">圖形</span></button>
+        <div class="color-popover shape-popover">
+          <div class="color-popover-title">圖形 Shapes</div>
+          <div class="shape-type-row">
+            <button type="button" class="shape-type-btn ${boardState.shapeType==='rect'?'active':''}" data-shape="rect" title="矩形 Rectangle">▭</button>
+            <button type="button" class="shape-type-btn ${boardState.shapeType==='ellipse'?'active':''}" data-shape="ellipse" title="橢圓 Ellipse">◯</button>
+            <button type="button" class="shape-type-btn ${boardState.shapeType==='triangle'?'active':''}" data-shape="triangle" title="三角形 Triangle">△</button>
+            <button type="button" class="shape-type-btn ${boardState.shapeType==='line'?'active':''}" data-shape="line" title="直線 Line">／</button>
+            <button type="button" class="shape-type-btn ${boardState.shapeType==='arrow'?'active':''}" data-shape="arrow" title="箭頭 Arrow">➜</button>
+          </div>
+          <div class="color-popover-title" style="margin-top:8px;">顏色 Color</div>
+          <div class="color-dot-grid">${colorDotsHtml}</div>
+          ${colorPickerRowHtml}
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>線條粗細 Line width</span></div>
+            ${sizeComboHtml("shape-size-input", boardState.shapeSize, 1, 40, [1,2,3,4,6,8,10,14,20])}
+          </div>
+          <div class="popover-field-row">
+            <button type="button" class="shape-fill-btn ${boardState.shapeFill?'active':''}" title="實心／空心 Filled or outline">■ 填滿 Fill</button>
           </div>
         </div>
       </div>
@@ -6368,6 +6416,8 @@
     }
     var imageLayer = document.createElement("div"); imageLayer.className = "image-layer";
     cWrap.appendChild(imageLayer);
+    var shapeLayer = document.createElement("div"); shapeLayer.className = "shape-layer";
+    cWrap.appendChild(shapeLayer);
     // 格線浮層：pointer-events:none，只是畫面正中央一塊參考用的方框，不會擋住下面 canvas 的書寫範圍
     var gridOverlay = document.createElement("div");
     gridOverlay.className = "grid-overlay" + (currentGrid === 'tian' ? ' grid-tian' : (currentGrid === 'jiu' ? ' grid-jiu' : ''));
@@ -6519,6 +6569,7 @@
       cWrap.style.width = Math.floor(w) + "px";
       cWrap.style.height = Math.floor(h) + "px";
       positionGridOverlay();
+      if(typeof renderShapeSvg === "function") renderShapeSvg();
       if(typeof applyCanvasZoomPan === "function") applyCanvasZoomPan(); // cWrap 的基準尺寸變了，縮放/平移要重新夾限一次，避免留下超出邊界的舊位移
     }
     boardResizeHandler = fitCanvasToViewport;
@@ -6543,6 +6594,7 @@
     var currentPath = [];
     var activeSelectedTextId = null;
     var activeSelectedImageId = null;
+    var activeSelectedShapeId = null;
     var isPanning = false, panStartClientX = 0, panStartClientY = 0, panStartX = 0, panStartY = 0;
     // 2026-09-29：iPad 等純觸控裝置的雙指縮放（pinch-to-zoom）——瀏覽器的雙指縮放手勢在滑鼠/觸控板
     // 才會轉成 wheel+ctrlKey 事件（見下面 stageArea 的 wheel 監聽），觸控螢幕的雙指縮放完全走不到
@@ -6590,7 +6642,7 @@
           b.classList.add("active");
           boardState.tool = b.dataset.tool;
           canvas.style.cursor = toolCursor();
-          if(boardState.tool !== "text") clearObjSelection(); // 換去別的工具＝不編輯了，選取框消失
+          if(boardState.tool !== "text" && boardState.tool !== "shape") clearObjSelection(); // 換去別的工具＝不編輯了，選取框消失
           syncObjInteractive();
         }
         // 「文字」工具第一次被點的時候，先問一次要不要打字加拼音／注音（只問一次，見
@@ -6640,7 +6692,8 @@
     function maxStepOf(qId){
       var pr = getProgress(qId);
       var mx = (pr.texts || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, 0);
-      return (pr.images || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
+      mx = (pr.images || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
+      return (pr.shapes || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
     }
     function slideStepNext(){
       if(isStudent){ if(slideIndex < slideSiblingIds.length - 1) setCurrentQ(slideSiblingIds[slideIndex + 1]); return; }
@@ -6710,11 +6763,11 @@
 
     // ===== 選取／互動狀態 =====
     function clearObjSelection(){
-      activeSelectedTextId = null; activeSelectedImageId = null;
-      textLayer.querySelectorAll(".movable-text.active, .image-proxy.active").forEach(function(d){ d.classList.remove("active"); });
+      activeSelectedTextId = null; activeSelectedImageId = null; activeSelectedShapeId = null;
+      textLayer.querySelectorAll(".movable-text.active, .image-proxy.active, .shape-proxy.active").forEach(function(d){ d.classList.remove("active"); });
     }
     function syncObjInteractive(){
-      textLayer.classList.toggle("objs-interactive", boardState.tool === "text" || boardState.tool === "stroke-eraser");
+      textLayer.classList.toggle("objs-interactive", boardState.tool === "text" || boardState.tool === "stroke-eraser" || boardState.tool === "shape");
     }
     syncObjInteractive();
     function activateTextToolQuietly(){
@@ -6730,7 +6783,7 @@
     }
     document.addEventListener("keydown", function escDeselect(e){
       if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", escDeselect); return; }
-      if(e.key === "Escape" && (activeSelectedTextId || activeSelectedImageId)) clearObjSelection();
+      if(e.key === "Escape" && (activeSelectedTextId || activeSelectedImageId || activeSelectedShapeId)) clearObjSelection();
     });
 
     // ===== 複製／剪下／貼上／Delete =====
@@ -6744,6 +6797,7 @@
     function currentSelectedObj(){
       if(activeSelectedTextId){ var t = texts.find(function(x){ return x.id === activeSelectedTextId; }); if(t) return { kind: "text", obj: t }; }
       if(activeSelectedImageId){ var im = images.find(function(x){ return x.id === activeSelectedImageId; }); if(im) return { kind: "image", obj: im }; }
+      if(activeSelectedShapeId){ var sh = shapes.find(function(x){ return x.id === activeSelectedShapeId; }); if(sh) return { kind: "shape", obj: sh }; }
       return null;
     }
     function deleteSelectedObj(){
@@ -6752,6 +6806,9 @@
       if(sel.kind === "text"){
         texts = texts.filter(function(x){ return x.id !== sel.obj.id; });
         writeProgress(q.id, { texts: texts });
+      } else if(sel.kind === "shape"){
+        shapes = shapes.filter(function(x){ return x.id !== sel.obj.id; });
+        writeProgress(q.id, { shapes: shapes });
       } else {
         images = images.filter(function(x){ return x.id !== sel.obj.id; });
         writeProgress(q.id, { images: images });
@@ -6810,15 +6867,18 @@
       if(!objClipboard) return;
       var off = (pasteOffsetN++ % 6 + 1) * 3;
       var copy = JSON.parse(JSON.stringify(objClipboard.data));
-      copy.id = uid(objClipboard.kind === "image" ? "im" : "t");
+      copy.id = uid(objClipboard.kind === "image" ? "im" : (objClipboard.kind === "shape" ? "sh" : "t"));
       copy.x = Math.min(95, copy.x + off); copy.y = Math.min(95, copy.y + off);
       snapshotForUndo();
-      if(objClipboard.kind === "image"){
+      if(objClipboard.kind === "shape"){
+        shapes.push(copy); writeProgress(q.id, { shapes: shapes });
+        activateTextToolQuietly(); renderTexts(); selectShapeObj(copy.id);
+      } else if(objClipboard.kind === "image"){
         images.push(copy); writeProgress(q.id, { images: images });
         activateTextToolQuietly(); renderTexts(); selectImageObj(copy.id);
       } else {
         texts.push(copy); writeProgress(q.id, { texts: texts });
-        activateTextToolQuietly(); activeSelectedTextId = copy.id; activeSelectedImageId = null; renderTexts();
+        activateTextToolQuietly(); activeSelectedTextId = copy.id; activeSelectedImageId = null; activeSelectedShapeId = null; renderTexts();
       }
     }
     function pasteTextBox(txt){
@@ -6830,7 +6890,7 @@
       if(!t.text) return;
       snapshotForUndo();
       texts.push(t); writeProgress(q.id, { texts: texts });
-      activateTextToolQuietly(); activeSelectedTextId = t.id; activeSelectedImageId = null; renderTexts();
+      activateTextToolQuietly(); activeSelectedTextId = t.id; activeSelectedImageId = null; activeSelectedShapeId = null; renderTexts();
     }
     if(objKeyHandlers){
       document.removeEventListener("copy", objKeyHandlers.copy);
@@ -6929,7 +6989,14 @@
         boardState.step = n;
         var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
         var selImg = activeSelectedImageId ? images.find(function(item){ return item.id === activeSelectedImageId; }) : null;
-        if(selObj){
+        var selShp = activeSelectedShapeId ? shapes.find(function(item){ return item.id === activeSelectedShapeId; }) : null;
+        if(selShp){
+          snapshotForUndo();
+          selShp.step = n;
+          writeProgress(q.id, { shapes: shapes });
+          renderTexts();
+          updateSlideNavUi();
+        } else if(selObj){
           snapshotForUndo();
           selObj.step = n;
           writeProgress(q.id, { texts: texts });
@@ -7540,13 +7607,13 @@
           var tapNow = Date.now();
           if(lastTextTap.id === t.id && tapNow - lastTextTap.at < 400){
             lastTextTap = { id: null, at: 0 };
-            activeSelectedTextId = t.id; activeSelectedImageId = null;
+            activeSelectedTextId = t.id; activeSelectedImageId = null; activeSelectedShapeId = null;
             openTextEditor(t.id);
             return;
           }
           lastTextTap = { id: t.id, at: tapNow };
           try{ div.setPointerCapture(e.pointerId); }catch(err){}
-          activeSelectedTextId = t.id; activeSelectedImageId = null;
+          activeSelectedTextId = t.id; activeSelectedImageId = null; activeSelectedShapeId = null;
           textLayer.querySelectorAll(".image-proxy.active").forEach(function(d){ d.classList.remove("active"); });
           div.classList.add("active");
           if(fontSelect) fontSelect.value = String(t.fontSize || 36);
@@ -7586,12 +7653,14 @@
         textLayer.appendChild(div);
       });
       renderImages();
+      renderShapes();
       renderMedias();
     }
 
     // ===== 貼上的圖片物件 =====
     function selectImageObj(id){
-      activeSelectedTextId = null; activeSelectedImageId = id;
+      activeSelectedTextId = null; activeSelectedImageId = id; activeSelectedShapeId = null;
+      textLayer.querySelectorAll(".shape-proxy.active").forEach(function(d){ d.classList.remove("active"); });
       textLayer.querySelectorAll(".movable-text.active").forEach(function(d){ d.classList.remove("active"); });
       textLayer.querySelectorAll(".image-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.imgId === id); });
       var im = images.find(function(x){ return x.id === id; });
@@ -7810,6 +7879,150 @@
       };
       inp.click();
     }
+
+    /* ===== 圖形 ===== */
+    var SHAPE_NS = "http://www.w3.org/2000/svg";
+    function shapeGeom(sh, W, H){
+      var x = sh.x / 100 * W, y = sh.y / 100 * H, w = sh.w / 100 * W, h = sh.h / 100 * H;
+      return { x: x, y: y, w: w, h: h,
+        x1: sh.fx ? x + w : x, y1: sh.fy ? y + h : y, x2: sh.fx ? x : x + w, y2: sh.fy ? y : y + h };
+    }
+    function buildShapeSvgEl(sh, W, H, dim){
+      var g = document.createElementNS(SHAPE_NS, "g");
+      if(dim) g.setAttribute("opacity", "0.35");
+      var gm = shapeGeom(sh, W, H);
+      var sw = Math.max(1, (sh.sw || 3) * getScaleRatio());
+      var col = sh.color || "#B23B32";
+      function mk(tag, attrs){ var el = document.createElementNS(SHAPE_NS, tag); Object.keys(attrs).forEach(function(k){ el.setAttribute(k, attrs[k]); }); return el; }
+      var common = { stroke: col, "stroke-width": sw, fill: (sh.fill && sh.type !== "line" && sh.type !== "arrow") ? col : "none", "stroke-linejoin": "round", "stroke-linecap": "round" };
+      if(sh.type === "ellipse"){
+        g.appendChild(mk("ellipse", Object.assign({ cx: gm.x + gm.w / 2, cy: gm.y + gm.h / 2, rx: gm.w / 2, ry: gm.h / 2 }, common)));
+      } else if(sh.type === "triangle"){
+        g.appendChild(mk("polygon", Object.assign({ points: (gm.x + gm.w / 2) + "," + gm.y + " " + (gm.x + gm.w) + "," + (gm.y + gm.h) + " " + gm.x + "," + (gm.y + gm.h) }, common)));
+      } else if(sh.type === "line" || sh.type === "arrow"){
+        var isArrow = sh.type === "arrow";
+        var ang = Math.atan2(gm.y2 - gm.y1, gm.x2 - gm.x1), L = Math.max(12, sw * 4.5);
+        var ex = gm.x2, ey = gm.y2;
+        if(isArrow){ ex = gm.x2 - Math.cos(ang) * L * 0.6; ey = gm.y2 - Math.sin(ang) * L * 0.6; }
+        g.appendChild(mk("line", { x1: gm.x1, y1: gm.y1, x2: ex, y2: ey, stroke: col, "stroke-width": sw, "stroke-linecap": "round" }));
+        if(isArrow){
+          var a1 = ang + Math.PI - 0.42, a2 = ang + Math.PI + 0.42;
+          g.appendChild(mk("polygon", { points: gm.x2 + "," + gm.y2 + " " + (gm.x2 + Math.cos(a1) * L) + "," + (gm.y2 + Math.sin(a1) * L) + " " + (gm.x2 + Math.cos(a2) * L) + "," + (gm.y2 + Math.sin(a2) * L), fill: col, stroke: col, "stroke-width": 1, "stroke-linejoin": "round" }));
+        }
+      } else {
+        g.appendChild(mk("rect", Object.assign({ x: gm.x, y: gm.y, width: gm.w, height: gm.h, rx: Math.min(6, gm.w / 4, gm.h / 4) }, common)));
+      }
+      return g;
+    }
+    var shapeSvgEl = null;
+    function renderShapeSvg(draft){
+      var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400;
+      if(!shapeSvgEl){ shapeSvgEl = document.createElementNS(SHAPE_NS, "svg"); shapeSvgEl.setAttribute("preserveAspectRatio", "none"); shapeLayer.appendChild(shapeSvgEl); }
+      shapeSvgEl.setAttribute("viewBox", "0 0 " + W + " " + H);
+      while(shapeSvgEl.firstChild) shapeSvgEl.removeChild(shapeSvgEl.firstChild);
+      var revealNow = getProgress(q.id).revealStep || 0;
+      shapes.forEach(function(sh){
+        var hid = (sh.step || 0) > revealNow;
+        if(hid && isStudent) return;
+        shapeSvgEl.appendChild(buildShapeSvgEl(sh, W, H, hid));
+      });
+      if(draft) shapeSvgEl.appendChild(buildShapeSvgEl(draft, W, H, false));
+    }
+    function selectShapeObj(id){
+      activeSelectedTextId = null; activeSelectedImageId = null; activeSelectedShapeId = id;
+      textLayer.querySelectorAll(".movable-text.active, .image-proxy.active").forEach(function(d){ d.classList.remove("active"); });
+      textLayer.querySelectorAll(".shape-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.shapeId === id); });
+      var sh = shapes.find(function(x){ return x.id === id; });
+      var st = vToolbar.querySelector(".text-step-input");
+      if(st && sh) st.value = String(sh.step || 0);
+    }
+    function renderShapeProxies(){
+      var revealNow = getProgress(q.id).revealStep || 0;
+      shapes.forEach(function(sh, idx){
+        var hid = (sh.step || 0) > revealNow;
+        if(hid && isStudent) return;
+        var px = document.createElement("div");
+        px.className = "shape-proxy" + (sh.id === activeSelectedShapeId ? " active" : "");
+        px.dataset.shapeId = sh.id;
+        function place(){
+          px.style.left = sh.x + "%"; px.style.top = sh.y + "%";
+          px.style.width = Math.max(sh.w, 1.5) + "%"; px.style.height = Math.max(sh.h, 2.5) + "%";
+        }
+        place();
+        px.innerHTML = ((!isStudent && (sh.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + sh.step + ' 次點擊出現">' + sh.step + '</span>' : '') + '<div class="resize-handle" title="按住拖動縮放 Drag to resize"></div>';
+        var handle = px.querySelector(".resize-handle");
+        handle.onpointerdown = function(e){
+          e.stopPropagation(); e.preventDefault();
+          try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+          selectShapeObj(sh.id); snapshotForUndo();
+          var rect = cWrap.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, w0 = sh.w, h0 = sh.h;
+          function onMove(ev){
+            sh.w = Math.max(1, Math.min(100 - sh.x, w0 + (ev.clientX - sx) / rect.width * 100));
+            sh.h = Math.max(sh.type === "line" || sh.type === "arrow" ? 0 : 1, Math.min(100 - sh.y, h0 + (ev.clientY - sy) / rect.height * 100));
+            place(); renderShapeSvg();
+          }
+          function onUp(){
+            handle.removeEventListener("pointermove", onMove); handle.removeEventListener("pointerup", onUp); handle.removeEventListener("pointercancel", onUp);
+            sh.w = Math.round(sh.w * 10) / 10; sh.h = Math.round(sh.h * 10) / 10;
+            writeProgress(q.id, { shapes: shapes });
+          }
+          handle.addEventListener("pointermove", onMove); handle.addEventListener("pointerup", onUp); handle.addEventListener("pointercancel", onUp);
+        };
+        px.onpointerdown = function(e){
+          e.stopPropagation();
+          if(boardState.tool === "stroke-eraser"){
+            snapshotForUndo();
+            shapes.splice(idx, 1);
+            writeProgress(q.id, { shapes: shapes });
+            renderTexts();
+            return;
+          }
+          try{ px.setPointerCapture(e.pointerId); }catch(err){}
+          selectShapeObj(sh.id); snapshotForUndo();
+          var sx = e.clientX, sy = e.clientY, ox = sh.x, oy = sh.y, rect = cWrap.getBoundingClientRect();
+          function onMove(ev){
+            sh.x = Math.max(0, Math.min(100 - sh.w, ox + (ev.clientX - sx) / rect.width * 100));
+            sh.y = Math.max(0, Math.min(100 - sh.h, oy + (ev.clientY - sy) / rect.height * 100));
+            place(); renderShapeSvg();
+          }
+          function onUp(){
+            px.removeEventListener("pointermove", onMove); px.removeEventListener("pointerup", onUp); px.removeEventListener("pointercancel", onUp);
+            writeProgress(q.id, { shapes: shapes });
+          }
+          px.addEventListener("pointermove", onMove); px.addEventListener("pointerup", onUp); px.addEventListener("pointercancel", onUp);
+        };
+        textLayer.appendChild(px);
+      });
+    }
+    function renderShapes(){ renderShapeSvg(); renderShapeProxies(); }
+    function startShapeDraw(p0){
+      var type = boardState.shapeType || "rect";
+      var isLine = type === "line" || type === "arrow";
+      var draft = { type: type, x: p0.x, y: p0.y, w: 0, h: 0, fx: false, fy: false, color: boardState.color, sw: boardState.shapeSize || 3, fill: !!boardState.shapeFill && !isLine, step: boardState.step || 0 };
+      var moved = false;
+      function mv(ev){
+        var p = getPos(ev);
+        if(Math.hypot(p.x - p0.x, p.y - p0.y) > 0.8) moved = true;
+        draft.x = Math.max(0, Math.min(p0.x, p.x)); draft.y = Math.max(0, Math.min(p0.y, p.y));
+        draft.w = Math.min(100, Math.abs(p.x - p0.x)); draft.h = Math.min(100, Math.abs(p.y - p0.y));
+        draft.fx = p.x < p0.x; draft.fy = p.y < p0.y;
+        renderShapeSvg(draft);
+      }
+      function up(){
+        window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+        if(!moved){ // 只點一下：放一個預設大小的圖形（平板上很好用）
+          draft.w = isLine ? 20 : 16; draft.h = isLine ? 0 : 22; draft.x = Math.max(0, Math.min(100 - draft.w, p0.x - draft.w / 2)); draft.y = Math.max(0, Math.min(100 - draft.h, p0.y - draft.h / 2));
+          draft.fx = false; draft.fy = false;
+        }
+        draft.w = Math.round(draft.w * 10) / 10; draft.h = Math.round(draft.h * 10) / 10; draft.x = Math.round(draft.x * 10) / 10; draft.y = Math.round(draft.y * 10) / 10;
+        draft.id = uid("sh");
+        snapshotForUndo();
+        shapes.push(draft);
+        writeProgress(q.id, { shapes: shapes });
+        renderTexts(); // 畫完不自動選取：接著換顏色／形狀是為了畫下一個；要改已經畫好的，點一下它再改
+      }
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    }
     function renderImages(){
       imageLayer.innerHTML = "";
       var revealNow = getProgress(q.id).revealStep || 0;
@@ -7994,6 +8207,7 @@
         checkStrokeHit(p);
         return;
       }
+      if(boardState.tool === "shape"){ startShapeDraw(p); return; }
       if(boardState.tool === "text"){
         showInlineTextInput(cWrap, p, function(txt){
           if(txt && txt.trim()){
@@ -8196,6 +8410,29 @@
     if(penSizeInput){
       bindSizeCombo(penSizeInput.closest(".size-combo"), function(n){ boardState.size = n; });
     }
+    var shapeSizeInput = vToolbar.querySelector(".shape-size-input");
+    function selectedShapeObj(){ return activeSelectedShapeId ? shapes.find(function(x){ return x.id === activeSelectedShapeId; }) : null; }
+    if(shapeSizeInput){
+      bindSizeCombo(shapeSizeInput.closest(".size-combo"), function(n){
+        boardState.shapeSize = n;
+        var so = selectedShapeObj(); if(so){ so.sw = n; writeProgress(q.id, { shapes: shapes }); renderShapeSvg(); }
+      });
+    }
+    vToolbar.querySelectorAll(".shape-type-btn").forEach(function(b){
+      b.onclick = function(e){
+        e.stopPropagation();
+        boardState.shapeType = b.dataset.shape;
+        vToolbar.querySelectorAll(".shape-type-btn").forEach(function(x){ x.classList.toggle("active", x === b); });
+        var tb = vToolbar.querySelector('button[data-tool="shape"]'); if(tb && boardState.tool !== "shape") tb.click();
+      };
+    });
+    var shapeFillBtn = vToolbar.querySelector(".shape-fill-btn");
+    if(shapeFillBtn) shapeFillBtn.onclick = function(e){
+      e.stopPropagation();
+      boardState.shapeFill = !boardState.shapeFill;
+      shapeFillBtn.classList.toggle("active", boardState.shapeFill);
+      var so = selectedShapeObj(); if(so){ so.fill = boardState.shapeFill; writeProgress(q.id, { shapes: shapes }); renderShapeSvg(); }
+    };
     var penOpacitySlider = vToolbar.querySelector("#pen-opacity-slider");
     var penOpacityValueEl = vToolbar.querySelector("#pen-opacity-value");
     if(penOpacitySlider){
@@ -8209,6 +8446,8 @@
     // 顯示的顏色——不管顏色是從色點、原生色盤、還是滴管挑出來的，統一都走這個函式。
     function applyBrushColor(newColor){
       boardState.color = newColor;
+      var selShapeC = activeSelectedShapeId ? shapes.find(function(x){ return x.id === activeSelectedShapeId; }) : null;
+      if(selShapeC && selShapeC.color !== newColor){ selShapeC.color = newColor; writeProgress(q.id, { shapes: shapes }); renderShapeSvg(); }
       vToolbar.querySelectorAll(".color-dot").forEach(function(x){
         x.classList.toggle("active", x.dataset.color === newColor);
       });
@@ -8256,28 +8495,28 @@
       if(btnRedo){ btnRedo.disabled = !redoStack.length; btnRedo.style.opacity = redoStack.length ? "1" : "0.4"; }
     }
     function snapshotForUndo(){
-      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images }));
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes }));
       if(undoStack.length > 60) undoStack.shift();
       redoStack.length = 0; // 有新的操作，「下一步」的歷史就作廢了，跟一般軟體的 undo/redo 行為一致
       updateUndoRedoBtns();
     }
     function applyUndoRedoSnapshot(snapText){
       var obj = JSON.parse(snapText);
-      strokes = obj.strokes; texts = obj.texts; images = obj.images || [];
+      strokes = obj.strokes; texts = obj.texts; images = obj.images || []; shapes = obj.shapes || [];
       clearObjSelection();
       redrawStrokes(); renderTexts();
       localSelfSeq++;
-      writeProgress(q.id, { strokes: strokes, texts: texts, images: images, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+      writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
       updateUndoRedoBtns();
     }
     if(btnUndo) btnUndo.onclick = function(){
       if(!undoStack.length) return;
-      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images }));
+      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes }));
       applyUndoRedoSnapshot(undoStack.pop());
     };
     if(btnRedo) btnRedo.onclick = function(){
       if(!redoStack.length) return;
-      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images }));
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes }));
       applyUndoRedoSnapshot(redoStack.pop());
     };
     updateUndoRedoBtns();
@@ -8287,7 +8526,7 @@
       clearBtn.onclick = function(){
         if(confirm("確定要清空畫布上的所有內容嗎？（可以按「上一步」復原）")){
           snapshotForUndo();
-          strokes = []; texts = []; images = []; clearObjSelection();
+          strokes = []; texts = []; images = []; shapes = []; clearObjSelection();
           // 2026-09-29 修正：清空只是把陣列設空、寫回雲端，並沒有真的把畫布這張點陣圖擦乾淨——
           // 以前是靠 refreshFromProgress() 收到雲端回音時「整個重畫」順便清空畫面，但那個函式現在
           // 已經改成「內容看起來沒變就跳過重畫」（見上面 strokesRev／同步節流的說明）：清空之後本機
@@ -8298,7 +8537,7 @@
           // 自己這邊就地重畫，不要依賴、也不要等雲端回音才更新畫面。
           redrawStrokes(); renderTexts();
           localSelfSeq++;
-          writeProgress(q.id, { strokes: strokes, texts: texts, images: images, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+          writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
         }
       };
     }
@@ -8405,6 +8644,7 @@
       }
       texts = freshProgress.texts || [];
       images = freshProgress.images || [];
+      shapes = freshProgress.shapes || [];
       medias = freshProgress.medias || [];
       var freshGrid = freshProgress.gridType || q.gridType || "none";
       var freshBg = freshProgress.bgImage || q.bgImage || "";
