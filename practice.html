@@ -867,6 +867,30 @@
   :root:not([data-theme="light"]) .size-combo-input, :root:not([data-theme="light"]) .size-combo-toggle{ border-color:rgba(255,255,255,0.14); }
   /* 2026-09-30 逐步出現：老師端看得到還沒出現的文字（半透明＋左上角步驟號），學生端完全不渲染。 */
   .movable-text.step-hidden{ opacity:0.35; }
+  /* 物件動畫（進場／強調）：用個別的 translate/scale/rotate 屬性，不會動到 transform */
+  @keyframes mmFade{ from{ opacity:0 } to{ opacity:1 } }
+  @keyframes mmFlyL{ from{ opacity:0; translate:-45% 0 } to{ opacity:1; translate:0 0 } }
+  @keyframes mmFlyR{ from{ opacity:0; translate:45% 0 } to{ opacity:1; translate:0 0 } }
+  @keyframes mmFlyT{ from{ opacity:0; translate:0 -45% } to{ opacity:1; translate:0 0 } }
+  @keyframes mmFlyB{ from{ opacity:0; translate:0 45% } to{ opacity:1; translate:0 0 } }
+  @keyframes mmZoom{ from{ opacity:0; scale:.2 } to{ opacity:1; scale:1 } }
+  @keyframes mmWipe{ from{ clip-path:inset(0 100% 0 0) } to{ clip-path:inset(0 0 0 0) } }
+  @keyframes mmBounce{ 0%{ opacity:0; translate:0 -40% } 55%{ opacity:1; translate:0 6% } 75%{ translate:0 -3% } 100%{ translate:0 0 } }
+  @keyframes mmPulse{ 0%{ scale:1 } 40%{ scale:1.25 } 100%{ scale:1 } }
+  @keyframes mmSpin{ from{ opacity:0; rotate:-360deg; scale:.3 } to{ opacity:1; rotate:0deg; scale:1 } }
+  .anim-fade{ animation:mmFade .7s ease both var(--adl,0s); }
+  .anim-flyL{ animation:mmFlyL .7s ease-out both var(--adl,0s); }
+  .anim-flyR{ animation:mmFlyR .7s ease-out both var(--adl,0s); }
+  .anim-flyT{ animation:mmFlyT .7s ease-out both var(--adl,0s); }
+  .anim-flyB{ animation:mmFlyB .7s ease-out both var(--adl,0s); }
+  .anim-zoom{ animation:mmZoom .6s cubic-bezier(.2,.9,.3,1.2) both var(--adl,0s); }
+  .anim-wipe{ animation:mmWipe .8s ease-in-out both var(--adl,0s); }
+  .anim-bounce{ animation:mmBounce .9s ease-out both var(--adl,0s); }
+  .anim-pulse{ animation:mmPulse .8s ease-in-out both var(--adl,0s); }
+  .anim-spin{ animation:mmSpin .9s ease-out both var(--adl,0s); }
+  .anim-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .anim-row select{ font-size:12px; padding:3px 4px; border-radius:6px; border:1.5px solid rgba(28,33,30,.2); background:var(--surface); color:var(--ink); }
+  .anim-row button{ font-size:12px; padding:3px 8px; border-radius:6px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; font-weight:700; }
   .text-step-badge{
     position:absolute; left:-10px; top:-12px; min-width:18px; height:18px; padding:0 4px; box-sizing:border-box;
     border-radius:9px; background:#F59E0B; color:#fff; font:700 11px/18px "Plus Jakarta Sans",sans-serif;
@@ -8355,6 +8379,7 @@
   // 接著維持全螢幕，不用每換一題都重新點一次。實際「搬到 body 底下蓋滿視窗」的邏輯統一寫在
   // setupCanvasFullscreen() 這個共用函式，renderDrawBoard／renderHanziBoard 各自呼叫一次。
   var canvasFullscreen = false;
+  var ANIM_NAMES = { none: "無", fade: "淡入", flyL: "從左飛入", flyR: "從右飛入", flyT: "從上飛入", flyB: "從下飛入", zoom: "放大", wipe: "擦去", bounce: "彈跳", pulse: "脈衝（強調）", spin: "旋轉進入" };
   var objClipboard = null;    // 應用程式內部的複製：{ token, kind:"text"|"image", data }，跟系統剪貼簿用 token 對應
   var objKeyHandlers = null;  // 複製／剪下／貼上／Delete 的 document 監聽器，換題目前先移除
   var slideListArmed = false; // 最後一次點擊是不是在左側投影片列表（是的話 Backspace／Delete 刪除目前這張投影片）
@@ -8571,6 +8596,14 @@
           <div class="popover-field-row">
             <div class="popover-field-row-label"><span title="0＝一開始就顯示；1＝老師按第 1 次「▶」才出現，以此類推">動畫：第幾次點擊出現 Animation</span></div>
             ${sizeComboHtml("text-step-input", boardState.step, 0, 30, [0,1,2,3,4,5,6,7,8,9,10])}
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="選一個文字方塊／圖片／圖案，再選動畫效果。相同的「第幾次點擊」＝同時出現；延遲可以做出「接在上一個之後」">動畫效果 Effect</span></div>
+            <div class="anim-row">
+              <select class="text-anim-select" title="動畫效果">${Object.keys(ANIM_NAMES).map(function(k){ return '<option value="' + k + '">' + ANIM_NAMES[k] + '</option>'; }).join("")}</select>
+              <select class="text-anim-delay" title="延遲（接在上一個之後）"><option value="0">同時</option><option value="0.5">延遲 0.5 秒</option><option value="1">延遲 1 秒</option><option value="2">延遲 2 秒</option></select>
+              <button type="button" class="text-anim-preview" title="預覽動畫">▶ 預覽</button>
+            </div>
           </div>
         </div>
       </div>
@@ -9936,6 +9969,34 @@
       });
     }
 
+    // 動畫效果：套在目前選取的文字方塊／圖片／圖案上
+    function selectedAnimTarget(){
+      var o = activeSelectedShapeId ? shapes.find(function(x){ return x.id === activeSelectedShapeId; }) : null;
+      if(o) return { o: o, key: "shapes" };
+      o = activeSelectedTextId ? texts.find(function(x){ return x.id === activeSelectedTextId; }) : null;
+      if(o) return { o: o, key: "texts" };
+      o = activeSelectedImageId ? images.find(function(x){ return x.id === activeSelectedImageId; }) : null;
+      return o ? { o: o, key: "images" } : null;
+    }
+    function syncAnimUi(){
+      var tg = selectedAnimTarget(), se = vToolbar.querySelector(".text-anim-select"), de = vToolbar.querySelector(".text-anim-delay");
+      if(se) se.value = (tg && tg.o.anim) || "none"; if(de) de.value = String((tg && tg.o.animDelay) || 0);
+    }
+    var animSel = vToolbar.querySelector(".text-anim-select"), animDel = vToolbar.querySelector(".text-anim-delay"), animPrev = vToolbar.querySelector(".text-anim-preview");
+    function setAnimProps(){
+      var tg = selectedAnimTarget(); if(!tg){ alert("請先點選一個文字方塊、圖片或圖案，再設定動畫。\nSelect an object first."); syncAnimUi(); return; }
+      snapshotForUndo();
+      tg.o.anim = animSel.value === "none" ? undefined : animSel.value; tg.o.animDelay = Number(animDel.value) || undefined;
+      var patch = {}; patch[tg.key] = tg.key === "texts" ? texts : tg.key === "images" ? images : shapes; writeProgress(q.id, patch);
+    }
+    if(animSel) animSel.onchange = function(){ setAnimProps(); if(animSel.value !== "none" && animPrev) animPrev.click(); };
+    if(animDel) animDel.onchange = setAnimProps;
+    if(animPrev) animPrev.onclick = function(e){
+      e.stopPropagation(); var tg = selectedAnimTarget(); if(!tg || !tg.o.anim) return;
+      var st = tg.o.step || 0; startRevealAnim(st - 1, st); renderTexts();
+    };
+    vToolbar.addEventListener("pointerover", syncAnimUi);
+
     // 格線／筆刷粗細／底圖／移動畫面／錄示範這些非核心工具的實際事件綁定：初始已經被 pin 住的
     // 工具（上面已經搬進 vToolbar），以及之後使用者從「➕更多」點加入的工具，都會呼叫這裡。
     function bindExtraToolHandlers(key){
@@ -10437,12 +10498,28 @@
     function applyTextBgDefaults(t){ if(boardState.lineH && Math.abs(boardState.lineH - 1) > 0.001) t.lh = boardState.lineH; if(boardState.textBgOn){ t.bgOn = true; t.bgColor = boardState.textBgColor; t.bgOp = boardState.textBgOp == null ? 1 : boardState.textBgOp; } }
     function textBgRgba(hex, a){ var h = /^#[0-9a-fA-F]{6}$/.test(hex || "") ? hex : "#FFF3B0"; return "rgba(" + parseInt(h.substr(1, 2), 16) + "," + parseInt(h.substr(3, 2), 16) + "," + parseInt(h.substr(5, 2), 16) + "," + (a == null ? 1 : a) + ")"; }
 
+    var lastRevSeen = null, revealAnim = null, revealAnimTimer = 0;
+    function syncRevealAnim(){
+      var rv = getProgress(q.id).revealStep || 0;
+      if(lastRevSeen == null){ lastRevSeen = rv; return; }
+      if(rv !== lastRevSeen){ startRevealAnim(rv > lastRevSeen ? lastRevSeen : null, rv); lastRevSeen = rv; }
+    }
+    function startRevealAnim(from, to){
+      if(from == null){ revealAnim = null; return; }
+      revealAnim = { from: from, to: to };
+      clearTimeout(revealAnimTimer); revealAnimTimer = setTimeout(function(){ revealAnim = null; }, 2800);
+    }
+    function applyAnim(el, o){
+      if(!revealAnim || !o.anim || o.anim === "none") return;
+      var st = o.step || 0; if(!(st > revealAnim.from && st <= revealAnim.to)) return;
+      el.classList.add("anim-" + o.anim); el.style.setProperty("--adl", (o.animDelay || 0) + "s");
+    }
     function renderTexts(){
       if(inPlaceEdit){ inPlaceEdit.refreshStyle(); return; } // 正在就地編輯：不要重建文字層（會把正在打字的框搞掉）
       textLayer.innerHTML = "";
       var scale = getScaleRatio();
       var zrT = zRanks();
-
+      syncRevealAnim();
       var revealNow = getProgress(q.id).revealStep || 0;
       texts.forEach(function(t, idx){
         var stepHidden = (t.step || 0) > revealNow; // 還沒輪到出現
@@ -10452,6 +10529,7 @@
         div.style.left = t.x + "%";
         div.style.top = t.y + "%";
         div.dataset.textId = t.id;
+        applyAnim(div, t);
         div.style.zIndex = String((zrT.map[t.id] || 0) + 1);
         div.style.color = t.color || "var(--ink)";
 
@@ -10941,6 +11019,7 @@
       var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400;
       Array.prototype.slice.call(cWrap.querySelectorAll(".shape-svg")).forEach(function(e){ e.remove(); });
       var zrS = zRanks();
+      syncRevealAnim();
       var revealNow = getProgress(q.id).revealStep || 0;
       function mkSvg(g){
         var sv = document.createElementNS(SHAPE_NS, "svg"); sv.setAttribute("class", "shape-svg"); sv.setAttribute("preserveAspectRatio", "none");
@@ -10950,6 +11029,7 @@
         var hid = (sh.step || 0) > revealNow;
         if(hid && isStudent) return;
         var sv = mkSvg(buildShapeSvgEl(sh, W, H, hid));
+        applyAnim(sv, sh);
         var rS = zrS.map[sh.id] || 0;
         if(rS > zrS.minText){ sv.style.zIndex = String(rS + 1); textLayer.appendChild(sv); }
         else { sv.style.zIndex = String(rS); imageLayer.appendChild(sv); }
@@ -11087,6 +11167,7 @@
     function renderImages(){
       imageLayer.innerHTML = "";
       var zrI = zRanks();
+      syncRevealAnim();
       var revealNow = getProgress(q.id).revealStep || 0;
       images.forEach(function(im, idx){
         var stepHidden = (im.step || 0) > revealNow;
@@ -11094,6 +11175,7 @@
         var el = document.createElement("img");
         el.className = "board-image" + (stepHidden ? " step-hidden" : "");
         el.dataset.imgId = im.id; el.draggable = false; setImgSrc(el, im.src);
+        applyAnim(el, im);
         el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
         if(im.h){ el.style.height = im.h + "%"; el.style.objectFit = "fill"; }
         var rI = zrI.map[im.id] || 0;
