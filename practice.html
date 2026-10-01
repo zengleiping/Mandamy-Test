@@ -95,9 +95,20 @@
   /* topbar */
   .topbar{
     display:flex;align-items:center;justify-content:space-between;
-    padding:12px 28px;background:var(--surface);
-    border-bottom:1px solid var(--grid-line); gap:16px; flex-wrap:wrap;
+    padding:6px 16px;background:var(--surface);
+    border-bottom:1px solid var(--grid-line); gap:6px; flex-wrap:wrap;
   }
+  .topbar > .timer-floating-widget{ padding:3px 6px 3px 12px; }
+  .topbar > .timer-floating-widget .timer-ctrl-btn{ width:28px; height:28px; font-size:14px; }
+  .topbar{ justify-content:flex-start; }
+  .topbar-right{ margin-left:auto; }
+  .topbar-actions{ flex-wrap:nowrap; gap:4px; }
+  .topbar-actions .btn{ padding:6px 6px; font-size:12px; white-space:nowrap; }
+  .topbar-actions{ gap:2px; }
+  .topbar > .timer-floating-widget .timer-icon{ display:none; }
+  .brand-sub-badge{ max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; padding:3px 8px; }
+  .brand-divider{ margin:0 2px; }
+  .brand{ gap:8px; }
   .brand{display:flex;align-items:center;gap:12px;cursor:pointer;}
   .brand-logo-wrap{
     width:42px;height:42px;flex:none;
@@ -123,7 +134,7 @@
     background:var(--surface-2); padding:4px 10px; border-radius:8px; border:1px solid var(--grid-line);
   }
 
-  .topbar-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+  .topbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
   .topbar-right{display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
 
   .btn{
@@ -1676,9 +1687,9 @@
       <div class="brand-divider"></div>
       <div class="brand-sub-badge" id="brand-sub">專案課次大廳 Course Lobby</div>
     </div>
+    <div class="timer-floating-widget" id="timer-widget" style="display:none;"></div>
     <div class="topbar-right" id="topbar-right">
       <!-- 考試倒數計時器：緊鄰開新房間／設定按鈕左側，不佔用作答區版面空間 -->
-      <div class="timer-floating-widget" id="timer-widget" style="display:none;"></div>
       <div class="topbar-actions" id="topbar-actions"></div>
     </div>
   </header>
