@@ -907,6 +907,9 @@
   .ap-add{ font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:7px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; }
   .ap-foot{ display:flex; gap:6px; padding:6px 8px; }
   .ap-foot button{ flex:1; font-size:12px; font-weight:700; padding:5px 8px; border-radius:8px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; }
+  .board-area .brush-mode, .canvas-stage-wrap.brush-mode{ cursor:copy; }
+  .canvas-stage-wrap.brush-mode *{ cursor:copy !important; }
+  .brush-hint{ position:absolute; left:50%; top:10px; transform:translateX(-50%); z-index:62; background:var(--ink); color:#fff; font-size:12.5px; font-weight:700; padding:6px 14px; border-radius:999px; pointer-events:none; white-space:nowrap; box-shadow:0 6px 18px rgba(0,0,0,.28); }
   .insert-popover{ min-width:210px; }
   .ins-shapes{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:4px 0; }
   .ins-lab{ font-size:12px; font-weight:700; color:var(--ink-soft); width:100%; }
@@ -8940,7 +8943,7 @@
   var pinnedExtraTools = {};
   // 2026-10-01 工具列自訂：哪些工具放左側／上方／隱藏、順序、收合狀態，存在這台裝置的 localStorage（每台裝置各自記，不同步）
   var TB_STORE_KEY = "mandamy-toolbar-layout-v1";
-  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "insert", "transition", "present", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
+  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "insert", "painter", "transition", "present", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
   var tbConfig = null;
   function loadTbConfig(){
     if(tbConfig) return tbConfig;
@@ -9123,6 +9126,7 @@
           <input type="file" class="ins-img-file" accept="image/*" multiple style="display:none;">
         </div>
       </div>` : ''}
+      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-format-painter" title="複製格式（格式刷）：先選取一個物件（或表格的一格），按一下這顆鈕，再點要套用的物件；連按兩下＝可以連續套用多個，Esc 結束。Format painter"><span class="tool-btn-v-icon">🖌</span><span class="tool-btn-v-label">複製<br>格式</span></button>` : ''}
       ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-anim-pane" title="動畫窗格：集中檢視與編輯這一頁所有物件的動畫 Animation pane"><span class="tool-btn-v-icon">🎞</span><span class="tool-btn-v-label">動畫<br>窗格</span></button>` : ''}
       ${!isStudent ? `
       <div class="tool-btn-v-wrap">
@@ -9588,6 +9592,7 @@
       { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
       { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [vToolbar.querySelector(".slide-nav-row"), vToolbar.querySelector(".slide-nav-counter")]; } },
       { key: "insert", label: "插入（圖片／圖案／表格／多媒體／連結）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-insert"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "painter", label: "複製格式（格式刷）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-format-painter")]; } },
       { key: "anim", label: "動畫窗格", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-anim-pane")]; } },
       { key: "present", label: "放映工具（雷射筆／螢光筆／簡報者檢視）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-present"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "transition", label: "轉場", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
@@ -10119,7 +10124,7 @@
     }
     // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-insert", "btn-anim-pane", "btn-present", "btn-canvas-size", "btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
+    var NON_TOOL_BTN_IDS = ["btn-format-painter", "btn-insert", "btn-anim-pane", "btn-present", "btn-canvas-size", "btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
 
     // 目前選定工具「本來該有」的游標樣式——跟放大縮小/自動拖曳無關，單純工具本身的樣子。
     // 抽成函式是因為畫布縮放後的「靠近墨跡才恢復成工具游標」也要用到同一份邏輯（見下面
@@ -12516,6 +12521,7 @@
         (inGroup ? '<button type="button" data-act="ungroup" title="解散群組（Ctrl/⌘+Shift+G）">解散群組</button>' : '') +
         '<button type="button" data-act="copy" title="複製（Ctrl/⌘+C）；貼上 Ctrl/⌘+V、重複製作 Ctrl/⌘+D">⧉ 複製</button>' +
         '<button type="button" data-act="dup" title="重複製作（Ctrl/⌘+D）">重複製作</button>' +
+        (items.length === 1 && items[0].k !== "stroke" ? '<button type="button" data-act="brush" title="複製格式：複製這個物件的外觀，再點別的物件套用（連按兩下上方「複製格式」鈕＝連續套用）">🖌 複製格式</button>' : '') +
         (items.some(function(x){ return x.k !== "stroke"; }) ? '<button type="button" data-act="link" title="超連結（Ctrl/⌘+K）：跳到投影片或開啟網址">🔗 連結</button>' : '') +
         (items.some(function(x){ return x.k !== "stroke" && x.k !== "table"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
         '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>' +
@@ -12533,6 +12539,7 @@
         else if(bt.dataset.act === "dup") duplicateSelection();
         else if(bt.dataset.act === "fmt") openObjFormat();
         else if(bt.dataset.act === "link") openLinkDialog();
+        else if(bt.dataset.act === "brush") brushStart(false);
         else if(/^al-/.test(bt.dataset.act)) alignSelection(bt.dataset.act.slice(3));
       });
       selectLayer.appendChild(bar);
@@ -13440,6 +13447,110 @@
         if(penOpacityValueEl) penOpacityValueEl.textContent = penOpacitySlider.value + "%";
       };
     }
+
+    // ===== 複製格式（格式刷）：複製選取物件／表格儲存格的外觀，套用到別的物件 =====
+    var BR_PROPS = { text: ["color", "fontSize", "bold", "align", "list", "lh", "bgOn", "bgColor", "bgOp", "bdW", "bdC", "shd", "rad"], image: ["bdW", "bdC", "shd", "rad", "crop"], shape: ["color", "sw", "fill", "op", "grad", "shd", "rad"], table: ["bd", "bw", "hdr", "fs"], cell: ["bg", "c", "b", "a", "fs"] };
+    var brush = null, brushHint = null, brushLastClick = 0;
+    function brushSource(){
+      var rg = tblSel && selSet.length === 1 && selSet[0].k === "table" ? tblRange() : null;
+      if(rg) return { k: "cell", o: rg.t.cells[rg.r1][rg.c1] };
+      if(selSet.length){ var it = selSet[0], o = selItemObj(it); if(o && it.k !== "stroke") return { k: it.k, o: o }; }
+      if(activeSelectedTextId){ var tx = texts.find(function(x){ return x.id === activeSelectedTextId; }); if(tx) return { k: "text", o: tx }; }
+      if(activeSelectedImageId){ var im = images.find(function(x){ return x.id === activeSelectedImageId; }); if(im) return { k: "image", o: im }; }
+      if(activeSelectedShapeId){ var sh = shapes.find(function(x){ return x.id === activeSelectedShapeId; }); if(sh) return { k: "shape", o: sh }; }
+      return null;
+    }
+    function brushCopyFmt(src){ var p = {}; BR_PROPS[src.k].forEach(function(pn){ if(src.o[pn] !== undefined) p[pn] = JSON.parse(JSON.stringify(src.o[pn])); }); return { k: src.k, p: p }; }
+    function brushCommon(f){
+      var p = f.p;
+      if(f.k === "cell") return { color: p.c, bold: p.b, align: p.a, fs: p.fs, bg: p.bg };
+      if(f.k === "text") return { color: p.color, bold: p.bold, align: p.align, fs: p.fontSize, bg: p.bgOn ? p.bgColor : undefined, shd: p.shd, rad: p.rad, bdW: p.bdW, bdC: p.bdC };
+      if(f.k === "shape") return { color: p.color, shd: p.shd, rad: p.rad };
+      if(f.k === "image") return { shd: p.shd, rad: p.rad, bdW: p.bdW, bdC: p.bdC };
+      return {};
+    }
+    function brushToObj(f, k, o){
+      if(f.k === k){ BR_PROPS[k].forEach(function(pn){ if(f.p[pn] === undefined) delete o[pn]; else o[pn] = JSON.parse(JSON.stringify(f.p[pn])); }); return; }
+      var c = brushCommon(f);
+      function set(key, v){ if(v === undefined) delete o[key]; else o[key] = v; }
+      if(k === "text"){ if(c.color) o.color = c.color; if(c.bold !== undefined) o.bold = c.bold; if(c.align) o.align = c.align; if(c.fs) o.fontSize = c.fs; if(c.bg){ o.bgOn = true; o.bgColor = c.bg; } set("shd", c.shd); set("rad", c.rad); set("bdW", c.bdW); set("bdC", c.bdC); }
+      else if(k === "shape"){ if(c.color) o.color = c.color; set("shd", c.shd); set("rad", c.rad); }
+      else if(k === "image"){ set("shd", c.shd); set("rad", c.rad); set("bdW", c.bdW); set("bdC", c.bdC); }
+    }
+    function brushToCells(f, t, r1, c1, r2, c2){
+      var c = brushCommon(f);
+      for(var r = r1; r <= r2; r++) for(var cc = c1; cc <= c2; cc++){
+        var cell = t.cells[r][cc];
+        if(f.k === "cell"){ BR_PROPS.cell.forEach(function(pn){ if(f.p[pn] === undefined) delete cell[pn]; else cell[pn] = f.p[pn]; }); }
+        else { if(c.color) cell.c = c.color; if(c.bold !== undefined) cell.b = c.bold; if(c.align) cell.a = c.align; if(c.fs) cell.fs = c.fs; if(c.bg) cell.bg = c.bg; }
+      }
+    }
+    function brushCommit(){ writeProgress(q.id, { texts: texts, images: images, shapes: shapes, tables: tables }); renderTexts(); }
+    function brushEnd(){
+      brush = null; if(brushHint){ brushHint.remove(); brushHint = null; }
+      var bb = vToolbar.querySelector("#btn-format-painter"); if(bb) bb.classList.remove("active");
+      canvas.style.cursor = toolCursor(); cWrap.classList.remove("brush-mode");
+    }
+    function brushStart(sticky){
+      var src = brushSource();
+      if(!src){ alert("請先選取要複製格式的物件（文字方塊、圖片、圖案，或表格裡的一格），再按「複製格式」。\nSelect an object (or a table cell) first."); return; }
+      brush = { fmt: brushCopyFmt(src), sticky: !!sticky };
+      var bb = vToolbar.querySelector("#btn-format-painter"); if(bb) bb.classList.add("active");
+      cWrap.classList.add("brush-mode");
+      if(!brushHint){ brushHint = document.createElement("div"); brushHint.className = "brush-hint"; cWrap.appendChild(brushHint); }
+      brushHint.textContent = "🖌 已複製格式：點要套用的物件（可拖曳框選多個；表格可拖曳選多格）。" + (sticky ? "連續套用中，" : "") + "按 Esc 結束";
+    }
+    function brushApplyTargets(items){
+      snapshotForUndo();
+      items.forEach(function(it){ var o = selItemObj(it); if(o && it.k !== "table") brushToObj(brush.fmt, it.k, o); });
+      brushCommit();
+    }
+    cWrap.addEventListener("pointerdown", function(e){
+      if(!brush || isStudent || e.button === 2) return;
+      if(e.target.closest && e.target.closest(".select-bar, .table-tools, .tbl-grip, .tbl-scale, .tn-float, .layers-panel")) return;
+      e.stopPropagation(); e.preventDefault();
+      var p0 = getPos(e), hit = hitTestItem(p0); if(hit && hit.k === "stroke") hit = null;
+      function done(){ if(!brush.sticky) brushEnd(); }
+      if(hit && hit.k === "table"){
+        var th = tableHitCell(hit.id, p0), t = tblById(hit.id); if(!t) return;
+        if(brush.fmt.k === "table"){ snapshotForUndo(); BR_PROPS.table.forEach(function(pn){ if(brush.fmt.p[pn] === undefined) delete t[pn]; else t[pn] = brush.fmt.p[pn]; }); brushCommit(); done(); return; }
+        if(!th){ done(); return; }
+        var r0 = th.r, c0 = th.c, r1 = r0, c1 = c0;
+        tblSel = { id: t.id, r1: r0, c1: c0, r2: r0, c2: c0 }; selSet = [{ k: "table", id: t.id }];
+        function mv(ev){ var h = tableHitCell(t.id, getPos(ev)); if(h){ r1 = h.r; c1 = h.c; tblSel.r2 = r1; tblSel.c2 = c1; renderSelection(); } }
+        function up(){
+          window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+          var ex = tblExpand(t, Math.min(r0, r1), Math.min(c0, c1), Math.max(r0, r1), Math.max(c0, c1));
+          snapshotForUndo(); brushToCells(brush.fmt, t, ex.r1, ex.c1, ex.r2, ex.c2); brushCommit(); renderSelection(); done();
+        }
+        window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); return;
+      }
+      if(hit){ brushApplyTargets(expandGroups([hit])); done(); return; }
+      // 沒點到東西：拖曳框選，框到的全部套用
+      var box = document.createElement("div"); box.className = "select-marquee"; cWrap.appendChild(box); var cur = p0, moved = false;
+      function mv2(ev){ cur = getPos(ev); moved = true; box.style.cssText = "left:" + Math.min(p0.x, cur.x) + "%;top:" + Math.min(p0.y, cur.y) + "%;width:" + Math.abs(cur.x - p0.x) + "%;height:" + Math.abs(cur.y - p0.y) + "%;z-index:60;"; }
+      function up2(){
+        window.removeEventListener("pointermove", mv2); window.removeEventListener("pointerup", up2); box.remove();
+        if(!moved){ return; }
+        var l = Math.min(p0.x, cur.x), tp = Math.min(p0.y, cur.y), r = Math.max(p0.x, cur.x), b = Math.max(p0.y, cur.y);
+        var picked = allItems().filter(function(it){ if(it.k === "stroke") return false; var bb = itemBox(it); return bb && bb.l >= l && bb.r <= r && bb.t >= tp && bb.b <= b; });
+        if(picked.length){ brushApplyTargets(picked); done(); }
+      }
+      window.addEventListener("pointermove", mv2); window.addEventListener("pointerup", up2);
+    }, true);
+    document.addEventListener("keydown", function brushKeys(e){
+      if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", brushKeys); return; }
+      if(e.key === "Escape" && brush) brushEnd();
+    });
+    (function(){
+      var bb = vToolbar.querySelector("#btn-format-painter"); if(!bb) return;
+      bb.addEventListener("click", function(e){
+        e.stopPropagation(); var now = Date.now(), dbl = now - brushLastClick < 450; brushLastClick = now;
+        if(brush && !dbl){ brushEnd(); return; }
+        if(brush && dbl){ brush.sticky = true; brushStart(true); return; }
+        brushStart(false);
+      });
+    })();
 
     // ===== 插入功能表 =====
     var insImgFile = vToolbar.querySelector(".ins-img-file");
