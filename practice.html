@@ -1342,6 +1342,48 @@
   .movable-text:has(ruby){ line-height:2.15; padding-top:0.3em !important; }
 
   .text-layer:not(.objs-interactive) .movable-text .tb-edge, .text-layer:not(.objs-interactive) .movable-text .resize-handle, .text-layer:not(.objs-interactive) .image-proxy .rh, .text-layer:not(.objs-interactive) .shape-proxy .rh{ pointer-events:auto; }
+  /* ===== 功能區（Ribbon）：頁籤＋群組，仿 PowerPoint ===== */
+  .board-area.ribbon-mode:not(.canvas-fs-active) .draw-toolbar-vertical{ display:none !important; }
+  .board-area.ribbon-mode.canvas-fs-active .draw-toolbar-top{ display:none !important; }
+  .draw-toolbar-top.ribbon{ display:block; padding:0; overflow:visible; }
+  .rb-tabs{ display:flex; align-items:flex-end; gap:2px; padding:4px 10px 0; border-bottom:1.5px solid rgba(28,33,30,.12); flex-wrap:nowrap; overflow-x:auto; }
+  .rb-qat{ display:flex; gap:2px; align-items:center; margin-right:10px; padding-bottom:3px; }
+  .rb-qat .tool-btn-v{ width:auto; min-width:0; height:30px; flex-direction:row; padding:2px 8px; gap:4px; }
+  .rb-qat .tool-btn-v-label{ font-size:11px; }
+  .rb-qat .tool-btn-v-icon, .rb-qat .tool-btn-v-icon-img{ width:18px; height:18px; font-size:15px; }
+  .rb-nav{ margin-left:auto; display:flex; align-items:center; gap:4px; padding-bottom:3px; }
+  .rb-tab{ border:none; background:none; padding:7px 13px 6px; font-size:13.5px; font-weight:700; color:var(--ink-soft); cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap; }
+  .rb-tab:hover{ color:var(--ink); } .rb-tab.on{ color:var(--seal); border-bottom-color:var(--seal); }
+  .rb-panels{ min-height:82px; }
+  .rb-panel{ display:none; padding:6px 8px 4px; align-items:stretch; overflow-x:auto; overflow-y:visible; }
+  .rb-panel.on{ display:flex; }
+  .rb-group{ display:flex; flex-direction:column; padding:0 10px; border-right:1px solid rgba(28,33,30,.13); flex:0 0 auto; }
+  .rb-group:last-child{ border-right:none; }
+  .rb-group-body{ display:flex; align-items:flex-start; gap:4px; flex:1; }
+  .rb-group-title{ font-size:11px; color:var(--ink-soft); text-align:center; margin-top:3px; white-space:nowrap; }
+  .rb-col{ display:flex; flex-direction:column; gap:3px; }
+  .rb-stack{ display:flex; flex-direction:column; gap:5px; justify-content:center; }
+  .rb-row{ display:flex; align-items:center; gap:5px; flex-wrap:nowrap; }
+  .rb-inl{ display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--ink-soft); white-space:nowrap; }
+  .rb-qat-sep{ width:1px; height:22px; background:rgba(28,33,30,.18); margin:0 4px; }
+  .rb-qat .tool-btn-v-wrap{ position:relative; }
+  .rb-inl select{ font-size:12px; padding:3px 4px; border-radius:6px; border:1.5px solid rgba(28,33,30,.2); background:var(--surface); color:var(--ink); max-width:150px; }
+  .rb-colors{ display:flex; align-items:center; gap:8px; }
+  .rb-colors .color-dot-grid{ display:flex; grid-template-columns:none; gap:5px; padding:0; }
+  .rb-colors .color-dot{ width:20px; height:20px; }
+  .rb-colors .color-picker-row{ display:flex; align-items:center; gap:4px; margin:0; }
+  .rb-shapes{ display:flex; gap:3px; flex-wrap:wrap; max-width:130px; align-items:center; }
+  .rb-trans{ display:flex; gap:6px; align-items:center; }
+  .rb-trans .trans-opt, .rb-stack .trans-opt{ width:auto; padding:6px 12px; border-radius:8px; border:1.5px solid rgba(28,33,30,.16); background:var(--surface); font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .rb-trans .trans-opt.active{ border-color:var(--seal); color:var(--seal); background:var(--seal-soft); }
+  .rb-row .text-fmt-row{ display:flex; gap:3px; align-items:center; }
+  .rb-row .size-combo{ width:auto; }
+  .ribbon .tool-btn-v{ min-width:54px; }
+  .ribbon .tool-btn-v-wrap .color-popover{ left:0; top:100%; margin:4px 0 0; transform:none; }
+  .ribbon .tool-btn-v-wrap:hover .color-popover, .ribbon .tool-btn-v-wrap:focus-within .color-popover{ transform:none; }
+  .rb-slot{ display:none; }
+  .text-layer:not(.objs-interactive) .movable-text rt, .text-layer:not(.objs-interactive) .movable-text .zy-s{ pointer-events:auto; }
+  .board-area.ribbon-mode:not(.canvas-fs-active) .layers-panel{ top:150px; }
   .tb-edge{ display:none; position:absolute; width:11px; height:11px; background:#fff; border:2px solid #1E88E5; border-radius:3px; z-index:10; touch-action:none; box-shadow:0 2px 6px rgba(0,0,0,.25); }
   .tb-e{ right:-7px; top:50%; margin-top:-6px; cursor:ew-resize !important; } .tb-w{ left:-7px; top:50%; margin-top:-6px; cursor:ew-resize !important; } .tb-s{ bottom:-7px; left:50%; margin-left:-6px; cursor:ns-resize !important; }
   .movable-text:hover .tb-edge, .movable-text.active .tb-edge{ display:block; }
@@ -9623,12 +9665,12 @@
     function pinExtraTool(key){
       if(pinnedExtraTools[key] || !extraToolsPool[key]) return;
       pinnedExtraTools[key] = true;
-      vToolbar.insertBefore(extraToolsPool[key].el, moreToolsWrap);
+      moreToolsWrap.parentNode.insertBefore(extraToolsPool[key].el, moreToolsWrap);
       refreshMoreToolsPopover();
       bindExtraToolHandlers(key); // 剛搬進來的按鈕要補上事件監聽（見下方）
     }
     Object.keys(extraToolsPool).forEach(function(key){
-      if(pinnedExtraTools[key]) vToolbar.insertBefore(extraToolsPool[key].el, moreToolsWrap);
+      if(pinnedExtraTools[key]) moreToolsWrap.parentNode.insertBefore(extraToolsPool[key].el, moreToolsWrap);
     });
     refreshMoreToolsPopover();
 
@@ -9953,7 +9995,123 @@
       render(); document.body.appendChild(back);
     }
     container.insertBefore(topBar, layout);
-    applyToolbarLayout();
+    if(!(!isStudent && !simpleBoard)) applyToolbarLayout();
+    var __ribbonBuild = function(){
+    // ===== 功能區（Ribbon）：跟 PowerPoint 一樣用「頁籤＋群組」排列工具。只有老師的投影片／測驗畫布使用；學生和小白板維持簡單的側邊工具列 =====
+    var ribbonMode = !isStudent && !simpleBoard;
+    if(ribbonMode){
+      container.classList.add("ribbon-mode"); topBar.classList.add("ribbon");
+      var rbTabs = [
+        { id: "home", name: "常用" }, { id: "insert", name: "插入" }, { id: "draw", name: "繪圖" }, { id: "design", name: "設計" },
+        { id: "trans", name: "轉場" }, { id: "anim", name: "動畫" }, { id: "show", name: "投影片放映" }, { id: "view", name: "檢視" }
+      ];
+      var rbCur = "home"; try{ rbCur = sessionStorage.getItem("mm-ribbon-tab") || "home"; }catch(e){}
+      var rbBar = document.createElement("div"); rbBar.className = "rb-tabs";
+      var rbQat = document.createElement("div"); rbQat.className = "rb-qat"; rbBar.appendChild(rbQat);
+      var rbPanels = {};
+      rbTabs.forEach(function(t){
+        var tb = document.createElement("button"); tb.type = "button"; tb.className = "rb-tab"; tb.textContent = t.name; tb.dataset.tab = t.id;
+        tb.onclick = function(e){ e.stopPropagation(); rbShow(t.id); };
+        rbBar.appendChild(tb);
+        var pn = document.createElement("div"); pn.className = "rb-panel"; pn.dataset.tab = t.id; rbPanels[t.id] = pn;
+      });
+      var rbNavSlot = document.createElement("div"); rbNavSlot.className = "rb-nav"; rbBar.appendChild(rbNavSlot);
+      topBar.innerHTML = ""; topBar.appendChild(rbBar); var rbPanelWrap = document.createElement("div"); rbPanelWrap.className = "rb-panels"; Object.keys(rbPanels).forEach(function(k){ rbPanelWrap.appendChild(rbPanels[k]); }); topBar.appendChild(rbPanelWrap);
+      function rbShow(id){
+        rbCur = id; try{ sessionStorage.setItem("mm-ribbon-tab", id); }catch(e){}
+        rbBar.querySelectorAll(".rb-tab").forEach(function(b){ b.classList.toggle("on", b.dataset.tab === id); });
+        Object.keys(rbPanels).forEach(function(k){ rbPanels[k].classList.toggle("on", k === id); });
+        requestAnimationFrame(fitCanvasToViewport); setTimeout(fitCanvasToViewport, 80);
+      }
+      function rbBtn(icon, label, fn, title){
+        var b = document.createElement("button"); b.type = "button"; b.className = "tool-btn-v rb-btn";
+        b.innerHTML = '<span class="tool-btn-v-icon">' + icon + '</span><span class="tool-btn-v-label">' + label + '</span>';
+        if(title) b.title = title; b.onclick = function(e){ e.stopPropagation(); fn(e); }; return b;
+      }
+      function rbGroup(panelId, title, nodes){
+        var g = document.createElement("div"); g.className = "rb-group";
+        var body = document.createElement("div"); body.className = "rb-group-body"; g.appendChild(body);
+        var tt = document.createElement("div"); tt.className = "rb-group-title"; tt.textContent = title; g.appendChild(tt);
+        nodes.forEach(function(n){ if(!n) return; if(Array.isArray(n)){ var col = document.createElement("div"); col.className = "rb-col"; n.forEach(function(x){ if(x) col.appendChild(x); }); body.appendChild(col); } else body.appendChild(n); });
+        rbPanels[panelId].appendChild(g); return g;
+      }
+      function inl(label, node){ if(!node) return null; var w = document.createElement("label"); w.className = "rb-inl"; if(label){ var sp = document.createElement("span"); sp.textContent = label; w.appendChild(sp); } w.appendChild(node); return w; }
+      function qsx(sel){ return vToolbar.querySelector(sel); }
+      function itemNode(k){ return tbItems[k] ? tbItems[k].nodes[0] : null; }
+      function clickOf(sel){ return function(){ var el = qsx(sel); if(el) el.click(); }; }
+      function selFromActive(){
+        if(selSet.length) return;
+        if(activeSelectedTextId) selSet = [{ k: "text", id: activeSelectedTextId }]; else if(activeSelectedImageId) selSet = [{ k: "image", id: activeSelectedImageId }]; else if(activeSelectedShapeId) selSet = [{ k: "shape", id: activeSelectedShapeId }];
+      }
+      function doCopy(){ selFromActive(); if(!selSet.length){ alert("請先選取要複製的物件。\\nSelect something first."); return false; } copySelection(); return true; }
+      function doPaste(){ if(window.__mmSelClip) pasteSelClip(); else if(objClipboard) pasteInternalObj(); else alert("先複製（Ctrl/⌘+C）或剪下一個物件，再按貼上；要貼上圖片也可以直接按 Ctrl/⌘+V。\\nCopy something first, or press Ctrl/⌘+V to paste an image."); }
+      function secId(){ return slideSecInfo && slideSecInfo.secId; }
+      function takeFrom(sel, closestSel){ var el = qsx(sel); return el ? (closestSel ? el.closest(closestSel) : el) : null; }
+      // ---- 常用 ----
+      rbGroup("home", "剪貼簿", [rbBtn("📋", "貼上", doPaste, "貼上（Ctrl/⌘+V）"), [rbBtn("✂️", "剪下", function(){ if(doCopy()) deleteSelection(); }, "剪下（Ctrl/⌘+X）"), rbBtn("⧉", "複製", doCopy, "複製（Ctrl/⌘+C）")], itemNode("painter")]);
+      rbGroup("home", "投影片", [rbBtn("➕", "新增<br>投影片", function(){ if(secId()) addBlankSlideToSection(secId()); }, "在這份簡報最後新增一張空白投影片"), [rbBtn("🗂", "版面<br>配置", function(){ openSlideSetupDialog(); }, "投影片設定：大小、背景、範本"), rbBtn("📑", "章節<br>整理", function(){ openSlideSorter(); }, "整理檢視：大縮圖、拖曳重排、章節")]]);
+      var fsel = qsx(".text-font-select"), szc = qsx(".board-font-select"), szWrap = szc && szc.closest(".size-combo"), boldB = qsx(".text-bold-btn");
+      var colGrid = qsx(".text-popover .color-dot-grid"), colPick = qsx(".text-popover .color-picker-row");
+      var colBox = document.createElement("div"); colBox.className = "rb-colors"; if(colGrid) colBox.appendChild(colGrid); if(colPick) colBox.appendChild(colPick);
+      var rbTxt = document.createElement("div"); rbTxt.className = "rb-stack"; var r1 = document.createElement("div"); r1.className = "rb-row"; if(fsel) r1.appendChild(inl("字型", fsel)); if(szWrap) r1.appendChild(szWrap); if(boldB) r1.appendChild(boldB);
+      var r2 = document.createElement("div"); r2.className = "rb-row"; r2.appendChild(colBox); var rst = qsx(".text-span-reset"); if(rst){ r2.appendChild(rst); }
+      rbTxt.appendChild(r1); rbTxt.appendChild(r2);
+      rbGroup("home", "字型", [rbTxt]);
+      var fmtRow = qsx(".text-fmt-row"), lhC = qsx(".text-lh-input"), lhWrap = lhC && lhC.closest(".size-combo");
+      var rbPar = document.createElement("div"); rbPar.className = "rb-stack"; var r3 = document.createElement("div"); r3.className = "rb-row"; if(fmtRow) r3.appendChild(fmtRow); var r4 = document.createElement("div"); r4.className = "rb-row"; if(lhWrap) r4.appendChild(inl("行距 %", lhWrap)); rbPar.appendChild(r3); rbPar.appendChild(r4);
+      rbGroup("home", "段落", [rbPar]);
+      rbGroup("home", "繪圖", [itemNode("text"), itemNode("shape"), rbBtn("🖼", "圖片", function(){ var f = qsx(".ins-img-file"); if(f) f.click(); }, "插入圖片"), itemNode("arrange"), rbBtn("🎨", "格式", function(){ selFromActive(); if(!selSet.length){ alert("請先選取一個物件。\\nSelect an object first."); return; } openObjFormat(); }, "物件格式：框線、陰影、圓角、圖片裁剪／去背、漸層")]);
+      rbGroup("home", "編輯", [itemNode("select"), rbBtn("🔎", "尋找<br>取代", function(){ openFindReplace(); }, "尋找與取代（Ctrl/⌘+H）")]);
+      // ---- 插入 ----
+      rbGroup("insert", "投影片", [rbBtn("➕", "新增<br>投影片", function(){ if(secId()) addBlankSlideToSection(secId()); }), rbBtn("▦", "表格", function(){ openTableDialog(); }, "插入表格")]);
+      var shapeBtns = Array.prototype.slice.call(vToolbar.querySelectorAll(".ins-shape")); var shapeBox = document.createElement("div"); shapeBox.className = "rb-shapes"; shapeBtns.forEach(function(b){ shapeBox.appendChild(b); });
+      rbGroup("insert", "圖例", [rbBtn("🖼", "圖片", function(){ var f = qsx(".ins-img-file"); if(f) f.click(); }), shapeBox]);
+      rbGroup("insert", "文字", [rbBtn("📝", "文字<br>方塊", clickOf('button[data-tool="text"]'), "文字方塊：點一下畫面就能打字"), rbBtn("🔗", "超連結", function(){ openLinkDialog(); }, "超連結（Ctrl/⌘+K）")]);
+      var mediaBox = document.createElement("div"); mediaBox.className = "rb-stack"; [".ins-yt", ".ins-audio"].forEach(function(sel){ var el = qsx(sel); if(el){ var r = document.createElement("div"); r.className = "rb-row"; r.appendChild(el); mediaBox.appendChild(r); } });
+      rbGroup("insert", "媒體", [mediaBox]);
+      rbGroup("insert", "頁首頁尾", [rbBtn("🎛", "母片<br>頁尾頁碼", function(){ openMasterDialog(); }, "母片：整份簡報共用的背景、標誌、頁尾、頁碼")]);
+      // ---- 繪圖 ----
+      rbGroup("draw", "工具", [rbBtn("↖", "選取", clickOf('button[data-tool="select"]'), "選取（指標）"), rbBtn("✏️", "筆", clickOf('button[data-tool="pen"]'), "筆（顏色與粗細在左上角「筆」的選單）"), (function(){ var h = qsx(".pt-hl"); return h; })(), rbBtn("🧽", "橡皮擦", clickOf("#btn-eraser"), "橡皮擦"), rbBtn("🔴", "雷射筆", clickOf(".pt-laser"), "雷射筆（快速鍵 L）")]);
+      rbGroup("draw", "清除", [rbBtn("🗑", "清除<br>筆跡", clickOf("#btn-clear-draw"), "清除畫筆的筆跡")]);
+      // ---- 設計 ----
+      rbGroup("design", "自訂", [itemNode("canvassize"), rbBtn("🎛", "母片", function(){ openMasterDialog(); }, "母片"), rbBtn("🗂", "範本", function(){ openSlideSetupDialog(); }, "投影片範本")]);
+      // ---- 轉場 ----
+      var tr = Array.prototype.slice.call(vToolbar.querySelectorAll(".trans-opt")).filter(function(b){ return b.dataset && b.dataset.trans; }); var trBox = document.createElement("div"); trBox.className = "rb-trans"; tr.forEach(function(b){ trBox.appendChild(b); });
+      rbGroup("trans", "切換到此投影片（套用到整份簡報）", [trBox]);
+      // ---- 動畫 ----
+      var aSel = qsx(".text-anim-select"), aDel = qsx(".text-anim-delay"), aPrev = qsx(".text-anim-preview"), stepC = qsx(".text-step-input"), stepWrap = stepC && stepC.closest(".size-combo");
+      var animBox = document.createElement("div"); animBox.className = "rb-stack"; var ra1 = document.createElement("div"); ra1.className = "rb-row"; if(aSel) ra1.appendChild(inl("效果", aSel)); if(aDel) ra1.appendChild(inl("延遲", aDel)); var ra2 = document.createElement("div"); ra2.className = "rb-row"; if(stepWrap) ra2.appendChild(inl("第幾次點擊出現", stepWrap)); if(aPrev) ra2.appendChild(aPrev); animBox.appendChild(ra1); animBox.appendChild(ra2);
+      rbGroup("anim", "動畫", [itemNode("anim"), animBox]);
+      // ---- 投影片放映 ----
+      rbGroup("show", "開始放映", [itemNode("fs"), itemNode("present")]);
+      // ---- 檢視 ----
+      rbGroup("view", "顯示", [itemNode("notes") ? rbBtn("📝", "備忘稿", clickOf("#btn-notes"), "顯示／隱藏備忘稿") : null, rbBtn("☰", "選取<br>窗格", function(){ toggleLayersPanel(); }, "選取窗格：調整上下層"), rbBtn("🗂", "整理<br>檢視", function(){ openSlideSorter(); })]);
+      rbGroup("view", "其他", [moreToolsWrap]);
+      // 快速存取列：復原／取消復原；右側：翻頁
+      ["undo", "redo"].forEach(function(k){ var n = itemNode(k); if(n){ n.classList.add("rb-qat-btn"); rbQat.appendChild(n); } });
+      var qatSep = document.createElement("span"); qatSep.className = "rb-qat-sep"; rbQat.appendChild(qatSep);
+      ["pen", "eraser", "clear"].forEach(function(k){ var n = itemNode(k); if(n){ n.classList.add("rb-qat-btn"); rbQat.appendChild(n); } });
+      var navN = tbItems.nav ? tbItems.nav.nodes : []; navN.forEach(function(n){ rbNavSlot.appendChild(n); });
+      ["insert", "transition", "media", "notes"].forEach(function(k){ var it = tbItems[k]; if(it) it.nodes.forEach(function(n){ n.style.display = "none"; }); }); // 已經拆成功能區的按鈕；這幾個原本的按鈕留在原處當「引擎」（不顯示）
+      rbShow(rbCur);
+      // 放映（全螢幕）時：功能區收起，左邊浮出簡單的放映工具列（放映／翻頁／筆／橡皮擦／清除／放映工具）；結束放映再放回功能區
+      var fsSlots = [];
+      function rbFsSync(){
+        var inFs = container.classList.contains("canvas-fs-active");
+        if(inFs && !fsSlots.length){
+          ["fs", "nav", "pen", "eraser", "clear", "present", "select", "text"].forEach(function(k){
+            var it = tbItems[k]; if(!it) return;
+            it.nodes.forEach(function(n){ var ph = document.createElement("span"); ph.className = "rb-slot"; n.parentNode.insertBefore(ph, n); fsSlots.push({ ph: ph, n: n }); vToolbar.appendChild(n); });
+          });
+        } else if(!inFs && fsSlots.length){
+          fsSlots.forEach(function(s2){ if(s2.ph.parentNode) s2.ph.parentNode.replaceChild(s2.n, s2.ph); }); fsSlots = [];
+        }
+      }
+      new MutationObserver(rbFsSync).observe(container, { attributes: true, attributeFilter: ["class"] });
+      rbFsSync();
+    }
+    };
+    __ribbonBuild();
 
     // ===== 老師備註：浮動面板（只有老師；每一頁各自的備註；老師自己決定要不要打開）=====
     (function(){
@@ -12803,10 +12961,20 @@
     }
     function finishCellEditIfAny(){ if(tblEdit){ finishCellEdit(); return true; } return false; }
     var activeFromSel = false;
+    function syncTextUiFromObj(t){ // 選到哪個文字方塊，工具列上的字級、粗體、對齊、行距、底色、動畫…就顯示那個的設定
+      if(fontSelect && document.activeElement !== fontSelect) fontSelect.value = String(t.fontSize || 36);
+      var bb = vToolbar.querySelector(".text-bold-btn"); if(bb) bb.classList.toggle("active", isTextBold(t));
+      var sti = vToolbar.querySelector(".text-step-input"); if(sti) sti.value = String(t.step || 0);
+      var fsx = vToolbar.querySelector(".text-font-select"); if(fsx && typeof curFontVal === "function") fsx.value = curFontVal();
+      if(typeof syncTextFmtUi === "function") syncTextFmtUi(t.align || "left", t.list || "none");
+      if(typeof syncTextBgUi === "function") syncTextBgUi(t);
+      if(lhInputEl) lhInputEl.value = String(Math.round((t.lh || 1) * 100));
+    }
     function syncActiveFromSelection(){ // 選取工具選到「一個」文字／圖片／圖案時，也當成「目前選取的物件」：邊框把手、字型顏色大小才會套用到它
       var one = (boardState.tool === "select" && selSet.length === 1) ? selSet[0] : null;
       if(one && (one.k === "text" || one.k === "image" || one.k === "shape")){
         activeSelectedTextId = one.k === "text" ? one.id : null; activeSelectedImageId = one.k === "image" ? one.id : null; activeSelectedShapeId = one.k === "shape" ? one.id : null; activeFromSel = true;
+        if(one.k === "text"){ var tsy = texts.find(function(x){ return x.id === one.id; }); if(tsy) syncTextUiFromObj(tsy); }
         textLayer.querySelectorAll(".movable-text").forEach(function(d){ d.classList.toggle("active", d.dataset.textId === activeSelectedTextId); });
         textLayer.querySelectorAll(".image-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.imgId === activeSelectedImageId); });
         textLayer.querySelectorAll(".shape-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.shapeId === activeSelectedShapeId); });
@@ -12872,7 +13040,7 @@
       if(hit && hit.k === "text" && !additive){
         var nowTap = Date.now();
         if(lastSelTap && lastSelTap.id === hit.id && nowTap - lastSelTap.t < 450 && Math.hypot(e.clientX - lastSelTap.x, e.clientY - lastSelTap.y) < 14){
-          lastSelTap = null; selSet = [hit]; renderSelection(); var cx0 = e.clientX, cy0 = e.clientY; beginMoveSelection(p, function(){ editTextInPlace(hit.id, null, { x: cx0, y: cy0 }); }); return;
+          lastSelTap = null; if(!inSel(hit)){ selSet = expandGroups([hit]); renderSelection(); } var cx0 = e.clientX, cy0 = e.clientY; beginMoveSelection(p, function(){ editTextInPlace(hit.id, null, { x: cx0, y: cy0 }); }); return;
         }
         lastSelTap = { id: hit.id, t: nowTap, x: e.clientX, y: e.clientY };
       } else lastSelTap = null;
