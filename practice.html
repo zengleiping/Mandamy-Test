@@ -897,6 +897,19 @@
   .mm-timer button{ border:none; background:rgba(255,255,255,.18); color:#fff; border-radius:8px; padding:4px 9px; cursor:pointer; font-size:14px; }
   .mm-timer.mt-end{ background:#B23B32; animation:mtBlink .7s infinite alternate; }
   @keyframes mtBlink{ to{ opacity:.55; } }
+  .obj-link-badge{ position:absolute; left:-10px; top:-12px; font-size:13px; pointer-events:none; }
+  .anim-panel{ right:274px; width:330px; }
+  .ap-row{ flex-wrap:wrap; }
+  .ap-row .lp-name{ flex:1; min-width:70px; }
+  .ap-n{ min-width:20px; height:20px; border-radius:50%; background:var(--seal); color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .ap-row select{ font-size:11.5px; padding:2px 3px; border-radius:6px; border:1.5px solid rgba(28,33,30,.2); background:var(--surface); color:var(--ink); max-width:112px; }
+  .ap-sub{ font-size:11.5px; font-weight:800; color:var(--ink-soft); margin:8px 2px 2px; }
+  .ap-add{ font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:7px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; }
+  .ap-foot{ display:flex; gap:6px; padding:6px 8px; }
+  .ap-foot button{ flex:1; font-size:12px; font-weight:700; padding:5px 8px; border-radius:8px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; }
+  .insert-popover{ min-width:210px; }
+  .ins-shapes{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:4px 0; }
+  .ins-lab{ font-size:12px; font-weight:700; color:var(--ink-soft); width:100%; }
   .table-obj{ position:absolute; pointer-events:none; }
   .table-obj.step-hidden{ opacity:.35; }
   .table-obj.editing{ pointer-events:auto; }
@@ -6290,6 +6303,25 @@
         x.stroke(); x.restore();
       });
       var sc = W / 640;
+      (prog.tables || []).forEach(function(tb){
+        var x0 = tb.x / 100 * W, y0 = tb.y / 100 * H, tw = tb.w / 100 * W, yy = y0;
+        tb.cells.forEach(function(row, r){
+          var rh = (tb.rh[r] || 8) / 100 * H, xx = x0;
+          row.forEach(function(cell, c){
+            var cw = tw * tb.cw[c], bg = cell.bg || ((tb.hdr && r === 0) ? "#F4D9CC" : "");
+            if(bg){ x.fillStyle = bg; x.fillRect(xx, yy, cw, rh); }
+            if(tb.bw !== 0){ x.strokeStyle = tb.bd || "#555"; x.lineWidth = Math.max(0.6, (tb.bw == null ? 2 : tb.bw) * sc); x.strokeRect(xx, yy, cw, rh); }
+            if(cell.t){
+              var fsz = (cell.fs || tb.fs || 24) * sc, bold = cell.b != null ? cell.b : (tb.hdr && r === 0);
+              x.font = (bold ? "700 " : "400 ") + fsz + 'px "LXGW WenKai TC", serif'; x.fillStyle = cell.c || "#2B2320"; x.textBaseline = "middle";
+              var lns = String(cell.t).split("\n"), ty = yy + rh / 2 - (lns.length - 1) * fsz * 0.65;
+              lns.forEach(function(ln, i){ var w2 = x.measureText(ln).width, al = cell.a || "center"; x.fillText(ln, al === "left" ? xx + fsz * 0.3 : al === "right" ? xx + cw - w2 - fsz * 0.3 : xx + (cw - w2) / 2, ty + i * fsz * 1.3); });
+            }
+            xx += cw;
+          });
+          yy += rh;
+        });
+      });
       var lc = document.createElement("canvas"); lc.width = W; lc.height = H;
       var l = lc.getContext("2d");
       (prog.strokes || []).forEach(function(st){
@@ -6619,8 +6651,9 @@
         if($(".fr-n").checked){ var m2 = (t.q.teacherNote || "").match(re); if(m2){ hits += m2.length; if(doReplace){ secs[t.secId].questions[t.qId].teacherNote = t.q.teacherNote.replace(re, function(){ return rep; }); secsChanged = true; } } }
         if($(".fr-t").checked && t.sec.type === "board"){
           var pr = getProgress(t.qId) || {}, changedT = false;
+          (pr.tables || []).forEach(function(tb){ tb.cells.forEach(function(row){ row.forEach(function(cell){ var m4 = String(cell.t || "").match(re); if(m4){ hits += m4.length; if(doReplace){ cell.t = cell.t.replace(re, function(){ return rep; }); delete cell.po; changedT = true; } } }); }); });
           (pr.texts || []).forEach(function(o){ var m3 = String(o.text || "").match(re); if(m3){ hits += m3.length; if(doReplace){ o.text = o.text.replace(re, function(){ return rep; }); delete o.phoneticOverride; changedT = true; } } });
-          if(doReplace && changedT) writeProgress(t.qId, { texts: pr.texts });
+          if(doReplace && changedT) writeProgress(t.qId, { texts: pr.texts, tables: pr.tables });
         }
         if(hits){ total += hits; out.push({ t: t, hits: hits }); }
       });
@@ -6738,6 +6771,7 @@
         var entries = [];
         (prog.images || []).forEach(function(o, i){ entries.push({ k: "image", o: o, z: (o.z != null ? o.z : i), n: entries.length }); });
         (prog.shapes || []).forEach(function(o, i){ entries.push({ k: "shape", o: o, z: (o.z != null ? o.z : 1000 + i), n: entries.length }); });
+        (prog.tables || []).forEach(function(o, i){ entries.push({ k: "table", o: o, z: (o.z != null ? o.z : 1500 + i), n: entries.length }); });
         (prog.texts || []).forEach(function(o, i){ entries.push({ k: "text", o: o, z: (o.z != null ? o.z : 2000 + i), n: entries.length }); });
         entries.sort(function(a, b){ return (a.z - b.z) || (a.n - b.n); });
         // 手寫筆跡：合成一張透明 PNG 放在圖片／圖案之上、文字之下（跟畫面上的層次一致）
@@ -6763,6 +6797,18 @@
           if(e.k === "image"){
             var wE = X(o.w), hE = o.h ? Y(o.h) : wE * (o.ar || 1);
             await addPic(o.src, X(o.x) - wE / 2, Y(o.y) - hE / 2, wE, hE, o.crop, "圖片");
+          } else if(e.k === "table"){
+            var tx0 = X(o.x), ty0 = Y(o.y), twE = X(o.w), thE = o.rh.reduce(function(a, b){ return a + Y(b); }, 0);
+            var lnX = function(tag){ return o.bw === 0 ? '<a:' + tag + ' w="0"><a:noFill/></a:' + tag + '>' : '<a:' + tag + ' w="' + Math.round((o.bw == null ? 2 : o.bw) * 1.5 * 12700) + '"><a:solidFill><a:srgbClr val="' + hex6(o.bd, "555555") + '"/></a:solidFill></a:' + tag + '>'; };
+            var tblXml = '<a:tbl><a:tblPr' + (o.hdr ? ' firstRow="1"' : "") + '/><a:tblGrid>' + o.cw.map(function(f){ return '<a:gridCol w="' + Math.max(1, Math.round(twE * f)) + '"/>'; }).join("") + '</a:tblGrid>' +
+              o.cells.map(function(row, r){
+                return '<a:tr h="' + Math.max(1, Y(o.rh[r] || 8)) + '">' + row.map(function(cell, c){
+                  var bg = hex6(cell.bg, (o.hdr && r === 0) ? "F4D9CC" : null), bold = cell.b != null ? cell.b : (o.hdr && r === 0), al = cell.a === "left" ? "l" : cell.a === "right" ? "r" : "ctr", fsz = Math.max(100, Math.round((cell.fs || o.fs || 24) * 150));
+                  var paras = String(cell.t || "").split("\n").map(function(t2){ return t2 ? '<a:p><a:pPr algn="' + al + '"/><a:r><a:rPr lang="zh-TW" sz="' + fsz + '" b="' + (bold ? 1 : 0) + '" dirty="0"><a:solidFill><a:srgbClr val="' + hex6(cell.c, "2B2320") + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(t2) + '</a:t></a:r></a:p>' : '<a:p><a:pPr algn="' + al + '"/><a:endParaRPr lang="zh-TW" sz="' + fsz + '"/></a:p>'; }).join("");
+                  return '<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>' + paras + '</a:txBody><a:tcPr anchor="ctr">' + lnX("lnL") + lnX("lnR") + lnX("lnT") + lnX("lnB") + (bg ? '<a:solidFill><a:srgbClr val="' + bg + '"/></a:solidFill>' : '<a:noFill/>') + '</a:tcPr></a:tc>';
+                }).join("") + '</a:tr>';
+              }).join("") + '</a:tbl>';
+            shapesXml.push('<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="' + (nid++) + '" name="表格"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="' + tx0 + '" y="' + ty0 + '"/><a:ext cx="' + twE + '" cy="' + Math.max(1, thE) + '"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">' + tblXml + '</a:graphicData></a:graphic></p:graphicFrame>');
           } else if(e.k === "shape"){
             var gx = X(o.x), gy = Y(o.y), gw = X(o.w), gh = Y(o.h), col = hex6(o.color, "B23B32"), lw = Math.max(1, (o.sw || 3)) * 1.5 * 12700;
             var isLine = o.type === "line" || o.type === "arrow", alpha = (o.op == null ? 1 : o.op);
@@ -8794,7 +8840,7 @@
   var pinnedExtraTools = {};
   // 2026-10-01 工具列自訂：哪些工具放左側／上方／隱藏、順序、收合狀態，存在這台裝置的 localStorage（每台裝置各自記，不同步）
   var TB_STORE_KEY = "mandamy-toolbar-layout-v1";
-  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "transition", "present", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
+  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "insert", "transition", "present", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
   var tbConfig = null;
   function loadTbConfig(){
     if(tbConfig) return tbConfig;
@@ -8962,6 +9008,24 @@
       </div>` : ''}
       ${!isStudent ? `
       <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v" id="btn-insert" title="插入：圖片、圖案、表格、多媒體、文字方塊、超連結 Insert"><span class="tool-btn-v-icon">➕</span><span class="tool-btn-v-label">插入</span></button>
+        <div class="color-popover insert-popover">
+          <div class="color-popover-title">插入 Insert</div>
+          <button type="button" class="trans-opt ins-img">🖼 圖片… Picture</button>
+          <button type="button" class="trans-opt ins-text">📝 文字方塊 Text box</button>
+          <div class="ins-shapes"><span class="ins-lab">🔷 圖案 Shapes</span>
+            <button type="button" class="shape-type-btn ins-shape" data-shape="rect" title="矩形">▭</button><button type="button" class="shape-type-btn ins-shape" data-shape="ellipse" title="橢圓">◯</button><button type="button" class="shape-type-btn ins-shape" data-shape="triangle" title="三角形">△</button><button type="button" class="shape-type-btn ins-shape" data-shape="line" title="直線">／</button><button type="button" class="shape-type-btn ins-shape" data-shape="arrow" title="箭頭">➜</button></div>
+          <button type="button" class="trans-opt ins-table">▦ 表格… Table</button>
+          <div class="ins-lab" style="margin-top:4px;">🎬 多媒體 Media</div>
+          <button type="button" class="trans-opt ins-yt">▶ YouTube 影片…</button>
+          <button type="button" class="trans-opt ins-audio">🔊 音檔…</button>
+          <button type="button" class="trans-opt ins-link">🔗 超連結… Link（選取物件後）</button>
+          <input type="file" class="ins-img-file" accept="image/*" multiple style="display:none;">
+        </div>
+      </div>` : ''}
+      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-anim-pane" title="動畫窗格：集中檢視與編輯這一頁所有物件的動畫 Animation pane"><span class="tool-btn-v-icon">🎞</span><span class="tool-btn-v-label">動畫窗格</span></button>` : ''}
+      ${!isStudent ? `
+      <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v" id="btn-present" title="放映工具：雷射筆、螢光筆、簡報者檢視 Slide show tools"><span class="tool-btn-v-icon">🔴</span><span class="tool-btn-v-label">放映工具</span></button>
         <div class="color-popover">
           <div class="color-popover-title">放映工具 Show tools</div>
@@ -9048,6 +9112,10 @@
               <select class="text-anim-delay" title="延遲（接在上一個之後）"><option value="0">同時</option><option value="0.5">延遲 0.5 秒</option><option value="1">延遲 1 秒</option><option value="2">延遲 2 秒</option></select>
               <button type="button" class="text-anim-preview" title="預覽動畫">▶ 預覽</button>
             </div>
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>超連結 Link</span></div>
+            <div class="anim-row"><button type="button" class="text-link-btn" title="選取文字方塊後，設定跳到某張投影片或開啟網址（Ctrl/⌘+K）">🔗 設定超連結…</button></div>
           </div>
         </div>
       </div>
@@ -9419,6 +9487,8 @@
     var TB_ITEM_DEFS = [
       { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
       { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [vToolbar.querySelector(".slide-nav-row"), vToolbar.querySelector(".slide-nav-counter")]; } },
+      { key: "insert", label: "插入（圖片／圖案／表格／多媒體／連結）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-insert"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "anim", label: "動畫窗格", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-anim-pane")]; } },
       { key: "present", label: "放映工具（雷射筆／螢光筆／簡報者檢視）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-present"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "transition", label: "轉場", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "media", label: "媒體（YouTube／音檔）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-media"); return [b && b.closest(".tool-btn-v-wrap")]; } },
@@ -9949,7 +10019,7 @@
     }
     // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-canvas-size", "btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
+    var NON_TOOL_BTN_IDS = ["btn-insert", "btn-anim-pane", "btn-present", "btn-canvas-size", "btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
 
     // 目前選定工具「本來該有」的游標樣式——跟放大縮小/自動拖曳無關，單純工具本身的樣子。
     // 抽成函式是因為畫布縮放後的「靠近墨跡才恢復成工具游標」也要用到同一份邏輯（見下面
@@ -10460,6 +10530,7 @@
       var tg = selectedAnimTarget(), se = vToolbar.querySelector(".text-anim-select"), de = vToolbar.querySelector(".text-anim-delay");
       if(se) se.value = (tg && tg.o.anim) || "none"; if(de) de.value = String((tg && tg.o.animDelay) || 0);
     }
+    var textLinkBtn = vToolbar.querySelector(".text-link-btn"); if(textLinkBtn) textLinkBtn.onclick = function(e){ e.stopPropagation(); openLinkDialog(); };
     var animSel = vToolbar.querySelector(".text-anim-select"), animDel = vToolbar.querySelector(".text-anim-delay"), animPrev = vToolbar.querySelector(".text-anim-preview");
     function setAnimProps(){
       var tg = selectedAnimTarget(); if(!tg){ alert("請先點選一個文字方塊、圖片或圖案，再設定動畫。\nSelect an object first."); syncAnimUi(); return; }
@@ -11037,6 +11108,7 @@
         if(t.list === "bullet") div.classList.add("list-bullet"); else if(t.list === "number") div.classList.add("list-number");
 
         div.innerHTML = `
+          ${(!isStudent && t.link) ? '<span class="obj-link-badge" title="有超連結">🔗</span>' : ''}
           ${(!isStudent && (t.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + t.step + ' 次點擊出現">' + t.step + '</span>' : ''}
           <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</div>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
@@ -11181,6 +11253,7 @@
       renderTables();
       renderMedias();
       if(typeof renderLayersPanel === "function") renderLayersPanel();
+      if(typeof renderAnimPanel === "function") renderAnimPanel();
       if(typeof renderSelection === "function" && selSet.length) renderSelection();
     }
 
@@ -12343,6 +12416,7 @@
         (inGroup ? '<button type="button" data-act="ungroup" title="解散群組（Ctrl/⌘+Shift+G）">解散群組</button>' : '') +
         '<button type="button" data-act="copy" title="複製（Ctrl/⌘+C）；貼上 Ctrl/⌘+V、重複製作 Ctrl/⌘+D">⧉ 複製</button>' +
         '<button type="button" data-act="dup" title="重複製作（Ctrl/⌘+D）">重複製作</button>' +
+        (items.some(function(x){ return x.k !== "stroke"; }) ? '<button type="button" data-act="link" title="超連結（Ctrl/⌘+K）：跳到投影片或開啟網址">🔗 連結</button>' : '') +
         (items.some(function(x){ return x.k !== "stroke" && x.k !== "table"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
         '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>' +
         (selUnits().length >= 2 ? '<span class="sb-sep"></span>' +
@@ -12358,6 +12432,7 @@
         else if(bt.dataset.act === "copy"){ copySelection(); bt.textContent = "✓ 已複製"; }
         else if(bt.dataset.act === "dup") duplicateSelection();
         else if(bt.dataset.act === "fmt") openObjFormat();
+        else if(bt.dataset.act === "link") openLinkDialog();
         else if(/^al-/.test(bt.dataset.act)) alignSelection(bt.dataset.act.slice(3));
       });
       selectLayer.appendChild(bar);
@@ -12846,6 +12921,7 @@
     }
     function selectFromLayers(it, ev){
       var item = { k: it.k, id: it.o.id };
+      if(it.k === "table" && boardState.tool !== "select"){ switchToSelectTool(); selSet = [item]; renderSelection(); renderLayersPanel(); return; }
       if(boardState.tool === "select"){
         var set = expandGroups([item]);
         if(ev && (ev.shiftKey || ev.metaKey || ev.ctrlKey)){
@@ -12922,6 +12998,104 @@
       var ob = vToolbar.querySelector("#btn-open-layers");
       if(ob) ob.addEventListener("click", function(e){ e.stopPropagation(); toggleLayersPanel(true); });
     })();
+
+    // ===== 動畫窗格：集中檢視／編輯這一頁所有物件的動畫（效果、開始方式、順序、預覽）=====
+    var animPanel = null;
+    function animObjs(){
+      var out = [];
+      texts.forEach(function(o){ out.push({ k: "text", o: o }); }); images.forEach(function(o){ out.push({ k: "image", o: o }); });
+      shapes.forEach(function(o){ out.push({ k: "shape", o: o }); }); tables.forEach(function(o){ out.push({ k: "table", o: o }); });
+      return out;
+    }
+    function animRows(){
+      var rows = animObjs().filter(function(x){ return (x.o.anim && x.o.anim !== "none") || (x.o.step || 0) > 0; });
+      rows.forEach(function(x, i){ x.z = objZ(x.k, x.o, i); });
+      rows.sort(function(a, b){ return ((a.o.step || 0) - (b.o.step || 0)) || ((a.o.ao || 0) - (b.o.ao || 0)) || (a.z - b.z); });
+      return rows;
+    }
+    function animModes(rows){
+      return rows.map(function(x, i){
+        if(i === 0) return "click"; var pv = rows[i - 1].o;
+        if((x.o.step || 0) > (pv.step || 0)) return "click";
+        return ((x.o.animDelay || 0) > (pv.animDelay || 0)) ? "after" : "with";
+      });
+    }
+    function animApply(rows, modes){ // 依「開始方式」重新算每個物件的點擊次數與延遲
+      var step = 0, prevDelay = 0;
+      rows.forEach(function(x, i){
+        var m = modes[i];
+        if(i === 0 || m === "click"){ step++; prevDelay = 0; x.o.animDelay = undefined; }
+        else if(m === "with"){ x.o.animDelay = undefined; prevDelay = 0; }
+        else { prevDelay = prevDelay + 0.8; x.o.animDelay = Math.round(prevDelay * 10) / 10; }
+        x.o.step = step; x.o.ao = i;
+      });
+    }
+    function animCommit(){ writeProgress(q.id, { texts: texts, images: images, shapes: shapes, tables: tables }); renderTexts(); if(typeof updateSlideNavUi === "function") updateSlideNavUi(); }
+    function animPlayAll(){
+      var mx = maxStepOf(q.id); if(!mx){ return; }
+      writeProgress(q.id, { revealStep: 0 }); var k = 0;
+      (function nextStep(){ k++; if(k > mx) return; setTimeout(function(){ writeProgress(q.id, { revealStep: k }); nextStep(); }, 1500); })();
+    }
+    function renderAnimPanel(){
+      if(!animPanel || animPanel.style.display === "none") return;
+      var body = animPanel.querySelector(".lp-body"); body.innerHTML = "";
+      var rows = animRows(), modes = animModes(rows), revealNow = getProgress(q.id).revealStep || 0;
+      if(!rows.length){ var em = document.createElement("div"); em.className = "lp-empty"; em.textContent = "這一頁還沒有動畫。從下面挑一個物件按「＋ 動畫」。"; body.appendChild(em); }
+      rows.forEach(function(x, i){
+        var row = document.createElement("div"); row.className = "lp-row ap-row";
+        row.innerHTML = '<span class="ap-n" title="第幾次點擊出現">' + (x.o.step || 0) + '</span><div class="lp-name">' + layerLabel(x) + '</div>' +
+          '<select class="ap-eff" title="動畫效果">' + Object.keys(ANIM_NAMES).map(function(k){ return '<option value="' + k + '"' + ((x.o.anim || "none") === k ? " selected" : "") + '>' + ANIM_NAMES[k] + '</option>'; }).join("") + '</select>' +
+          '<select class="ap-mode" title="開始方式"><option value="click"' + (modes[i] === "click" ? " selected" : "") + '>點擊時</option><option value="with"' + (modes[i] === "with" ? " selected" : "") + '>與前一個同時</option><option value="after"' + (modes[i] === "after" ? " selected" : "") + '>接在前一個之後</option></select>' +
+          '<div class="lp-btns"><button type="button" data-a="up" title="往前（先出現）">↑</button><button type="button" data-a="down" title="往後（後出現）">↓</button><button type="button" data-a="del" title="移除動畫">✕</button></div>';
+        row.addEventListener("click", function(e){ if(e.target.closest("button,select")) return; if(typeof selectFromLayers === "function") selectFromLayers(x, e); });
+        row.querySelector(".ap-eff").onchange = function(e){ snapshotForUndo(); x.o.anim = e.target.value === "none" ? undefined : e.target.value; animCommit(); };
+        row.querySelector(".ap-mode").onchange = function(e){ snapshotForUndo(); modes[i] = e.target.value; animApply(rows, modes); animCommit(); };
+        row.querySelector(".lp-btns").addEventListener("click", function(e){
+          var bt = e.target.closest("button"); if(!bt) return; e.stopPropagation(); var a = bt.dataset.a;
+          snapshotForUndo();
+          if(a === "del"){ x.o.anim = undefined; x.o.step = 0; x.o.animDelay = undefined; x.o.ao = undefined; var r2 = rows.slice(), m2 = modes.slice(); r2.splice(i, 1); m2.splice(i, 1); if(m2.length) m2[0] = "click"; animApply(r2, m2); }
+          else { var j = a === "up" ? i - 1 : i + 1; if(j < 0 || j >= rows.length) return; var tr = rows[i]; rows[i] = rows[j]; rows[j] = tr; var tm = modes[i]; modes[i] = modes[j]; modes[j] = tm; modes[0] = "click"; animApply(rows, modes); }
+          animCommit();
+        });
+        body.appendChild(row);
+      });
+      var rest = animObjs().filter(function(x){ return rows.indexOf(rows.find(function(r){ return r.o === x.o; })) === -1; });
+      if(rest.length){
+        var h = document.createElement("div"); h.className = "ap-sub"; h.textContent = "還沒有動畫的物件"; body.appendChild(h);
+        rest.forEach(function(x){
+          var row = document.createElement("div"); row.className = "lp-row ap-row";
+          row.innerHTML = '<div class="lp-name">' + layerLabel(x) + '</div><button type="button" class="ap-add" title="加上淡入動畫（點擊時出現）">＋ 動畫</button>';
+          row.addEventListener("click", function(e){ if(e.target.closest("button")) return; if(typeof selectFromLayers === "function") selectFromLayers(x, e); });
+          row.querySelector(".ap-add").onclick = function(e){ e.stopPropagation(); snapshotForUndo(); var rr = animRows(), md = animModes(rr); x.o.anim = "fade"; rr.push(x); md.push("click"); animApply(rr, md); animCommit(); };
+          body.appendChild(row);
+        });
+      }
+    }
+    function toggleAnimPanel(on){
+      if(!animPanel){
+        animPanel = document.createElement("div"); animPanel.className = "layers-panel anim-panel"; animPanel.style.display = "none";
+        animPanel.innerHTML = '<div class="lp-head"><span>🎞 動畫窗格 Animation Pane</span><button type="button" class="lp-x" title="關閉">✕</button></div><div class="lp-body"></div><div class="lp-foot ap-foot"><button type="button" class="ap-play">▶ 預覽全部</button><button type="button" class="ap-reset">⏮ 回到起點</button></div>';
+        animPanel.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+        animPanel.querySelector(".lp-x").onclick = function(){ toggleAnimPanel(false); };
+        animPanel.querySelector(".ap-play").onclick = animPlayAll;
+        animPanel.querySelector(".ap-reset").onclick = function(){ writeProgress(q.id, { revealStep: 0 }); };
+        var head = animPanel.querySelector(".lp-head");
+        head.onpointerdown = function(e){
+          if(e.target.closest("button")) return;
+          e.preventDefault(); try{ head.setPointerCapture(e.pointerId); }catch(er){}
+          var cr = container.getBoundingClientRect(), pr = animPanel.getBoundingClientRect(), dx = e.clientX - pr.left, dy = e.clientY - pr.top;
+          function mv(ev){ animPanel.style.left = Math.max(0, Math.min(cr.width - 80, ev.clientX - cr.left - dx)) + "px"; animPanel.style.top = Math.max(0, Math.min(cr.height - 40, ev.clientY - cr.top - dy)) + "px"; animPanel.style.right = "auto"; }
+          function up(){ head.removeEventListener("pointermove", mv); head.removeEventListener("pointerup", up); head.removeEventListener("pointercancel", up); }
+          head.addEventListener("pointermove", mv); head.addEventListener("pointerup", up); head.addEventListener("pointercancel", up);
+        };
+        container.appendChild(animPanel);
+      }
+      var show = on === undefined ? animPanel.style.display === "none" : on;
+      animPanel.style.display = show ? "flex" : "none";
+      var ab = vToolbar.querySelector("#btn-anim-pane"); if(ab) ab.classList.toggle("active", show);
+      if(show) renderAnimPanel();
+    }
+    (function(){ var ab = vToolbar.querySelector("#btn-anim-pane"); if(ab) ab.addEventListener("click", function(e){ e.stopPropagation(); toggleAnimPanel(); }); })();
 
     // ===== 📐 畫布大小（老師）=====
     var canvasSizeBtn = vToolbar.querySelector("#btn-canvas-size");
@@ -13110,6 +13284,59 @@
         if(penOpacityValueEl) penOpacityValueEl.textContent = penOpacitySlider.value + "%";
       };
     }
+
+    // ===== 插入功能表 =====
+    var insImgFile = vToolbar.querySelector(".ins-img-file");
+    function insBind(sel, fn){ var el = vToolbar.querySelector(sel); if(el) el.onclick = function(e){ e.stopPropagation(); fn(e); }; }
+    insBind(".ins-img", function(){ insImgFile.click(); });
+    if(insImgFile) insImgFile.onchange = function(){ var fl = Array.prototype.slice.call(insImgFile.files || []); insImgFile.value = ""; if(fl.length) pasteImageFiles(fl); };
+    insBind(".ins-text", function(){ var tb = vToolbar.querySelector('button[data-tool="text"]'); if(tb) tb.click(); });
+    vToolbar.querySelectorAll(".ins-shape").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); boardState.shapeType = b.dataset.shape; var tb = vToolbar.querySelector('button[data-tool="shape"]'); if(tb) tb.click(); vToolbar.querySelectorAll(".shape-type-btn").forEach(function(x){ if(x.dataset.shape) x.classList.toggle("active", x.dataset.shape === b.dataset.shape); }); }; });
+    insBind(".ins-table", function(){ openTableDialog(); });
+    insBind(".ins-yt", function(){ var b = vToolbar.querySelector("#btn-add-youtube"); if(b) b.click(); });
+    insBind(".ins-audio", function(){ var b = vToolbar.querySelector("#btn-add-audio"); if(b) b.click(); });
+    insBind(".ins-link", function(){ openLinkDialog(); });
+    // ===== 超連結：文字方塊／圖片／圖案／表格 被選取時都能設定「跳到某張投影片」或「開啟網址」 =====
+    function linkTargets(){
+      var items = selSet.length ? expandGroups(selSet).filter(function(it){ return it.k !== "stroke"; }) : [];
+      var objs = items.map(selItemObj).filter(Boolean);
+      if(!objs.length){
+        [activeSelectedTextId && texts.find(function(x){ return x.id === activeSelectedTextId; }), activeSelectedImageId && images.find(function(x){ return x.id === activeSelectedImageId; }), activeSelectedShapeId && shapes.find(function(x){ return x.id === activeSelectedShapeId; })].forEach(function(o){ if(o) objs.push(o); });
+      }
+      return objs;
+    }
+    function openLinkDialog(){
+      var objs = linkTargets();
+      if(!objs.length){ alert("請先選取文字方塊、圖片、圖案或表格（用「選取」或「文字方塊」工具點一下），再設定超連結。\nSelect an object first."); return; }
+      snapshotForUndo();
+      var lk = objs[0].link || {};
+      var back = document.createElement("div"); back.className = "tb-modal-back";
+      var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(480px,94vw)"; back.appendChild(modal);
+      var slideOpts = slideSiblingIds.map(function(id, i){ var qq = slideSecInfo && slideSecInfo.sec.questions[id]; return '<option value="' + id + '">' + (i + 1) + '. ' + escapeHtml((qq && qq.title) || "") + '</option>'; }).join("");
+      modal.innerHTML = '<h3>🔗 超連結 Link</h3><div class="tb-hint">套用到選取的 ' + objs.length + ' 個物件。放映時輕點物件就會啟動（編輯時按住 Ctrl/⌘ 點）。</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;margin:10px 0;font-size:13px;"><label><input type="radio" name="lk" value="" class="lk-none"> 無連結</label>' +
+        '<label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="lk" value="slide" class="lk-slide"> 跳到投影片 <select class="lk-ls" style="flex:1;min-width:0;">' + slideOpts + '</select></label>' +
+        '<label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="lk" value="url" class="lk-url"> 開啟網址 <input type="text" class="lk-lu" placeholder="https://…" style="flex:1;min-width:0;padding:4px 6px;"></label></div>' +
+        '<div class="tb-foot"><button type="button" class="primary lk-ok">完成</button></div>';
+      var $ = function(c){ return modal.querySelector(c); };
+      $(".lk-" + (lk.t || "none")).checked = true; if(lk.t === "slide" && lk.id) $(".lk-ls").value = lk.id; $(".lk-lu").value = lk.url || "";
+      function apply(){
+        var t = (modal.querySelector('input[name="lk"]:checked') || {}).value || "";
+        objs.forEach(function(o){ if(t === "slide") o.link = { t: "slide", id: $(".lk-ls").value }; else if(t === "url" && $(".lk-lu").value.trim()) o.link = { t: "url", url: $(".lk-lu").value.trim() }; else delete o.link; });
+        var patch = { texts: texts, images: images, shapes: shapes, tables: tables }; writeProgress(q.id, patch); renderTexts();
+      }
+      modal.querySelectorAll('input[name="lk"]').forEach(function(r){ r.onchange = apply; });
+      $(".lk-ls").onchange = function(){ $(".lk-slide").checked = true; apply(); };
+      $(".lk-lu").oninput = function(){ $(".lk-url").checked = true; apply(); };
+      $(".lk-ok").onclick = function(){ back.remove(); };
+      back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
+      document.body.appendChild(back);
+    }
+    document.addEventListener("keydown", function linkKey(e){
+      if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", linkKey); return; }
+      if(isStudent || !(e.ctrlKey || e.metaKey) || (e.key !== "k" && e.key !== "K")) return;
+      e.preventDefault(); if(inPlaceEdit){ alert("請先按空白處完成文字輸入，再選取這個文字方塊按 Ctrl/⌘+K 設定超連結（連結是整個文字方塊）。"); return; } openLinkDialog();
+    });
 
     // ===== 放映工具：雷射筆／螢光筆／簡報者檢視 =====
     var laserOn = false, laserLayer = null;
