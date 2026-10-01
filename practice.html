@@ -1874,7 +1874,7 @@
 
     <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
 
-    <label>✏️ 小白板打字加註音（文字工具）</label>
+    <label>✏️ 投影片打字加註音（文字工具）</label>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
       <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="off">Aa 不加註音 Off</button>
       <button type="button" class="btn btn-sm btn-phonetic-mode" data-phonetic="pinyin">拼音 Pinyin</button>
@@ -1886,7 +1886,7 @@
       <button type="button" class="btn btn-sm btn-phonetic-layout" data-layout="right">字的右側（直式，像生字本）Right, vertical</button>
     </div>
     <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">「右側」只對注音有效（拼音一律在字的上方）。想改某個字的讀音：點那個字的注音／拼音，聲調可以直接打數字——1～4＝一～四聲、0＝輕聲（例如 ni3 會自動變成 nǐ，ㄋㄧ3 會變成 ㄋㄧˇ）。</p>
-    <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">用「文字」工具在小白板上打字時，字的正上方要不要自動加拼音或注音——第一次用文字工具時會問一次，之後都可以回這裡改。</p>
+    <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">這是整份簡報的預設：用「文字」工具打字時，要不要自動加拼音或注音——第一次用文字工具時會問一次，之後都可以回這裡改。只有部分文字要加？選取文字方塊後，在「文字方塊」浮窗的「注音／拼音」可以單獨設定這個方塊，編輯時選一段字還能只設那一段。</p>
 
     <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
 
@@ -1904,7 +1904,7 @@
     <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
 
     <label>🔒 鎖定作答提醒語言 Lock Notice Languages</label>
-    <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 8px;">小白板「鎖定作答」時，學生如果還是試圖畫圖或按按鈕，會跳出提醒彈窗——這裡選要顯示哪些語言（可複選），預設中文＋英文。</p>
+    <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 8px;">投影片「鎖定作答」時，學生如果還是試圖畫圖或按按鈕，會跳出提醒彈窗——這裡選要顯示哪些語言（可複選），預設中文＋英文。</p>
     <div style="display:flex; gap:14px; flex-wrap:wrap;">
       <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;"><input type="checkbox" class="chk-lock-notice-lang" data-lang="zh"> 中文</label>
       <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;"><input type="checkbox" class="chk-lock-notice-lang" data-lang="en"> English</label>
@@ -2026,7 +2026,7 @@
         <button type="button" data-type="match" class="active">🔗 連連看 Match</button>
         <button type="button" data-type="choice">🔘 選擇題 Choice</button>
         <button type="button" data-type="reorder">🔤 句子重組 Reorder</button>
-        <button type="button" data-type="board">🖊️ 小白板 Whiteboard</button>
+        <button type="button" data-type="board">🖼 投影片 Slides</button>
         <button type="button" data-type="hanzi">🖋️ 生字練習 Character Practice</button>
       </div>
 
@@ -4797,6 +4797,18 @@
       });
     } else doDelete();
   }
+  // 「小題」只算測驗題（連連看／選擇／句子重組／生字練習）；投影片（小白板）另外算「幾份簡報、共幾頁」，不併入題目數
+  function projCountText(proj){
+    var quizSecs = 0, quizQ = 0, decks = 0, pages = 0;
+    Object.keys(proj.sections || {}).forEach(function(sid){
+      var sc = proj.sections[sid], n = Object.keys(sc.questions || {}).length;
+      if(sc.type === "board"){ decks++; pages += n; } else { quizSecs++; quizQ += n; }
+    });
+    var parts = [];
+    if(quizSecs) parts.push(quizSecs + " 大題 Sections · " + quizQ + " 小題 Questions");
+    if(decks) parts.push(decks + " 份簡報 · " + pages + " 頁 Slides");
+    return parts.length ? parts.join("　｜　") : "尚無內容 Empty";
+  }
   function makeProjectCard(proj, opts){
     opts = opts || {};
     var totalQ = 0; Object.keys(proj.sections || {}).forEach(function(sid){ totalQ += Object.keys(proj.sections[sid].questions || {}).length; });
@@ -4807,7 +4819,7 @@
         ${opts.showPath ? '<div class="item-path">' + escapeHtml(folderPathText(proj.folderId || null)) + '</div>' : ''}
         ${tags.length ? '<div class="item-tags">' + tags.map(function(t){ return '<span class="item-tag">' + escapeHtml(t) + '</span>'; }).join("") + '</div>' : ''}</div>
       <div class="item-card-foot">
-        <span class="item-badge">📄 ${Object.keys(proj.sections||{}).length} 大題 Sections · ${totalQ} 小題 Questions</span>
+        <span class="item-badge">📄 ${projCountText(proj)}</span>
         <div class="item-actions-btns">
           <button type="button" class="btn btn-sm btn-ghost btn-edit-p">編輯 Edit</button>
           <button type="button" class="btn btn-sm btn-ghost btn-dup-p" title="複製這個課程（含所有內容）Duplicate">複製 Copy</button>
@@ -6785,7 +6797,7 @@
   }
   function exportDeckInfo(){
     var cur = getCurrentQInfo(), found = cur ? findSectionForQuestion(cur.question.id) : null;
-    if(!found || found.sec.type !== "board"){ alert("請先點開一份「小白板」簡報（左邊列表裡的任何一張投影片），再按匯出。\nOpen a whiteboard deck first."); return null; }
+    if(!found || found.sec.type !== "board"){ alert("請先點開一份「投影片」簡報（左邊列表裡的任何一張投影片），再按匯出。\nOpen a whiteboard deck first."); return null; }
     var keys = getSortedQuestionKeys(found.sec);
     return { secId: found.secId, sec: found.sec, slides: keys.map(function(k){ return found.sec.questions[k]; }) };
   }
@@ -6996,7 +7008,7 @@
       match:   { label: "連連看 Match",   color: "#4C7A5E" },
       choice:  { label: "選擇題 Choice",  color: "#B8763D" },
       reorder: { label: "句子重組 Reorder", color: "#6B5B95" },
-      board:   { label: "小白板 Whiteboard", color: "#A83232" },
+      board:   { label: "投影片 Slides", color: "#A83232" },
       hanzi:   { label: "生字練習 Character", color: "#3A7CA5" }
     };
 
@@ -7054,11 +7066,11 @@
         </div>
         <div class="section-head-meta">
           <span class="badge">${typeMeta.label}</span>
-          <span class="section-q-count">共 ${qKeys.length} 小題 ${qKeys.length} ${qKeys.length === 1 ? 'Question' : 'Questions'}</span>
+          <span class="section-q-count">${sec.type === "board" ? '共 ' + qKeys.length + ' 頁 ' + qKeys.length + ' ' + (qKeys.length === 1 ? 'Slide' : 'Slides') : '共 ' + qKeys.length + ' 小題 ' + qKeys.length + ' ' + (qKeys.length === 1 ? 'Question' : 'Questions')}</span>
         </div>
         <div class="section-head-actions">
           <button type="button" class="btn btn-sm btn-ghost btn-edit-sec" title="編輯大題（標題／說明／媒體）Edit Section" style="color:var(--ink-soft);">編輯</button>
-          <button type="button" class="btn btn-sm btn-ghost btn-add-subq" title="新增小題 Add Question" style="color:var(--seal);">新增小題</button>
+          <button type="button" class="btn btn-sm btn-ghost btn-add-subq" title="${sec.type === "board" ? "新增投影片 Add Slide" : "新增小題 Add Question"}" style="color:var(--seal);">${sec.type === "board" ? "新增投影片" : "新增小題"}</button>
           ${sec.type === "board" ? '<button type="button" class="btn btn-sm btn-ghost btn-findrep" title="尋找與取代（Ctrl/⌘+H）" style="color:var(--ink-soft);">🔎 尋找</button>' : ''}
           ${sec.type === "board" ? '<button type="button" class="btn btn-sm btn-ghost btn-sorter" title="投影片整理檢視：大縮圖、拖曳重排、章節" style="color:var(--seal);">🗂 整理檢視</button>' : ''}
           <button type="button" class="btn btn-sm btn-ghost btn-del-sec" title="刪除大題 Delete Section" style="color:var(--ink-soft);">刪除</button>
@@ -7069,7 +7081,7 @@
       head.querySelector(".btn-edit-sec").onclick = function(e){ e.stopPropagation(); openSectionDialog(secId); };
       var frBtn = head.querySelector(".btn-findrep"); if(frBtn) frBtn.onclick = function(e){ e.stopPropagation(); openFindReplace(); };
       var sorterBtn = head.querySelector(".btn-sorter"); if(sorterBtn) sorterBtn.onclick = function(e){ e.stopPropagation(); openSlideSorter(); };
-      head.querySelector(".btn-add-subq").onclick = function(e){ e.stopPropagation(); openQuestionDialog(secId, null); };
+      head.querySelector(".btn-add-subq").onclick = function(e){ e.stopPropagation(); if(sec.type === "board") addBlankSlideToSection(secId); else openQuestionDialog(secId, null); };
       head.querySelector(".btn-del-sec").onclick = function(e){
         e.stopPropagation();
         if(Object.keys(secs).length <= 1){ alert("試卷中至少要保留一大題！Keep at least one section."); return; }
@@ -7308,7 +7320,7 @@
     var secs = getSections();
     var title = document.getElementById("f-sec-title").value.trim();
     var desc = document.getElementById("f-sec-desc").value.trim();
-    var typeNames = { match: "連連看", choice: "選擇題", reorder: "句子重組", board: "小白板", hanzi: "生字練習" };
+    var typeNames = { match: "連連看", choice: "選擇題", reorder: "句子重組", board: "投影片", hanzi: "生字練習" };
     if(editingSectionId && secs[editingSectionId]){
       secs[editingSectionId].title = title || secs[editingSectionId].title;
       secs[editingSectionId].desc = desc;
@@ -7479,24 +7491,32 @@
   // 那個字上面的注音自己改，改過的字就用 overrides 裡存的版本，其餘沒改過的字照樣自動產生。
   // 2026-09-30：文字可以有多行（段落）——依換行拆成一行一個 <div class="tl">，每行各自加註音；
   // overrides／data-ph-idx 的索引仍然是「整段文字第幾個字元」（換行也算一個字元），跟以前單行時一致。
-  function buildPhoneticHtml(text, overrides){
+  function buildPhoneticHtml(text, overrides, modeArg){
     if(!text) return "";
     var base = 0;
     return String(text).split("\n").map(function(line){
-      var h = buildPhoneticLine(line, overrides, base);
+      var h = buildPhoneticLine(line, overrides, base, modeArg);
       base += Array.from(line).length + 1;
       return '<div class="tl">' + h + '</div>';
     }).join("");
   }
-  function buildPhoneticLine(text, overrides, baseIdx){
+  function buildPhoneticLine(text, overrides, baseIdx, modeArg){
     if(!text) return "";
     baseIdx = baseIdx || 0;
-    if(currentPhoneticMode !== "pinyin" && currentPhoneticMode !== "zhuyin") return escapeHtml(text);
+    // 每個文字方塊可以自己決定（modeArg）：跟隨整份簡報／不加／拼音／注音；
+    // 方塊裡「選取的範圍」可以再個別設定：overrides[字的位置] = " "（這個字不加）或 "+"（這個字要加，即使整個方塊關掉）
+    var mode = (modeArg === "pinyin" || modeArg === "zhuyin" || modeArg === "off") ? modeArg : currentPhoneticMode;
+    var showAll = true;
+    if(mode !== "pinyin" && mode !== "zhuyin"){
+      var anyOn = false; if(overrides){ for(var kk in overrides){ if(overrides[kk] === "+"){ anyOn = true; break; } } }
+      if(!anyOn) return escapeHtml(text);
+      mode = (currentPhoneticMode === "zhuyin") ? "zhuyin" : "pinyin"; showAll = false;
+    }
     if(typeof pinyinPro === "undefined" || typeof pinyinPro.pinyin !== "function") return escapeHtml(text);
     var chars = Array.from(text);
     var symbols;
     try{
-      symbols = currentPhoneticMode === "zhuyin"
+      symbols = mode === "zhuyin"
         ? pinyinPro.pinyin(text, { toneType: "num", type: "array" })
         : pinyinPro.pinyin(text, { type: "array" });
     } catch(e){ return escapeHtml(text); }
@@ -7505,10 +7525,12 @@
     for(var i = 0; i < chars.length; i++){
       var ch = chars[i];
       if(!isHanChar(ch)){ html += escapeHtml(ch); continue; }
-      var hasOverride = overrides && typeof overrides[baseIdx + i] === "string" && overrides[baseIdx + i] !== "";
+      var ovv = overrides && typeof overrides[baseIdx + i] === "string" ? overrides[baseIdx + i] : "";
+      if(ovv === " " || (!showAll && ovv !== "+")){ html += (showAll ? "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt></rt></ruby>" : escapeHtml(ch)); continue; }
+      var hasOverride = ovv !== "" && ovv !== "+";
       var annotation = hasOverride ? overrides[baseIdx + i]
-        : (currentPhoneticMode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i]);
-      if(currentPhoneticMode === "zhuyin" && currentPhoneticLayout === "right"){
+        : (mode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i]);
+      if(mode === "zhuyin" && currentPhoneticLayout === "right"){
         // 直式、在字右邊：把注音拆成「符號本體」和「聲調符號」，本體直排，聲調放在右邊（輕聲 ˙ 放在上方）
         var ann = String(annotation || ""), tone = "", neutral = false, main = ann.replace(/[ˊˇˋ˙]/g, function(m){ if(m === "˙") neutral = true; else tone = m; return ""; });
         html += "<span class=\"zy-r\" data-ph-idx=\"" + (baseIdx + i) + "\"><span class=\"zy-c\">" + escapeHtml(ch) + "</span><span class=\"zy-s" + (hasOverride ? " ph-overridden" : "") + "\"><span class=\"zy-col\">" + (neutral ? "<span class=\"zy-n\">˙</span>" : "") + "<span class=\"zy-m\">" + Array.from(main).map(function(c){ return "<span class=\"zy-ch\">" + escapeHtml(c) + "</span>"; }).join("") + "</span></span>" + (tone ? "<span class=\"zy-t\">" + tone + "</span>" : "") + "</span></span>";
@@ -7909,8 +7931,8 @@
   };
 
   /* ================== Excel 題庫匯入匯出 ================== */
-  var TYPE_LABEL_MAP = { match: "連連看", choice: "選擇題", reorder: "句子重組", board: "小白板", hanzi: "生字練習" };
-  var TYPE_LABEL_TO_KEY = { "連連看": "match", "選擇題": "choice", "句子重組": "reorder", "小白板": "board", "寫字板": "board", "生字練習": "hanzi" };
+  var TYPE_LABEL_MAP = { match: "連連看", choice: "選擇題", reorder: "句子重組", board: "投影片", hanzi: "生字練習" };
+  var TYPE_LABEL_TO_KEY = { "連連看": "match", "選擇題": "choice", "句子重組": "reorder", "投影片": "board", "小白板": "board", "寫字板": "board", "生字練習": "hanzi" };
 
   function downloadWorkbook(wb, filename){
     XLSX.writeFile(wb, filename);
@@ -7928,7 +7950,7 @@
       ["第三大題：句型排列", "句子重組", "我喜歡喝咖啡", "請將下列詞語重組為正確句子", "喜歡", 2],
       ["第三大題：句型排列", "句子重組", "我喜歡喝咖啡", "請將下列詞語重組為正確句子", "喝", 3],
       ["第三大題：句型排列", "句子重組", "我喜歡喝咖啡", "請將下列詞語重組為正確句子", "咖啡", 4],
-      ["第四大題：漢字書寫", "小白板", "第 1 題：書寫『好』", "請在格線中寫出『好』", "", ""],
+      ["第四大題：漢字書寫", "投影片", "第 1 題：書寫『好』", "請在格線中寫出『好』", "", ""],
       ["第五大題：生字練習", "生字練習", "第 1 題", "請跟著筆順寫三次", "愛", ""]
     ];
     var ws = XLSX.utils.aoa_to_sheet(data);
@@ -8071,7 +8093,7 @@
   }
 
   /* ================== 表格編輯題庫（即時、不用下載上傳檔案） ================== */
-  var TYPE_LABELS_ORDER = ["連連看", "選擇題", "句子重組", "小白板", "生字練習"];
+  var TYPE_LABELS_ORDER = ["連連看", "選擇題", "句子重組", "投影片", "生字練習"];
   var tableEditorDialog = document.getElementById("table-editor-dialog");
   var tableEditorTbody = document.getElementById("table-editor-tbody");
 
@@ -8083,7 +8105,7 @@
         '<option value="連連看">🔗 連連看 Match</option>' +
         '<option value="選擇題">🔘 選擇題 Choice</option>' +
         '<option value="句子重組">🔤 句子重組 Reorder</option>' +
-        '<option value="小白板">🖊️ 小白板 Whiteboard</option>' +
+        '<option value="投影片">🖼 投影片 Slides</option>' +
         '<option value="生字練習">🖋️ 生字練習 Character</option>' +
       '</select></td>' +
       '<td><input type="text" class="te-cell" data-col="2" placeholder="小題標題 Question"></td>' +
@@ -8245,7 +8267,7 @@
             if(lower.indexOf("match") !== -1 || norm.indexOf("連連看") !== -1) matched = "連連看";
             else if(lower.indexOf("choice") !== -1 || norm.indexOf("選擇") !== -1) matched = "選擇題";
             else if(lower.indexOf("reorder") !== -1 || norm.indexOf("重組") !== -1) matched = "句子重組";
-            else if(lower.indexOf("board") !== -1 || lower.indexOf("whiteboard") !== -1 || norm.indexOf("寫字") !== -1 || norm.indexOf("白板") !== -1) matched = "小白板";
+            else if(lower.indexOf("board") !== -1 || lower.indexOf("whiteboard") !== -1 || norm.indexOf("寫字") !== -1 || norm.indexOf("白板") !== -1 || norm.indexOf("投影片") !== -1) matched = "投影片";
             else if(lower.indexOf("hanzi") !== -1 || lower.indexOf("character") !== -1 || norm.indexOf("生字") !== -1 || norm.indexOf("筆順") !== -1) matched = "生字練習";
           }
           if(matched) cell.value = matched;
@@ -9215,6 +9237,17 @@
               <select class="text-anim-select" title="動畫效果">${Object.keys(ANIM_NAMES).map(function(k){ return '<option value="' + k + '">' + ANIM_NAMES[k] + '</option>'; }).join("")}</select>
               <select class="text-anim-delay" title="延遲（接在上一個之後）"><option value="0">同時</option><option value="0.5">延遲 0.5 秒</option><option value="1">延遲 1 秒</option><option value="2">延遲 2 秒</option></select>
               <button type="button" class="text-anim-preview" title="預覽動畫">▶ 預覽</button>
+            </div>
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="這個文字方塊自己決定要不要加拼音／注音；也可以在編輯文字時先選取一段字，再只對那一段設定">注音／拼音 Phonetics</span></div>
+            <div class="anim-row">
+              <select class="text-ph-select" title="這個文字方塊的注音／拼音"><option value="">跟隨整份簡報設定</option><option value="off">這個方塊：不加</option><option value="pinyin">這個方塊：拼音</option><option value="zhuyin">這個方塊：注音</option></select>
+            </div>
+            <div class="anim-row" style="margin-top:4px;">
+              <button type="button" class="text-ph-range" data-m="hide" title="編輯文字時先選取一段字，再按：這一段不加注音／拼音（沒選取＝整個方塊）">選取的字：不加</button>
+              <button type="button" class="text-ph-range" data-m="show" title="選取的字：要加注音／拼音（即使整個方塊設成不加）">選取的字：要加</button>
+              <button type="button" class="text-ph-range" data-m="reset" title="選取的字：恢復跟著方塊設定">還原</button>
             </div>
           </div>
           <div class="popover-field-row">
@@ -10520,7 +10553,7 @@
             var target = texts.find(function(x){ return x.id === textId; });
             if(target){
               if(val === ""){ snapshotForUndo(); texts = texts.filter(function(x){ return x.id !== textId; }); writeProgress(q.id, { texts: texts }); }
-              else if(val !== target.text){ snapshotForUndo(); target.text = val; delete target.phoneticOverride; writeProgress(q.id, { texts: texts }); }
+              else if(val !== target.text){ snapshotForUndo(); if(Array.from(val).length !== Array.from(target.text).length) delete target.phoneticOverride; target.text = val; writeProgress(q.id, { texts: texts }); }
             }
           } else if(val){
             snapshotForUndo();
@@ -10533,7 +10566,11 @@
         clearObjSelection();
         renderTexts();
       }
-      inPlaceEdit = { finish: finish, refreshStyle: refreshStyle };
+      inPlaceEdit = { finish: finish, refreshStyle: refreshStyle, textId: textId, getRange: function(){
+        var sel = window.getSelection(); if(!sel.rangeCount) return null; var r = sel.getRangeAt(0); if(!content.contains(r.startContainer)) return null;
+        var pre = document.createRange(); pre.selectNodeContents(content); pre.setEnd(r.startContainer, r.startOffset);
+        var s0 = Array.from(pre.toString()).length, len = Array.from(r.toString()).length; return len > 0 ? [s0, s0 + len] : null;
+      } };
       document.addEventListener("pointerdown", outside, true);
       document.addEventListener("keydown", onKey, true);
       content.addEventListener("paste", onPaste, true);
@@ -10635,6 +10672,26 @@
       var tg = selectedAnimTarget(), se = vToolbar.querySelector(".text-anim-select"), de = vToolbar.querySelector(".text-anim-delay");
       if(se) se.value = (tg && tg.o.anim) || "none"; if(de) de.value = String((tg && tg.o.animDelay) || 0);
     }
+    // 每個文字方塊／選取範圍自己的注音設定
+    function phTextObj(){ var id = (inPlaceEdit && inPlaceEdit.textId) || activeSelectedTextId; return id ? texts.find(function(x){ return x.id === id; }) : null; }
+    var phSel = vToolbar.querySelector(".text-ph-select");
+    if(phSel){
+      phSel.onchange = function(){ var t = phTextObj(); if(!t){ alert("請先選取一個文字方塊。\nSelect a text box first."); phSel.value = ""; return; } snapshotForUndo(); if(phSel.value) t.ph = phSel.value; else delete t.ph; writeProgress(q.id, { texts: texts }); renderTexts(); };
+      vToolbar.addEventListener("pointerover", function(){ var t = phTextObj(); phSel.value = (t && t.ph) || ""; });
+    }
+    vToolbar.querySelectorAll(".text-ph-range").forEach(function(b){
+      b.addEventListener("mousedown", function(e){ e.preventDefault(); }); // 不要讓按鈕搶走文字選取
+      b.onclick = function(e){
+        e.stopPropagation(); var t = phTextObj(); if(!t){ alert("請先選取一個文字方塊。\nSelect a text box first."); return; }
+        var rg = inPlaceEdit && inPlaceEdit.getRange ? inPlaceEdit.getRange() : null, len = Array.from(t.text || "").length;
+        if(!rg) rg = [0, len];
+        snapshotForUndo(); var ov = Object.assign({}, t.phoneticOverride || {});
+        for(var i = rg[0]; i < rg[1]; i++){ if(b.dataset.m === "reset") delete ov[i]; else ov[i] = b.dataset.m === "hide" ? " " : "+"; }
+        if(Object.keys(ov).length) t.phoneticOverride = ov; else delete t.phoneticOverride;
+        writeProgress(q.id, { texts: texts }); b.textContent = "✓ 已套用"; var old0 = { hide: "選取的字：不加", show: "選取的字：要加", reset: "還原" }[b.dataset.m]; setTimeout(function(){ b.textContent = old0; }, 900);
+        if(!inPlaceEdit) renderTexts();
+      };
+    });
     var textLinkBtn = vToolbar.querySelector(".text-link-btn"); if(textLinkBtn) textLinkBtn.onclick = function(e){ e.stopPropagation(); openLinkDialog(); };
     var animSel = vToolbar.querySelector(".text-anim-select"), animDel = vToolbar.querySelector(".text-anim-delay"), animPrev = vToolbar.querySelector(".text-anim-preview");
     function setAnimProps(){
@@ -11214,7 +11271,7 @@
 
         div.innerHTML = `
           ${(!isStudent && (t.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + t.step + ' 次點擊出現">' + t.step + '</span>' : ''}
-          <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</div>
+          <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride, t.ph)}</div>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
         // 行距（預設 100%）：有注音（ruby）的文字本來行高就是 2.15，行距是在預設行高上再乘倍數
@@ -12718,7 +12775,7 @@
           row.forEach(function(cell, c){
             if(cell.m) return;
             var bg = cell.bg || ((t.hdr && r === 0) ? TBL_HDR_BG : ""), bold = cell.b != null ? cell.b : (t.hdr && r === 0);
-            html += '<td data-r="' + r + '" data-c="' + c + '"' + (cell.rs > 1 ? ' rowspan="' + cell.rs + '"' : "") + (cell.cs > 1 ? ' colspan="' + cell.cs + '"' : "") + ' style="border:' + (bw ? bw * scale + "px solid " + bc : "none") + ";" + (bg ? "background:" + bg + ";" : "") + "color:" + (cell.c || "#2B2320") + ";font-weight:" + (bold ? 700 : 400) + ";text-align:" + (cell.a || "center") + ";font-size:" + Math.max(6, (cell.fs || fs0) * scale) + 'px;">' + buildPhoneticHtml(cell.t || "", cell.po) + '</td>';
+            html += '<td data-r="' + r + '" data-c="' + c + '"' + (cell.rs > 1 ? ' rowspan="' + cell.rs + '"' : "") + (cell.cs > 1 ? ' colspan="' + cell.cs + '"' : "") + ' style="border:' + (bw ? bw * scale + "px solid " + bc : "none") + ";" + (bg ? "background:" + bg + ";" : "") + "color:" + (cell.c || "#2B2320") + ";font-weight:" + (bold ? 700 : 400) + ";text-align:" + (cell.a || "center") + ";font-size:" + Math.max(6, (cell.fs || fs0) * scale) + 'px;">' + buildPhoneticHtml(cell.t || "", cell.po, t.ph) + '</td>';
           });
           html += '</tr>';
         });
@@ -12895,7 +12952,7 @@
         '<span class="tt-g"><label title="儲存格填色">填色 <input type="color" class="tt-bg" value="' + (cell0.bg || "#FFFFFF") + '"></label>' + btn("nobg", "無色", "清除填色") +
         '<label title="文字顏色">字色 <input type="color" class="tt-fc" value="' + (cell0.c || "#2B2320") + '"></label>' + btn("bold", "<b>B</b>", "粗體") + btn("fs-", "A−", "字小一點") + btn("fs+", "A＋", "字大一點") + btn("al-l", "⇤", "靠左") + btn("al-c", "↔", "置中") + btn("al-r", "⇥", "靠右") + '</span>' +
         '<span class="tt-g"><label title="框線顏色">框線 <input type="color" class="tt-bd" value="' + (t.bd || "#555555") + '"></label><input type="number" class="tt-bw" min="0" max="8" step="1" value="' + (t.bw == null ? 2 : t.bw) + '" title="框線粗細（0＝無框線）">' +
-        '<label title="第一列當標題列"><input type="checkbox" class="tt-hdr" ' + (t.hdr ? "checked" : "") + '> 標題列</label>' + btn("eq", "平均", "平均分配欄寬與列高") + btn("del", "🗑 刪除表格", "刪除整張表格") + '</span>' +
+        '<label title="這張表格的注音／拼音">注音 <select class="tt-ph"><option value="">跟隨簡報</option><option value="off">不加</option><option value="pinyin">拼音</option><option value="zhuyin">注音</option></select></label><label title="第一列當標題列"><input type="checkbox" class="tt-hdr" ' + (t.hdr ? "checked" : "") + '> 標題列</label>' + btn("eq", "平均", "平均分配欄寬與列高") + btn("del", "🗑 刪除表格", "刪除整張表格") + '</span>' +
         '<span class="tt-hint">點一下格子選取（拖曳可選多格）；點兩下輸入文字；Tab 跳下一格；拖曳格線調整欄寬列高</span>';
       bar.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
       bar.addEventListener("click", function(e){
@@ -12911,6 +12968,7 @@
       bar.querySelector(".tt-fc").oninput = function(e){ tblSetCellsLive("c", e.target.value); };
       bar.querySelector(".tt-bd").oninput = function(e){ t.bd = e.target.value; writeProgress(q.id, { tables: tables }); renderTexts(); };
       bar.querySelector(".tt-bw").onchange = function(e){ tblProp("bw", Math.max(0, Math.min(8, Number(e.target.value) || 0))); };
+      bar.querySelector(".tt-ph").value = t.ph || ""; bar.querySelector(".tt-ph").onchange = function(e){ snapshotForUndo(); if(e.target.value) t.ph = e.target.value; else delete t.ph; tblCommit(); };
       bar.querySelector(".tt-hdr").onchange = function(e){ tblProp("hdr", e.target.checked); };
       // 顏色選擇器拖動時連續更新，只在第一次存復原點
       var liveSnap = false;
