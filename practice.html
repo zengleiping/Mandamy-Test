@@ -897,7 +897,7 @@
   .mm-timer button{ border:none; background:rgba(255,255,255,.18); color:#fff; border-radius:8px; padding:4px 9px; cursor:pointer; font-size:14px; }
   .mm-timer.mt-end{ background:#B23B32; animation:mtBlink .7s infinite alternate; }
   @keyframes mtBlink{ to{ opacity:.55; } }
-  .obj-link-badge{ position:absolute; left:-10px; top:-12px; font-size:13px; pointer-events:none; }
+  .movable-text.has-link .text-content{ color:#1565C0 !important; text-decoration:underline; text-underline-offset:.12em; }
   .anim-panel{ right:274px; width:330px; }
   .ap-row{ flex-wrap:wrap; }
   .ap-row .lp-name{ flex:1; min-width:70px; }
@@ -11208,12 +11208,12 @@
         if(t.list === "bullet") div.classList.add("list-bullet"); else if(t.list === "number") div.classList.add("list-number");
 
         div.innerHTML = `
-          ${(!isStudent && t.link) ? '<span class="obj-link-badge" title="有超連結">🔗</span>' : ''}
           ${(!isStudent && (t.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + t.step + ' 次點擊出現">' + t.step + '</span>' : ''}
           <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</div>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
         // 行距（預設 100%）：有注音（ruby）的文字本來行高就是 2.15，行距是在預設行高上再乘倍數
+        if(t.link) div.classList.add("has-link");
         if(t.lh && Math.abs(t.lh - 1) > 0.001){ var baseLh = div.querySelector("ruby") ? 2.15 : 1; div.style.lineHeight = String(Math.round(baseLh * t.lh * 1000) / 1000); }
 
         // 2026-09-30 新增：多音字（例如「誰」）自動產生的拼音／注音不一定是老師要的常用讀音，
@@ -11850,7 +11850,7 @@
         var el = document.createElement("img");
         el.className = "board-image" + (stepHidden ? " step-hidden" : "");
         el.dataset.imgId = im.id; el.draggable = false; setImgSrc(el, im.src);
-        applyAnim(el, im); applyObjFmt(el, im, getScaleRatio());
+        applyAnim(el, im); applyObjFmt(el, im, getScaleRatio()); if(im.link && !isStudent) el.style.outline = "2px dotted #1565C0";
         el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
         if(im.h){ el.style.height = im.h + "%"; el.style.objectFit = "fill"; }
         var rI = zrI.map[im.id] || 0;
@@ -12703,7 +12703,7 @@
         if(tblEdit && tblEdit.id === t.id){ div = tblEdit.el; layer.appendChild(div); tblEdit.layer = layer; div.style.zIndex = String(inText ? rank + 1 : rank); return; }
         div = document.createElement("div"); div.className = "table-obj" + (hid ? " step-hidden" : ""); div.dataset.tableId = t.id;
         div.style.left = t.x + "%"; div.style.top = t.y + "%"; div.style.width = t.w + "%"; div.style.zIndex = String(inText ? rank + 1 : rank);
-        applyAnim(div, t);
+        applyAnim(div, t); if(t.link && !isStudent) div.style.outline = "2px dotted #1565C0";
         var bw = Math.max(0, t.bw == null ? 2 : t.bw), bc = t.bd || "#555555", fs0 = t.fs || 24;
         var html = '<table style="table-layout:fixed;width:100%;border-collapse:collapse;"><colgroup>' + t.cw.map(function(f){ return '<col style="width:' + (f * 100) + '%">'; }).join("") + '</colgroup><tbody>';
         t.cells.forEach(function(row, r){
@@ -13553,19 +13553,36 @@
     if(ptTm) ptTm.onclick = function(e){ e.stopPropagation(); startCountdownTimer(); };
     if(ptAu) ptAu.onclick = function(e){ e.stopPropagation(); toggleAutoAdvance(ptAu); };
     // 超連結／動作按鈕：放映中（或按住 Ctrl/⌘）輕點有設連結的物件，就跳到指定投影片或開啟網址
-    var linkDown = null;
-    cWrap.addEventListener("pointerdown", function(e){ linkDown = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
-    cWrap.addEventListener("pointerup", function(e){
+    var linkDown = null, lastLinkDown = null, hoverLink = false, hoverRaf = 0;
+    function linkAt(e){ var hit = hitTestItem(getPos(e)); if(!hit || hit.k === "stroke") return null; var o = selItemObj(hit); return (o && o.link) ? o : null; }
+    function fireLink(o){
+      if(o.link.t === "slide" && o.link.id){ setCurrentQ(o.link.id); }
+      else if(o.link.t === "url" && o.link.url){ var u = /^https?:\/\//i.test(o.link.url) ? o.link.url : "https://" + o.link.url; window.open(u, "_blank", "noopener"); }
+    }
+    var LINK_UI = ".select-bar, .laser-layer, .tn-float, .table-tools, .tbl-grip, .tbl-scale";
+    cWrap.addEventListener("pointerdown", function(e){
+      linkDown = { x: e.clientX, y: e.clientY, t: Date.now() };
+      if(isStudent || (e.target.closest && e.target.closest(LINK_UI))) return;
+      var now = Date.now();
+      // 編輯時：在有連結的物件上「連點兩下」就跳轉（不用再按 Ctrl）
+      if(lastLinkDown && now - lastLinkDown.t < 450 && Math.hypot(e.clientX - lastLinkDown.x, e.clientY - lastLinkDown.y) < 16){
+        lastLinkDown = null; var o = linkAt(e);
+        if(o){ e.stopPropagation(); e.preventDefault(); linkDown = null; fireLink(o); return; }
+      }
+      lastLinkDown = { x: e.clientX, y: e.clientY, t: now };
+    }, true);
+    cWrap.addEventListener("pointerup", function(e){ // 放映中（或按住 Ctrl/⌘）：輕點一下就跳轉
       if(isStudent || !linkDown) return;
       var d = linkDown; linkDown = null;
       if(Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || Date.now() - d.t > 600) return;
       if(!(canvasFullscreen || e.ctrlKey || e.metaKey)) return;
-      if(e.target.closest && e.target.closest(".select-bar, .laser-layer, .tn-float")) return;
-      var hit = hitTestItem(getPos(e)); if(!hit || hit.k === "stroke") return;
-      var o = selItemObj(hit); if(!o || !o.link) return;
-      if(o.link.t === "slide" && o.link.id){ setCurrentQ(o.link.id); }
-      else if(o.link.t === "url" && o.link.url){ var u = /^https?:\/\//i.test(o.link.url) ? o.link.url : "https://" + o.link.url; window.open(u, "_blank", "noopener"); }
+      if(e.target.closest && e.target.closest(LINK_UI)) return;
+      var o = linkAt(e); if(o) fireLink(o);
     }, true);
+    cWrap.addEventListener("pointermove", function(e){ // 滑鼠移到有連結的物件上：游標變成手指
+      if(isStudent || e.buttons || hoverRaf || e.pointerType === "touch") return;
+      hoverRaf = requestAnimationFrame(function(){ hoverRaf = 0; var o = linkAt(e); if(!!o !== hoverLink){ hoverLink = !!o; canvas.style.cursor = o ? "pointer" : toolCursor(); } });
+    });
     vToolbar.addEventListener("click", function(e){ var tb = e.target.closest && e.target.closest("button[data-tool]"); if(tb && laserOn) setLaser(false); });
     document.addEventListener("keydown", function laserKeys(e){
       if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", laserKeys); return; }
