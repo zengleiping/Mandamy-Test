@@ -752,7 +752,7 @@
   .color-popover{
     position:absolute; left:100%; top:50%; margin-left:10px; transform:translateY(-50%) translateX(-6px);
     background:var(--surface); border:1.5px solid var(--grid-line); border-radius:14px;
-    box-shadow:0 12px 28px rgba(0,0,0,0.18); padding:10px; z-index:60;
+    box-shadow:0 12px 28px rgba(0,0,0,0.18); padding:10px; z-index:60; max-height:calc(100vh - 24px); overflow-y:auto; overscroll-behavior:contain;
     opacity:0; visibility:hidden; pointer-events:none; transition:opacity .15s ease, transform .15s ease;
   }
   .tool-btn-v-wrap:hover .color-popover, .tool-btn-v-wrap:focus-within .color-popover{
@@ -766,6 +766,9 @@
      （見 renderDrawBoard 裡綁在 .tool-btn-v-wrap 上的 mouseenter/focusin），非全螢幕則維持原本
      CSS 相對定位、完全不受影響。 */
   .board-area.canvas-fs-active .color-popover{ position:fixed; left:0; top:0; margin-left:0; z-index:9003; }
+  .pop-more{ margin-top:6px; border-top:1px solid var(--grid-line); padding-top:6px; }
+  .pop-more > summary{ cursor:pointer; font-size:12px; font-weight:800; color:var(--seal); padding:4px 0; list-style:none; }
+  .pop-more > summary::before{ content:"▸ "; } .pop-more[open] > summary::before{ content:"▾ "; }
   .color-popover-title{ font-size:11px; font-weight:700; color:var(--ink-soft); text-align:center; margin-bottom:7px; white-space:nowrap; }
   .color-dot-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:9px; padding:2px; }
   .color-dot{
@@ -9199,6 +9202,8 @@
     var slideSecInfo = findSectionForQuestion(q.id);
     // 學生在看「投影片」時只能用畫筆、橡皮擦、清空畫布（只清筆跡）；不能動老師放的文字／圖片／圖案／表格，也不能改底圖或背景
     var deckStudent = !!(isStudent && slideSecInfo && slideSecInfo.sec.type === "board");
+    // 小白板：只留筆、文字、橡皮擦、清空、圖案（多媒體放在題目上方，由題目設定，不是浮在畫布上）
+    var simpleBoard = !!(slideSecInfo && slideSecInfo.sec.type === "whiteboard");
     setTimeout(function(){ prefetchNeighbors(q.id); }, 300);
     var slideSiblingIds = slideSecInfo ? getSortedQuestionKeys(slideSecInfo.sec) : [];
     var slideIndex = slideSiblingIds.indexOf(q.id);
@@ -9344,6 +9349,11 @@
             </div>
           </div>
           <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="加不加拼音／注音就像一種字型：選取一個文字方塊＝整個方塊；編輯文字時先選取一段字，就只改那一段（跟 PowerPoint 一樣）">字型 Font（加不加注音）</span></div>
+            <div class="anim-row"><select class="text-font-select" title="字型：一般＝不加注音；拼音字型＝字上面加拼音；注音字型＝加注音符號"><option value="off">一般字型（不加注音）</option><option value="pinyin">拼音字型（字上加拼音）</option><option value="zhuyin">注音字型（加注音符號）</option></select></div>
+          </div>
+          <details class="pop-more"><summary>進階文字設定 Advanced</summary>
+          <div class="popover-field-row">
             <div class="popover-field-row-label"><span title="100%＝預設；數字越大行與行之間離得越開（選取文字方塊時改那一個，也會是之後新打的字的預設）">行距 Line spacing（%）</span></div>
             ${sizeComboHtml("text-lh-input", Math.round((boardState.lineH || 1) * 100), 60, 400, [80,100,115,150,200,250])}
           </div>
@@ -9372,10 +9382,6 @@
             <div class="anim-row"><button type="button" class="text-span-reset" title="選取一段字再按：這段的顏色與大小恢復跟著方塊（沒選取＝整個方塊都恢復）">還原選取的顏色與大小</button></div>
           </div>
           <div class="popover-field-row">
-            <div class="popover-field-row-label"><span title="加不加拼音／注音就像一種字型：選取一個文字方塊＝整個方塊；編輯文字時先選取一段字，就只改那一段（跟 PowerPoint 一樣）">字型 Font（加不加注音）</span></div>
-            <div class="anim-row"><select class="text-font-select" title="字型：一般＝不加注音；拼音字型＝字上面加拼音；注音字型＝加注音符號"><option value="off">一般字型（不加注音）</option><option value="pinyin">拼音字型（字上加拼音）</option><option value="zhuyin">注音字型（加注音符號）</option></select></div>
-          </div>
-          <div class="popover-field-row">
             <div class="popover-field-row-label"><span title="預設是剛好包住文字；拖曳文字方塊四周的小方塊可以自己決定大小，文字會依方塊寬度自動換行">文字框大小 Box size</span></div>
             <div class="anim-row"><button type="button" class="text-box-auto" title="恢復成剛好包住文字的大小（不自動換行）">恢復自動大小</button></div>
           </div>
@@ -9383,6 +9389,7 @@
             <div class="popover-field-row-label"><span>超連結 Link</span></div>
             <div class="anim-row"><button type="button" class="text-link-btn" title="選取文字方塊後，設定跳到某張投影片或開啟網址（Ctrl/⌘+K）">🔗 設定超連結…</button></div>
           </div>
+          </details>
         </div>
       </div>
       <div class="tool-btn-v-wrap">
@@ -9474,6 +9481,19 @@
         }
       } else {
         pop.style.left = ""; pop.style.top = "";
+      }
+      // 面板很高（例如文字工具）時，不能超出畫面上下：整個面板往上／下挪回可見範圍，超過的部分可以捲動
+      if(!topBar.contains(wrap)){
+        var vh = window.innerHeight, ph = Math.min(pop.offsetHeight, vh - 24);
+        pop.style.maxHeight = (vh - 24) + "px"; pop.style.marginTop = "";
+        if(container.classList.contains("canvas-fs-active")){
+          var rr = wrap.getBoundingClientRect(), center = rr.top + rr.height / 2;
+          pop.style.top = Math.round(Math.max(12 + ph / 2, Math.min(vh - 12 - ph / 2, center))) + "px";
+        } else {
+          var pr = pop.getBoundingClientRect(), shift = 0;
+          if(pr.top < 12) shift = 12 - pr.top; else if(pr.bottom > vh - 12) shift = (vh - 12) - pr.bottom;
+          if(shift) pop.style.marginTop = Math.round(shift) + "px";
+        }
       }
     }
     vToolbar.querySelectorAll(".tool-btn-v-wrap").forEach(function(wrap){
@@ -9749,6 +9769,11 @@
     layout.appendChild(stageArea);
     container.appendChild(layout);
 
+    if(simpleBoard){
+      var hideEl = function(el){ if(!el) return; var w = el.closest && el.closest(".tool-btn-v-wrap"); (w || el).style.display = "none"; };
+      ['button[data-tool="select"]', "#btn-more-tools", "#btn-undo", "#btn-redo", "#btn-arrange", "#btn-transition", "#btn-present", "#btn-insert", "#btn-format-painter", "#btn-anim-pane", "#btn-notes", "#btn-canvas-size", "#btn-media", ".slide-nav-row", ".slide-nav-counter", "#btn-slide-prev", "#btn-slide-next"].forEach(function(sel){ hideEl(vToolbar.querySelector(sel)); });
+      var hs = vToolbar.querySelector("#btn-slide-prev"); if(hs && hs.parentNode) hs.parentNode.style.display = "none";
+    }
     if(deckStudent){ // 學生看投影片：只留筆、橡皮擦、清空（＋放映、翻頁）
       ["select", "text", "shape"].forEach(function(tn){ var tb = vToolbar.querySelector('button[data-tool="' + tn + '"]'); var w = tb && (tb.closest(".tool-btn-v-wrap") || tb); if(w) w.style.display = "none"; });
       ["#btn-more-tools", "#btn-undo", "#btn-redo", "#btn-arrange", "#btn-open-layers"].forEach(function(sel){ var el = vToolbar.querySelector(sel); if(el) el.style.display = "none"; });
@@ -10306,7 +10331,7 @@
       b.onclick = function(){
         if(NON_TOOL_BTN_IDS.indexOf(b.id) !== -1) return;
         function activate(){
-          if(deckStudent && ["pen"].indexOf(b.dataset.tool) === -1) return;
+          if((deckStudent && ["pen"].indexOf(b.dataset.tool) === -1) || (simpleBoard && b.dataset.tool === "select")) return;
           vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
             if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
           });
@@ -11788,6 +11813,7 @@
       h.applyState(st);
     }
     function renderMedias(){
+      if(simpleBoard){ Object.keys(mediaEls).forEach(function(k){ var h0 = mediaEls[k]; if(h0 && h0.el && h0.el.parentNode) h0.el.parentNode.removeChild(h0.el); }); return; }
       var live = {};
       medias.forEach(function(m){
         live[m.id] = true;
@@ -12229,7 +12255,7 @@
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
       if(e.pointerType === "mouse" && e.button === 2){
-        if(deckStudent) return;
+        if(deckStudent || simpleBoard) return;
         e.preventDefault(); try{ canvas.setPointerCapture(e.pointerId); }catch(er){}
         switchToSelectTool(); startSelectInteraction(e, getPos(e));
         return;
