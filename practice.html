@@ -942,7 +942,8 @@
   }
   /* 文字多行／對齊／清單（項目符號、編號）。white-space:pre 讓換行照原樣顯示；每一行是一個 .tl，
      清單的符號用 CSS ::before 產生（不是真的字元），所以不會被編輯、註音或複製到，切換清單樣式也不用改文字內容。 */
-  .movable-text .tl{ white-space:pre; } /* 只讓「一行行文字」保留換行；外層維持 nowrap，不然模板裡的縮排空白會被當成空行撐高方框 */
+  .movable-text .tl{ white-space:pre; }
+  .movable-text.boxed .tl{ white-space:pre-wrap; } /* 只讓「一行行文字」保留換行；外層維持 nowrap，不然模板裡的縮排空白會被當成空行撐高方框 */
   .movable-text .text-content{ display:block; }
   .movable-text .tl{ min-height:1em; }
   .movable-text:has(.tl + .tl){ line-height:1.35; }           /* 多行時行距鬆一點，不然上下行會黏在一起 */
@@ -1054,7 +1055,7 @@
   /* 文字就地編輯（像 PPT：直接在原本的文字位置、原本的樣式裡打字） */
   .movable-text.editing{ user-select:text !important; -webkit-user-select:text !important; cursor:text !important; border-color:var(--seal) !important; }
   .movable-text.editing .text-content{ outline:none; white-space:pre-wrap; min-width:1em; min-height:1em; caret-color:currentColor; user-select:text; -webkit-user-select:text; }
-  .movable-text.editing .resize-handle, .movable-text.editing .text-step-badge{ display:none !important; }
+  .movable-text.editing .resize-handle, .movable-text.editing .tb-edge, .movable-text.editing .text-step-badge{ display:none !important; }
   .tb-modal-back{ position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:20000; display:flex; align-items:center; justify-content:center; }
   .tb-modal{ background:var(--surface); color:var(--ink); border-radius:16px; padding:18px 20px; width:min(460px,92vw); max-height:86vh; overflow:auto; box-shadow:0 20px 50px rgba(0,0,0,.35); }
   .tb-modal h3{ margin:0 0 4px; font-size:17px; } .tb-modal .tb-hint{ font-size:12px; color:var(--ink-soft); margin-bottom:10px; }
@@ -1337,6 +1338,10 @@
   .movable-text rt.ph-overridden{ opacity:1; color:var(--seal); }
   .movable-text:has(ruby){ line-height:2.15; padding-top:0.3em !important; }
 
+  .tb-edge{ display:none; position:absolute; width:11px; height:11px; background:#fff; border:2px solid #1E88E5; border-radius:3px; z-index:10; touch-action:none; box-shadow:0 2px 6px rgba(0,0,0,.25); }
+  .tb-e{ right:-7px; top:50%; margin-top:-6px; cursor:ew-resize !important; } .tb-w{ left:-7px; top:50%; margin-top:-6px; cursor:ew-resize !important; } .tb-s{ bottom:-7px; left:50%; margin-left:-6px; cursor:ns-resize !important; }
+  .movable-text:hover .tb-edge, .movable-text.active .tb-edge{ display:block; }
+  .movable-text.editing .rs.f-pinyin{ background:rgba(30,136,229,.16); } .movable-text.editing .rs.f-zhuyin{ background:rgba(251,140,0,.2); }
   .resize-handle{
     display:none;position:absolute;right:-7px;bottom:-7px;width:13px;height:13px; background:#1E88E5;border:2px solid #FFFFFF;border-radius:50%; cursor:nwse-resize !important;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:10;
     touch-action:none;
@@ -1887,7 +1892,7 @@
       <button type="button" class="btn btn-sm btn-phonetic-layout" data-layout="right">字的右側（直式，像生字本）Right, vertical</button>
     </div>
     <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">「右側」只對注音有效（拼音一律在字的上方）。想改某個字的讀音：點那個字的注音／拼音，聲調可以直接打數字——1～4＝一～四聲、0＝輕聲（例如 ni3 會自動變成 nǐ，ㄋㄧ3 會變成 ㄋㄧˇ）。</p>
-    <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">這是整份簡報的預設：用「文字」工具打字時，要不要自動加拼音或注音——第一次用文字工具時會問一次，之後都可以回這裡改。只有部分文字要加？選取文字方塊後，在「文字方塊」浮窗的「注音／拼音」可以單獨設定這個方塊，編輯時選一段字還能只設那一段。</p>
+    <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;">這是「新增文字方塊」的預設字型（拼音／注音／不加），改了不會動到已經打好的文字。每個文字方塊、甚至同一行裡的某幾個字，都可以在「文字方塊」浮窗的「字型」另外選——像 PowerPoint 選字型一樣，編輯時先選取一段字再選，就只改那一段。</p>
 
     <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
 
@@ -2028,6 +2033,7 @@
         <button type="button" data-type="choice">🔘 選擇題 Choice</button>
         <button type="button" data-type="reorder">🔤 句子重組 Reorder</button>
         <button type="button" data-type="board">🖼 投影片 Slides</button>
+        <button type="button" data-type="whiteboard">🖊️ 小白板 Whiteboard</button>
         <button type="button" data-type="hanzi">🖋️ 生字練習 Character Practice</button>
       </div>
 
@@ -3565,7 +3571,7 @@
             }
           },
           "sec_4": {
-            id: "sec_4", title: "肆、漢字書寫與筆畫 (小白板)", type: "board", order: 3, collapsed: false,
+            id: "sec_4", title: "肆、漢字書寫與筆畫 (小白板)", type: "whiteboard", order: 3, collapsed: false,
             questions: {
               "q_b_1": {
                 id: "q_b_1", title: "第 1 題：書寫『好』與『叫』", order: 0, desc: "請在田字格中練習書寫『好』與『叫』", bgImage: "", gridType: "tian"
@@ -3804,6 +3810,7 @@
     return null;
   }
 
+  function isCanvasSec(sec){ return !!sec && (sec.type === "board" || sec.type === "whiteboard"); } // 投影片（board）與小白板（whiteboard）共用同一個畫布
   function getAllQuestionsList(){
     var secs = getSections(); var secKeys = getSortedSectionKeys(); var list = [];
     secKeys.forEach(function(secId){
@@ -3914,6 +3921,27 @@
     var rest = val.slice(3), at = rest.indexOf("@");
     return { key: at < 0 ? rest : rest.slice(0, at), url: at < 0 ? "" : rest.slice(at + 1) };
   }
+  var mediaFetching = {}, prefetchHold = {}, prefetchKeys = [];
+  // 學生端：預先載入接下來幾張投影片的圖片（瀏覽器先下載好，翻到那一頁就不用再等）
+  function prefetchSlideImages(qId){
+    var item = getAllQuestionsList().find(function(it){ return it.question.id === qId; }); if(!item) return;
+    var pr = getProgress(qId) || {}, vals = [];
+    if(pr.bgImage || item.question.bgImage) vals.push(pr.bgImage || item.question.bgImage);
+    (pr.images || []).forEach(function(im){ if(im.src) vals.push(im.src); });
+    vals.forEach(function(v){
+      resolveMediaSrc(v, "").then(function(u){
+        if(!u || prefetchHold[u]) return;
+        var im = new Image(); im.decoding = "async"; im.src = u; prefetchHold[u] = im; prefetchKeys.push(u);
+        if(prefetchKeys.length > 60){ delete prefetchHold[prefetchKeys.shift()]; }
+      });
+    });
+  }
+  function prefetchNeighbors(qId){
+    if(!isStudent && !inRoom()) return;
+    var found = findSectionForQuestion(qId); if(!found) return;
+    var keys = getSortedQuestionKeys(found.sec), idx = keys.indexOf(qId);
+    [1, 2, 3, 4, -1].forEach(function(d, i){ var k = keys[idx + d]; if(k) setTimeout(function(){ prefetchSlideImages(k); }, 250 + i * 250); });
+  }
   function resolveMediaSrc(val, name){
     var ref0 = parseMediaRef(val);
     if(!ref0) return Promise.resolve(typeof val === "string" ? val : null); // 舊格式：資料網址／一般網址
@@ -3922,7 +3950,8 @@
     return MO.getMedia(ref0.key).then(function(rec){
       if(rec && rec.blob){ var u = URL.createObjectURL(rec.blob); mediaObjUrlCache[ref0.key] = u; return u; }
       if(ref0.url){
-        fetch(ref0.url).then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.blob(); }).then(function(bl){ return MO.putMediaWithKey(ref0.key, bl, name || ""); }).catch(function(){});
+        if(!isStudent && !mediaFetching[ref0.key]){ mediaFetching[ref0.key] = true;
+        fetch(ref0.url).then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.blob(); }).then(function(bl){ return MO.putMediaWithKey(ref0.key, bl, name || ""); }).catch(function(){ delete mediaFetching[ref0.key]; }); }
         return ref0.url;
       }
       return null;
@@ -3976,6 +4005,21 @@
   }
   var mediaSyncing = false;
   // 把還沒上傳的媒體（音檔、圖片）傳到 Firebase Storage（登入且有網路、Storage 可用時）。成功的參照會加上 @網址，再存回課程庫。
+  // 上傳前把太大的圖片縮小（最長邊 1920px；沒有透明的改存 JPEG），學生端載入會快很多；本機保留原檔
+  async function shrinkImageBlob(blob){
+    try{
+      if(!blob || !/^image\/(png|jpeg|webp)$/.test(blob.type || "")) return blob;
+      var url = URL.createObjectURL(blob), im = new Image(); im.src = url; await im.decode();
+      var W = im.naturalWidth, H = im.naturalHeight, k = Math.min(1, 1920 / Math.max(W, H));
+      if(k === 1 && blob.size < 600000){ URL.revokeObjectURL(url); return blob; }
+      var cv = document.createElement("canvas"); cv.width = Math.round(W * k); cv.height = Math.round(H * k);
+      var cx = cv.getContext("2d"); cx.drawImage(im, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+      var opaque = true;
+      if(blob.type !== "image/jpeg"){ var d = cx.getImageData(0, 0, cv.width, cv.height).data; for(var i = 3; i < d.length; i += 40){ if(d[i] < 250){ opaque = false; break; } } }
+      var out = await new Promise(function(res){ if(opaque) cv.toBlob(res, "image/jpeg", 0.86); else cv.toBlob(res, "image/png"); });
+      return (out && out.size < blob.size) ? out : blob;
+    }catch(e){ return blob; }
+  }
   async function syncMediaToCloud(){
     if(mediaSyncing || !currentTeacher || !MO || !MO.ok || !window.storageApi || navigator.onLine === false) return { uploaded: 0, pending: 0 };
     mediaSyncing = true;
@@ -3991,7 +4035,8 @@
             if(!rec || !rec.blob){ done[j.key] = null; }
             else {
               var sr = window.storageApi.ref(window.storageApi.storage, "teacherMedia/" + currentTeacher.id + "/" + j.key);
-              await window.storageApi.uploadBytes(sr, rec.blob, { contentType: rec.type || "application/octet-stream" });
+              var upBlob = await shrinkImageBlob(rec.blob);
+              await window.storageApi.uploadBytes(sr, upBlob, { contentType: upBlob.type || rec.type || "application/octet-stream", cacheControl: "public, max-age=31536000" });
               done[j.key] = await window.storageApi.getDownloadURL(sr);
             }
           }
@@ -4191,7 +4236,7 @@
     var items = []; var totalWeight = 0;
     secKeys.forEach(function(secId){
       var sec = secs[secId];
-      if(sec.type === "board" || sec.type === "hanzi") return; // 小白板／生字練習不計分
+      if(sec.type === "board" || sec.type === "whiteboard" || sec.type === "hanzi") return; // 投影片／小白板／生字練習不計分
       var qKeys = getSortedQuestionKeys(sec);
       qKeys.forEach(function(qId){
         var q = sec.questions[qId];
@@ -4274,7 +4319,7 @@
           } else {
             qRes.score = 0; qRes.status = "wrong"; qRes.detail = `語序未完成或有誤 Incorrect (正解 Answer: ${correctWords.join(" ")})`;
           }
-        } else if(sec.type === "board"){
+        } else if(sec.type === "board" || sec.type === "whiteboard"){
           qRes.isScoreable = false;
           var strokes = progress.strokes || [];
           qRes.status = strokes.length > 0 ? "completed" : "empty";
@@ -5547,7 +5592,7 @@
     (pr.texts || []).forEach(function(t){
       var cls = "mt" + (t.list === "bullet" ? " list-bullet" : (t.list === "number" ? " list-number" : ""));
       var bold = (t.bold === undefined) ? true : !!t.bold;
-      h += '<div class="' + cls + '" style="left:' + t.x + '%;top:' + t.y + '%;font-size:' + Math.round((t.fontSize || 36) * scale) + 'px;font-weight:' + (bold ? 700 : 400) + ';color:' + escapeHtml(t.color || "#2B2320") + ';text-align:' + (t.align || "left") + ';' + (t.bgOn ? 'background:' + exportRgba(t.bgColor, t.bgOp) + ';padding:.12em .45em;border-radius:.3em;' : '') + '">' + buildPhoneticHtml(t.text, t.phoneticOverride) + '</div>';
+      h += '<div class="' + cls + '" style="left:' + t.x + '%;top:' + t.y + '%;font-size:' + Math.round((t.fontSize || 36) * scale) + 'px;font-weight:' + (bold ? 700 : 400) + ';color:' + escapeHtml(t.color || "#2B2320") + ';text-align:' + (t.align || "left") + ';' + (t.bgOn ? 'background:' + exportRgba(t.bgColor, t.bgOp) + ';padding:.12em .45em;border-radius:.3em;' : '') + (t.w ? 'width:' + t.w + '%;max-width:' + t.w + '%;white-space:pre-wrap;word-break:break-word;' : '') + '">' + buildPhoneticHtml(t.text, t.phoneticOverride, t.ph, t.spans ? { map: mmSpanMap(t), base: t.fontSize || 36 } : null) + '</div>';
     });
     h += '</div>';
     var kPrint = Math.min(1000 / W, 690 / H);
@@ -5584,7 +5629,7 @@
         var title = escapeHtml(q.title || "");
         var secTitle = escapeHtml(sec.title || "");
         var body = "", frameStyle = "", kPrint = 0.8, kind = "generic";
-        if(sec.type === "board"){
+        if(isCanvasSec(sec)){
           var sl = await exportBoardSlide(q, pr, title); kind = "board";
           body = sl.html; frameStyle = "--W:" + sl.W + ";--H:" + sl.H + ";--kp:" + sl.kPrint.toFixed(4) + ";";
         } else {
@@ -5603,7 +5648,7 @@
       '.scaler{transform:scale(var(--k));transform-origin:0 0}' +
       '.canvas{position:relative;overflow:hidden;background:#fff}.canvas>img,.canvas>svg{position:absolute}' +
       '.canvas .bg{inset:0;width:100%;height:100%;object-fit:contain}.canvas .pic{transform:translate(-50%,-50%);max-width:none}.canvas .ink,.canvas .shp{inset:0;width:100%;height:100%}' +
-      '.mt{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;line-height:1;width:max-content}.mt .tl{white-space:pre;min-height:1em}' +
+      '.mt{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;line-height:1;width:max-content}.mt .tl{white-space:pre;min-height:1em}.mt[style*="pre-wrap"] .tl{white-space:pre-wrap}' +
       '.zy-r{display:inline-flex;align-items:center;vertical-align:middle}.zy-s{display:inline-flex;align-items:center;margin-left:.06em;font-size:.36em;font-weight:600;line-height:1;opacity:.88}.zy-col{display:inline-flex;flex-direction:column;align-items:center}.zy-m{display:flex;flex-direction:column;align-items:center}.zy-ch{display:block;line-height:1.02}.zy-n{line-height:1;margin-bottom:.1em}.zy-t{margin-left:.08em;align-self:center}' +
       '.mt:has(ruby){line-height:2.15;padding-top:.3em}.mt ruby{ruby-position:over}.mt rt{font-size:.42em;font-weight:600;opacity:.8;letter-spacing:0}' +
       '.mt.list-bullet .tl:not(:empty)::before{content:"•";display:inline-block;min-width:1.1em}.mt.list-number{counter-reset:tl}.mt.list-number .tl:not(:empty){counter-increment:tl}.mt.list-number .tl:not(:empty)::before{content:counter(tl) ".";display:inline-block;min-width:1.5em;margin-right:.15em}' +
@@ -6361,8 +6406,9 @@
         x.fillStyle = (t.color && t.color.charAt(0) === "#") ? t.color : "#2B2320";
         x.textBaseline = "top";
         var lines = String(t.text || "").split("\n"), lh = fs * 1.25;
+        if(t.w){ var maxPx = t.w / 100 * W, wl = []; lines.forEach(function(ln){ var cur = ""; Array.from(ln).forEach(function(chh){ if(cur && x.measureText(cur + chh).width > maxPx){ wl.push(cur); cur = chh; } else cur += chh; }); wl.push(cur); }); lines = wl; }
         var widths = lines.map(function(ln){ return x.measureText(ln).width; });
-        var bw = Math.max.apply(null, widths.concat([1]));
+        var bw = t.w ? t.w / 100 * W : Math.max.apply(null, widths.concat([1]));
         var left = t.x / 100 * W - bw / 2, top = t.y / 100 * H - lines.length * lh / 2;
         if(t.bgOn && /^#[0-9a-fA-F]{6}$/.test(t.bgColor || "")){ x.save(); x.globalAlpha = (t.bgOp == null ? 1 : t.bgOp); x.fillStyle = t.bgColor; x.fillRect(left - fs * 0.4, top - fs * 0.1, bw + fs * 0.8, lines.length * lh + fs * 0.2); x.restore(); }
         if(t.bdW > 0){ x.save(); x.strokeStyle = t.bdC || "#333"; x.lineWidth = t.bdW * sc; x.strokeRect(left - fs * 0.4, top - fs * 0.1, bw + fs * 0.8, lines.length * lh + fs * 0.2); x.restore(); }
@@ -6942,6 +6988,12 @@
             var maxW = Math.max.apply(null, lines.map(function(t){ return mc.measureText(t).width; }).concat([fsU])), unit = WE / 640;
             var padU = (o.bgOn || o.bdW > 0) ? fsU * 0.45 : 0;
             var tw = (maxW + padU * 2) * unit * 1.08, th = lines.length * fsU * 1.3 * (o.lh || 1) * unit + (padU ? fsU * 0.24 * unit : 0);
+            var boxed = !!o.w;
+            if(boxed){
+              tw = X(o.w); var wlines = 0, maxUnits = o.w / 100 * 640;
+              lines.forEach(function(ln){ wlines += Math.max(1, Math.ceil(mc.measureText(ln).width / Math.max(10, maxUnits))); });
+              th = Math.max(wlines * fsU * 1.3 * (o.lh || 1) * unit, o.h ? Y(o.h) : 0);
+            }
             var tcol = hex6(o.color, "2B2320"), al = o.align === "center" ? "ctr" : o.align === "right" ? "r" : "l";
             var bg2 = o.bgOn ? '<a:solidFill><a:srgbClr val="' + hex6(o.bgColor, "FFF3B0") + '">' + ((o.bgOp != null && o.bgOp < 1) ? '<a:alpha val="' + Math.round(o.bgOp * 100000) + '"/>' : "") + '</a:srgbClr></a:solidFill>' : '<a:noFill/>';
             var ln2 = o.bdW > 0 ? '<a:ln w="' + Math.round(o.bdW * 1.5 * 12700) + '"><a:solidFill><a:srgbClr val="' + hex6(o.bdC, "333333") + '"/></a:solidFill></a:ln>' : '<a:ln><a:noFill/></a:ln>';
@@ -6962,7 +7014,7 @@
               lineOff += chs.length + 1;
               return '<a:p><a:pPr algn="' + al + '">' + (o.lh && Math.abs(o.lh - 1) > 0.02 ? '<a:lnSpc><a:spcPct val="' + Math.round(o.lh * 100000) + '"/></a:lnSpc>' : "") + '</a:pPr>' + runs + '</a:p>';
             }).join("");
-            shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="文字方塊"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(X(o.x) - tw / 2) + '" y="' + Math.round(Y(o.y) - th / 2) + '"/><a:ext cx="' + Math.round(tw) + '" cy="' + Math.round(th) + '"/></a:xfrm><a:prstGeom prst="' + (o.rad > 0 ? "roundRect" : "rect") + '"><a:avLst/></a:prstGeom>' + bg2 + ln2 + '</p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>' + paras + '</p:txBody></p:sp>');
+            shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="文字方塊"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(X(o.x) - tw / 2) + '" y="' + Math.round(Y(o.y) - th / 2) + '"/><a:ext cx="' + Math.round(tw) + '" cy="' + Math.round(th) + '"/></a:xfrm><a:prstGeom prst="' + (o.rad > 0 ? "roundRect" : "rect") + '"><a:avLst/></a:prstGeom>' + bg2 + ln2 + '</p:spPr><p:txBody><a:bodyPr wrap="' + (boxed ? "square" : "none") + '" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="' + (boxed ? "t" : "ctr") + '"><a:noAutofit/></a:bodyPr><a:lstStyle/>' + paras + '</p:txBody></p:sp>');
           }
         }
         if(!strokeDone) await addStrokes();
@@ -7023,6 +7075,7 @@
       choice:  { label: "選擇題 Choice",  color: "#B8763D" },
       reorder: { label: "句子重組 Reorder", color: "#6B5B95" },
       board:   { label: "投影片 Slides", color: "#A83232" },
+      whiteboard: { label: "小白板 Whiteboard", color: "#C0623A" },
       hanzi:   { label: "生字練習 Character", color: "#3A7CA5" }
     };
 
@@ -7099,7 +7152,7 @@
       head.querySelector(".btn-del-sec").onclick = function(e){
         e.stopPropagation();
         if(Object.keys(secs).length <= 1){ alert("試卷中至少要保留一大題！Keep at least one section."); return; }
-        if(confirm(`確定刪除大題「${sec.title}」？Delete this section?`)){
+        if(confirm(`⚠️ 確定要刪除整個大題「${sec.title}」嗎？\n\n這個大題裡共有 ${Object.keys(sec.questions || {}).length} ${sec.type === "board" ? "頁投影片" : "個小題"}，會「全部」一起刪除。\n（刪除前會自動存一份版本記錄，可以到「版本記錄」還原。）\n\nDelete this entire section and everything in it?`)){
           delete secs[secId]; var nextList = getAllQuestionsList(); writeSections(secs, nextList.length ? nextList[0].question.id : null);
         }
       };
@@ -7123,7 +7176,7 @@
                 <span class="q-index-badge">${idx + 1}</span>
                 ${sec.type === "board" ? `<img class="q-thumb" data-thumb-qid="${qId}" src="${thumbSrcFor(q)}" alt="">` : ""}
                 <span class="q-item-title">${escapeHtml(q.title)}</span>
-                ${(sec.type !== "board" && sec.type !== "hanzi" && q.weight && q.weight !== 1) ? `<span class="q-weight-tag" title="配分權重 Weight ×${q.weight}">×${q.weight}</span>` : ""}
+                ${(!isCanvasSec(sec) && sec.type !== "hanzi" && q.weight && q.weight !== 1) ? `<span class="q-weight-tag" title="配分權重 Weight ×${q.weight}">×${q.weight}</span>` : ""}
               </span>
               <span class="q-action-btns">
                 ${sec.type === "board" ? `<span class="row-del btn-dup-q" title="複製這張投影片（貼在後面）Duplicate slide" style="font-size:11px; font-weight:700; padding:2px 6px; color:var(--ink-soft); white-space:nowrap;">複製</span>` : ""}
@@ -7285,8 +7338,9 @@
     currentSectionTypeChoice = sec ? sec.type : "match";
     sectionTypeToggle.querySelectorAll("button").forEach(function(b){
       b.classList.toggle("active", b.dataset.type === currentSectionTypeChoice);
-      b.disabled = !!secId;
-      b.style.opacity = secId ? 0.5 : 1;
+      var swap = secId && sec && (sec.type === "board" || sec.type === "whiteboard") && (b.dataset.type === "board" || b.dataset.type === "whiteboard");
+      b.disabled = !!secId && !swap;
+      b.style.opacity = (secId && !swap) ? 0.5 : 1;
     });
     document.getElementById("f-sec-title").value = sec ? (sec.title || "") : "";
     document.getElementById("f-sec-desc").value = sec ? (sec.desc || "") : "";
@@ -7334,10 +7388,11 @@
     var secs = getSections();
     var title = document.getElementById("f-sec-title").value.trim();
     var desc = document.getElementById("f-sec-desc").value.trim();
-    var typeNames = { match: "連連看", choice: "選擇題", reorder: "句子重組", board: "投影片", hanzi: "生字練習" };
+    var typeNames = { match: "連連看", choice: "選擇題", reorder: "句子重組", board: "投影片", whiteboard: "小白板", hanzi: "生字練習" };
     if(editingSectionId && secs[editingSectionId]){
       secs[editingSectionId].title = title || secs[editingSectionId].title;
       secs[editingSectionId].desc = desc;
+      if((secs[editingSectionId].type === "board" || secs[editingSectionId].type === "whiteboard") && (currentSectionTypeChoice === "board" || currentSectionTypeChoice === "whiteboard")) secs[editingSectionId].type = currentSectionTypeChoice; // 投影片 ↔ 小白板 可以互相切換（資料格式相同）
       secs[editingSectionId].media = secMediaManager.getItems();
       writeSections(secs);
     } else {
@@ -7509,18 +7564,18 @@
   // 文字被編輯時，spans 與 phoneticOverride 都依「改了哪一段」重新對位，沒被改到的字保留格式。
   function mmStyleArr(t){
     var n = Array.from(t.text || "").length, arr = new Array(n).fill(null);
-    (t.spans || []).forEach(function(sp){ for(var i = sp.s; i < sp.e && i < n; i++) arr[i] = { c: sp.c, fs: sp.fs }; });
+    (t.spans || []).forEach(function(sp){ for(var i = sp.s; i < sp.e && i < n; i++) arr[i] = { c: sp.c, fs: sp.fs, f: sp.f }; });
     return arr;
   }
   function mmArrToSpans(arr){
     var out = [], cur = null;
     arr.forEach(function(st, i){
-      if(st && (st.c || st.fs)){
-        var key = (st.c || "") + "|" + (st.fs || "");
-        if(cur && cur.key === key && cur.e === i){ cur.e = i + 1; } else { cur = { s: i, e: i + 1, c: st.c, fs: st.fs, key: key }; out.push(cur); }
+      if(st && (st.c || st.fs || st.f)){
+        var key = (st.c || "") + "|" + (st.fs || "") + "|" + (st.f || "");
+        if(cur && cur.key === key && cur.e === i){ cur.e = i + 1; } else { cur = { s: i, e: i + 1, c: st.c, fs: st.fs, f: st.f, key: key }; out.push(cur); }
       } else cur = null;
     });
-    return out.map(function(o){ var r = { s: o.s, e: o.e }; if(o.c) r.c = o.c; if(o.fs) r.fs = o.fs; return r; });
+    return out.map(function(o){ var r = { s: o.s, e: o.e }; if(o.c) r.c = o.c; if(o.fs) r.fs = o.fs; if(o.f) r.f = o.f; return r; });
   }
   function mmRemapText(t, newText){
     var a = Array.from(t.text || ""), b = Array.from(newText || "");
@@ -7537,12 +7592,19 @@
     }
     t.text = newText;
   }
+  function mmStripSpans(t, props){ // 整個方塊統一設定時，把局部格式裡的這些屬性清掉
+    if(!t.spans) return;
+    var ar = mmStyleArr(t);
+    ar.forEach(function(st, i){ if(st){ props.forEach(function(pn){ delete st[pn]; }); if(!st.c && !st.fs && !st.f) ar[i] = null; } });
+    var sp = mmArrToSpans(ar); if(sp.length) t.spans = sp; else delete t.spans;
+  }
+  function mmSpanMap(t){ var m = {}; mmStyleArr(t).forEach(function(st, i){ if(st) m[i] = st; }); return m; }
   function mmRunsHtml(t){ // 編輯時顯示用：依 spans 分段，不含注音
     var chars = Array.from(t.text || ""), arr = mmStyleArr(t), base = t.fontSize || 36, html = "", i = 0;
     while(i < chars.length){
-      var st = arr[i], j = i + 1; while(j < chars.length && ((arr[j] && st && arr[j].c === st.c && arr[j].fs === st.fs) || (!arr[j] && !st))) j++;
+      var st = arr[i], j = i + 1; while(j < chars.length && ((arr[j] && st && arr[j].c === st.c && arr[j].fs === st.fs && arr[j].f === st.f) || (!arr[j] && !st))) j++;
       var seg = escapeHtml(chars.slice(i, j).join(""));
-      html += (st && (st.c || st.fs)) ? '<span class="rs" style="' + (st.c ? "color:" + st.c + ";" : "") + (st.fs ? "font-size:" + (st.fs / base) + "em;" : "") + '">' + seg + '</span>' : seg;
+      html += (st && (st.c || st.fs || st.f)) ? '<span class="rs' + (st.f ? " f-" + st.f : "") + '" style="' + (st.c ? "color:" + st.c + ";" : "") + (st.fs ? "font-size:" + (st.fs / base) + "em;" : "") + '">' + seg + '</span>' : seg;
       i = j;
     }
     return html;
@@ -7564,36 +7626,36 @@
       return '<span class="rs" style="' + (st.c ? "color:" + st.c + ";" : "") + (st.fs ? "font-size:" + (st.fs / (sp.base || 36)) + "em;" : "") + '">' + h + '</span>';
     }
     function plain(){ if(!sp || !sp.map) return escapeHtml(text); return Array.from(text).map(function(ch, i){ return W(i, escapeHtml(ch)); }).join(""); }
-    // 每個文字方塊可以自己決定（modeArg）：跟隨整份簡報／不加／拼音／注音；
-    // 方塊裡「選取的範圍」可以再個別設定：overrides[字的位置] = " "（這個字不加）或 "+"（這個字要加，即使整個方塊關掉）
-    var mode = (modeArg === "pinyin" || modeArg === "zhuyin" || modeArg === "off") ? modeArg : currentPhoneticMode;
-    var showAll = true;
-    if(mode !== "pinyin" && mode !== "zhuyin"){
-      var anyOn = false; if(overrides){ for(var kk in overrides){ if(overrides[kk] === "+"){ anyOn = true; break; } } }
-      if(!anyOn) return plain();
-      mode = (currentPhoneticMode === "zhuyin") ? "zhuyin" : "pinyin"; showAll = false;
+    // 「加不加注音」就像一種字型：每個文字方塊有自己的預設（modeArg：pinyin／zhuyin／off，沒設定的舊方塊才跟著整體預設），
+    // 方塊裡「選取的某幾個字」可以另外套用別的字型（sp.map[i].f）。overrides：舊版個別字設定（" "＝不加、"+"＝要加）＋手動改讀音
+    var boxMode = (modeArg === "pinyin" || modeArg === "zhuyin" || modeArg === "off") ? modeArg : ((currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off");
+    var chars = Array.from(text), modes = [], anyAnn = false, needP = false, needZ = false;
+    for(var k = 0; k < chars.length; k++){
+      var st0 = sp && sp.map && sp.map[baseIdx + k], m = (st0 && st0.f) || boxMode, ov0 = overrides && typeof overrides[baseIdx + k] === "string" ? overrides[baseIdx + k] : "";
+      if(ov0 === " ") m = "hide"; else if(ov0 === "+" && m === "off") m = (currentPhoneticMode === "zhuyin" ? "zhuyin" : "pinyin");
+      if(!isHanChar(chars[k])) m = "none";
+      modes.push(m);
+      if(m === "pinyin"){ anyAnn = true; needP = true; } else if(m === "zhuyin"){ anyAnn = true; needZ = true; }
     }
+    if(!anyAnn) return plain();
     if(typeof pinyinPro === "undefined" || typeof pinyinPro.pinyin !== "function") return plain();
-    var chars = Array.from(text);
-    var symbols;
+    var symP = null, symN = null;
     try{
-      symbols = mode === "zhuyin"
-        ? pinyinPro.pinyin(text, { toneType: "num", type: "array" })
-        : pinyinPro.pinyin(text, { type: "array" });
+      if(needP) symP = pinyinPro.pinyin(text, { type: "array" });
+      if(needZ) symN = pinyinPro.pinyin(text, { toneType: "num", type: "array" });
     } catch(e){ return plain(); }
-    if(!symbols || symbols.length !== chars.length) return plain();
+    if((symP && symP.length !== chars.length) || (symN && symN.length !== chars.length)) return plain();
     var html = "";
     for(var i = 0; i < chars.length; i++){
-      var ch = chars[i];
-      if(!isHanChar(ch)){ html += W(i, escapeHtml(ch)); continue; }
+      var ch = chars[i], md = modes[i];
+      if(md === "none"){ html += W(i, escapeHtml(ch)); continue; }
+      if(md === "off" || md === "hide"){ html += W(i, "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt></rt></ruby>"); continue; }
       var ovv = overrides && typeof overrides[baseIdx + i] === "string" ? overrides[baseIdx + i] : "";
-      if(ovv === " " || (!showAll && ovv !== "+")){ html += W(i, showAll ? "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt></rt></ruby>" : escapeHtml(ch)); continue; }
-      var hasOverride = ovv !== "" && ovv !== "+";
-      var annotation = hasOverride ? overrides[baseIdx + i]
-        : (mode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i]);
-      if(mode === "zhuyin" && currentPhoneticLayout === "right"){
+      var hasOverride = ovv !== "" && ovv !== "+" && ovv !== " ";
+      var annotation = hasOverride ? ovv : (md === "zhuyin" ? pinyinSyllableToZhuyin(symN[i]) : symP[i]);
+      if(md === "zhuyin" && currentPhoneticLayout === "right"){
         // 直式、在字右邊：把注音拆成「符號本體」和「聲調符號」，本體直排，聲調放在右邊（輕聲 ˙ 放在上方）
-        var ann = String(annotation || ""), tone = "", neutral = false, main = ann.replace(/[ˊˇˋ˙]/g, function(m){ if(m === "˙") neutral = true; else tone = m; return ""; });
+        var ann = String(annotation || ""), tone = "", neutral = false, main = ann.replace(/[ˊˇˋ˙]/g, function(mm){ if(mm === "˙") neutral = true; else tone = mm; return ""; });
         html += W(i, "<span class=\"zy-r\" data-ph-idx=\"" + (baseIdx + i) + "\"><span class=\"zy-c\">" + escapeHtml(ch) + "</span><span class=\"zy-s" + (hasOverride ? " ph-overridden" : "") + "\"><span class=\"zy-col\">" + (neutral ? "<span class=\"zy-n\">˙</span>" : "") + "<span class=\"zy-m\">" + Array.from(main).map(function(c){ return "<span class=\"zy-ch\">" + escapeHtml(c) + "</span>"; }).join("") + "</span></span>" + (tone ? "<span class=\"zy-t\">" + tone + "</span>" : "") + "</span></span>");
         continue;
       }
@@ -7861,7 +7923,7 @@
     document.getElementById("match-fields").style.display = type === "match" ? "block" : "none";
     document.getElementById("choice-fields").style.display = type === "choice" ? "block" : "none";
     document.getElementById("reorder-fields").style.display = type === "reorder" ? "block" : "none";
-    document.getElementById("board-fields").style.display = type === "board" ? "block" : "none";
+    document.getElementById("board-fields").style.display = (type === "board" || type === "whiteboard") ? "block" : "none";
     document.getElementById("hanzi-fields").style.display = type === "hanzi" ? "block" : "none";
 
     if(type === "match"){
@@ -7881,7 +7943,7 @@
     } else if(type === "reorder"){
       document.getElementById("f-reorder-prompt").value = q ? (q.prompt || "") : "";
       document.getElementById("f-reorder-answer").value = q && q.words ? q.words.join(" ") : "";
-    } else if(type === "board"){
+    } else if(type === "board" || type === "whiteboard"){
       editorBoardImgData = q ? (q.bgImage || "") : "";
       document.getElementById("upload-tip").textContent = editorBoardImgData ? "✅ 已上傳底圖 Uploaded（點擊可更換 tap to change）" : "📷 點擊上傳背景圖片 Upload Image";
       document.getElementById("f-board-desc").value = q ? (q.desc || "") : "";
@@ -7959,7 +8021,7 @@
       if(words.length < 2){ alert("請輸入至少兩個詞語組成句子！Please enter at least two words."); return; }
       qObj.title = titleInput || ("第 " + (order + 1) + " 題");
       qObj.prompt = rPrompt || "請將下列詞語重組為正確句子 Rearrange the words into a correct sentence"; qObj.words = words;
-    } else if(sec.type === "board"){
+    } else if(sec.type === "board" || sec.type === "whiteboard"){
       qObj.title = titleInput || ("第 " + (order + 1) + " 題");
       qObj.desc = document.getElementById("f-board-desc").value.trim();
       qObj.bgImage = editorBoardImgData || "";
@@ -7992,8 +8054,8 @@
   };
 
   /* ================== Excel 題庫匯入匯出 ================== */
-  var TYPE_LABEL_MAP = { match: "連連看", choice: "選擇題", reorder: "句子重組", board: "投影片", hanzi: "生字練習" };
-  var TYPE_LABEL_TO_KEY = { "連連看": "match", "選擇題": "choice", "句子重組": "reorder", "投影片": "board", "小白板": "board", "寫字板": "board", "生字練習": "hanzi" };
+  var TYPE_LABEL_MAP = { match: "連連看", choice: "選擇題", reorder: "句子重組", board: "投影片", whiteboard: "小白板", hanzi: "生字練習" };
+  var TYPE_LABEL_TO_KEY = { "連連看": "match", "選擇題": "choice", "句子重組": "reorder", "投影片": "board", "小白板": "whiteboard", "寫字板": "whiteboard", "生字練習": "hanzi" };
 
   function downloadWorkbook(wb, filename){
     XLSX.writeFile(wb, filename);
@@ -8011,7 +8073,7 @@
       ["第三大題：句型排列", "句子重組", "我喜歡喝咖啡", "請將下列詞語重組為正確句子", "喜歡", 2],
       ["第三大題：句型排列", "句子重組", "我喜歡喝咖啡", "請將下列詞語重組為正確句子", "喝", 3],
       ["第三大題：句型排列", "句子重組", "我喜歡喝咖啡", "請將下列詞語重組為正確句子", "咖啡", 4],
-      ["第四大題：漢字書寫", "投影片", "第 1 題：書寫『好』", "請在格線中寫出『好』", "", ""],
+      ["第四大題：漢字書寫", "小白板", "第 1 題：書寫『好』", "請在格線中寫出『好』", "", ""],
       ["第五大題：生字練習", "生字練習", "第 1 題", "請跟著筆順寫三次", "愛", ""]
     ];
     var ws = XLSX.utils.aoa_to_sheet(data);
@@ -8041,8 +8103,8 @@
           var words = q.words || [];
           if(!words.length){ rows.push([sec.title, TYPE_LABEL_MAP.reorder, q.title, q.prompt || "", "", ""]); }
           words.forEach(function(w, idx){ rows.push([sec.title, TYPE_LABEL_MAP.reorder, q.title, q.prompt || "", w, idx + 1]); });
-        } else if(sec.type === "board"){
-          rows.push([sec.title, TYPE_LABEL_MAP.board, q.title, q.desc || "", "", ""]);
+        } else if(sec.type === "board" || sec.type === "whiteboard"){
+          rows.push([sec.title, TYPE_LABEL_MAP[sec.type], q.title, q.desc || "", "", ""]);
         } else if(sec.type === "hanzi"){
           rows.push([sec.title, TYPE_LABEL_MAP.hanzi, q.title, q.desc || "", q.char || "", ""]);
         }
@@ -8105,7 +8167,7 @@
         if(type === "match") sec.questions[qId] = { id: qId, title: qTitle, order: order, leftLabel: "生詞", rightLabel: "意思", pairs: {} };
         else if(type === "choice") sec.questions[qId] = { id: qId, title: qTitle, order: order, prompt: qPrompt, choices: {}, answerIds: [] };
         else if(type === "reorder") sec.questions[qId] = { id: qId, title: qTitle, order: order, prompt: qPrompt || "請將下列詞語重組為正確句子", words: [] };
-        else if(type === "board") sec.questions[qId] = { id: qId, title: qTitle, order: order, desc: qPrompt || String(c1 || ""), bgImage: "", gridType: "none" };
+        else if(type === "board" || type === "whiteboard") sec.questions[qId] = { id: qId, title: qTitle, order: order, desc: qPrompt || String(c1 || ""), bgImage: "", gridType: "none" };
         else if(type === "hanzi") sec.questions[qId] = { id: qId, title: qTitle, order: order, char: String(c1 || ""), desc: qPrompt || "" };
       }
       var q = sec.questions[qId];
@@ -8154,7 +8216,7 @@
   }
 
   /* ================== 表格編輯題庫（即時、不用下載上傳檔案） ================== */
-  var TYPE_LABELS_ORDER = ["連連看", "選擇題", "句子重組", "投影片", "生字練習"];
+  var TYPE_LABELS_ORDER = ["連連看", "選擇題", "句子重組", "投影片", "小白板", "生字練習"];
   var tableEditorDialog = document.getElementById("table-editor-dialog");
   var tableEditorTbody = document.getElementById("table-editor-tbody");
 
@@ -8167,6 +8229,7 @@
         '<option value="選擇題">🔘 選擇題 Choice</option>' +
         '<option value="句子重組">🔤 句子重組 Reorder</option>' +
         '<option value="投影片">🖼 投影片 Slides</option>' +
+        '<option value="小白板">🖊️ 小白板 Whiteboard</option>' +
         '<option value="生字練習">🖋️ 生字練習 Character</option>' +
       '</select></td>' +
       '<td><input type="text" class="te-cell" data-col="2" placeholder="小題標題 Question"></td>' +
@@ -8328,7 +8391,8 @@
             if(lower.indexOf("match") !== -1 || norm.indexOf("連連看") !== -1) matched = "連連看";
             else if(lower.indexOf("choice") !== -1 || norm.indexOf("選擇") !== -1) matched = "選擇題";
             else if(lower.indexOf("reorder") !== -1 || norm.indexOf("重組") !== -1) matched = "句子重組";
-            else if(lower.indexOf("board") !== -1 || lower.indexOf("whiteboard") !== -1 || norm.indexOf("寫字") !== -1 || norm.indexOf("白板") !== -1 || norm.indexOf("投影片") !== -1) matched = "投影片";
+            else if(norm.indexOf("投影片") !== -1 || lower.indexOf("slide") !== -1) matched = "投影片";
+            else if(lower.indexOf("board") !== -1 || lower.indexOf("whiteboard") !== -1 || norm.indexOf("寫字") !== -1 || norm.indexOf("白板") !== -1) matched = "小白板";
             else if(lower.indexOf("hanzi") !== -1 || lower.indexOf("character") !== -1 || norm.indexOf("生字") !== -1 || norm.indexOf("筆順") !== -1) matched = "生字練習";
           }
           if(matched) cell.value = matched;
@@ -8397,12 +8461,12 @@
         if(type === "match") sec.questions[qId] = { id: qId, title: qTitle, order: order, leftLabel: (oldQ && oldQ.leftLabel) || "生詞", rightLabel: (oldQ && oldQ.rightLabel) || "意思", pairs: {}, media: (oldQ && oldQ.media) || [], teacherNote: (oldQ && oldQ.teacherNote) || "", weight: (oldQ && oldQ.weight) || 1 };
         else if(type === "choice") sec.questions[qId] = { id: qId, title: qTitle, order: order, prompt: qPrompt, choices: {}, answerIds: [], media: (oldQ && oldQ.media) || [], teacherNote: (oldQ && oldQ.teacherNote) || "", weight: (oldQ && oldQ.weight) || 1 };
         else if(type === "reorder") sec.questions[qId] = { id: qId, title: qTitle, order: order, prompt: qPrompt || "請將下列詞語重組為正確句子 Rearrange the words into a correct sentence", words: [], media: (oldQ && oldQ.media) || [], teacherNote: (oldQ && oldQ.teacherNote) || "", weight: (oldQ && oldQ.weight) || 1 };
-        else if(type === "board") sec.questions[qId] = { id: qId, title: qTitle, order: order, desc: qPrompt || String(c1 || ""), bgImage: (oldQ && oldQ.bgImage) || "", gridType: (oldQ && oldQ.gridType) || "none", media: (oldQ && oldQ.media) || [], teacherNote: (oldQ && oldQ.teacherNote) || "", weight: (oldQ && oldQ.weight) || 1 };
+        else if(type === "board" || type === "whiteboard") sec.questions[qId] = { id: qId, title: qTitle, order: order, desc: qPrompt || String(c1 || ""), bgImage: (oldQ && oldQ.bgImage) || "", gridType: (oldQ && oldQ.gridType) || "none", media: (oldQ && oldQ.media) || [], teacherNote: (oldQ && oldQ.teacherNote) || "", weight: (oldQ && oldQ.weight) || 1 };
         else if(type === "hanzi") sec.questions[qId] = { id: qId, title: qTitle, order: order, char: (oldQ && oldQ.char) || String(c1 || ""), desc: qPrompt || (oldQ && oldQ.desc) || "", media: (oldQ && oldQ.media) || [], teacherNote: (oldQ && oldQ.teacherNote) || "", weight: (oldQ && oldQ.weight) || 1 };
       }
       var q = sec.questions[qId];
       if(type === "choice" || type === "reorder") q.prompt = qPrompt || q.prompt;
-      if(type === "board") q.desc = qPrompt || q.desc;
+      if(type === "board" || type === "whiteboard") q.desc = qPrompt || q.desc;
       if(type === "hanzi"){ q.desc = qPrompt || q.desc; if(String(c1).trim()) q.char = String(c1).trim(); }
 
       if(type === "match"){
@@ -8507,9 +8571,9 @@
     var sec = currentInfo.section; var q = currentInfo.question;
     var allList = getAllQuestionsList(); var currentIndex = allList.findIndex(function(it){ return it.question.id === q.id; });
     var mediaFingerprint = (sec.media || []).map(function(m){ return m.id; }).join(",") + "|" + (q.media || []).map(function(m){ return m.id; }).join(",");
-    var stageSignature = JSON.stringify([q.id, sec.title, sec.desc || "", q.title, q.desc || "", currentIndex, allList.length, currentClassMode, !!isStudent, mediaFingerprint, (sec.type === "board" ? "" : (q.teacherNote || ""))]);
+    var stageSignature = JSON.stringify([q.id, sec.title, sec.desc || "", q.title, q.desc || "", currentIndex, allList.length, currentClassMode, !!isStudent, mediaFingerprint, (isCanvasSec(sec) ? "" : (q.teacherNote || ""))]);
 
-    if((sec.type === "board" || sec.type === "hanzi") && liveBoardQId === q.id && stageSignature === lastStageSignature && liveBoardRefresh && liveBoardRefresh()){
+    if((isCanvasSec(sec) || sec.type === "hanzi") && liveBoardQId === q.id && stageSignature === lastStageSignature && liveBoardRefresh && liveBoardRefresh()){
       return; // 局部刷新成功：只更新畫布內容（筆畫／文字／格線／底圖），不重建整個舞台
     }
 
@@ -8534,7 +8598,7 @@
     lastStageSignature = stageSignature;
     liveBoardQId = null; liveBoardRefresh = null; liveTraceHandler = null; // 若這題是小白板／生字練習，稍後 renderDrawBoard()／renderHanziBoard() 會重新指定
     // 小白板／生字練習這兩種畫布類題型，舞台區不要被一般題型的固定寬度上限卡住（見 CSS .stage-canvas-type）
-    stageEl.classList.toggle("stage-canvas-type", sec.type === "board" || sec.type === "hanzi");
+    stageEl.classList.toggle("stage-canvas-type", isCanvasSec(sec) || sec.type === "hanzi");
 
     var navBar = document.createElement("div"); navBar.className = "stage-header-nav";
     navBar.innerHTML = `
@@ -8569,7 +8633,7 @@
     head.appendChild(actWrap);
     stageEl.appendChild(head);
 
-    if(!isStudent && sec.type !== "board" && q.teacherNote && q.teacherNote.trim()){
+    if(!isStudent && !isCanvasSec(sec) && q.teacherNote && q.teacherNote.trim()){
       var noteBlock = document.createElement("div"); noteBlock.className = "teacher-note-block";
       var tnIcon = document.createElement("div"); tnIcon.className = "tn-icon"; tnIcon.textContent = "🔒";
       var tnBody = document.createElement("div"); tnBody.className = "tn-body";
@@ -8589,7 +8653,7 @@
     if(sec.type === "match") renderMatchBoard(q, boardArea);
     else if(sec.type === "choice") renderChoiceBoard(q, boardArea);
     else if(sec.type === "reorder") renderReorderBoard(q, boardArea);
-    else if(sec.type === "board") renderDrawBoard(q, boardArea);
+    else if(isCanvasSec(sec)) renderDrawBoard(q, boardArea);
     else if(sec.type === "hanzi") renderHanziBoard(q, boardArea);
 
     applyStageZoom(currentZoomRatio);
@@ -9133,6 +9197,9 @@
     // 簡報頁面切換：如果這一題所在的大題底下有兩題以上，就當成一份多頁簡報／小白板，全螢幕工具列
     // 顯示「上一頁／下一頁」讓老師不用退出全螢幕就能翻頁（見下面 vToolbar 裡的 .slide-nav-row）。
     var slideSecInfo = findSectionForQuestion(q.id);
+    // 學生在看「投影片」時只能用畫筆、橡皮擦、清空畫布（只清筆跡）；不能動老師放的文字／圖片／圖案／表格，也不能改底圖或背景
+    var deckStudent = !!(isStudent && slideSecInfo && slideSecInfo.sec.type === "board");
+    setTimeout(function(){ prefetchNeighbors(q.id); }, 300);
     var slideSiblingIds = slideSecInfo ? getSortedQuestionKeys(slideSecInfo.sec) : [];
     var slideIndex = slideSiblingIds.indexOf(q.id);
     var isMultiSlideDeck = slideSiblingIds.length > 1;
@@ -9305,15 +9372,12 @@
             <div class="anim-row"><button type="button" class="text-span-reset" title="選取一段字再按：這段的顏色與大小恢復跟著方塊（沒選取＝整個方塊都恢復）">還原選取的顏色與大小</button></div>
           </div>
           <div class="popover-field-row">
-            <div class="popover-field-row-label"><span title="這個文字方塊自己決定要不要加拼音／注音；也可以在編輯文字時先選取一段字，再只對那一段設定">注音／拼音 Phonetics</span></div>
-            <div class="anim-row">
-              <select class="text-ph-select" title="這個文字方塊的注音／拼音"><option value="">跟隨整份簡報設定</option><option value="off">這個方塊：不加</option><option value="pinyin">這個方塊：拼音</option><option value="zhuyin">這個方塊：注音</option></select>
-            </div>
-            <div class="anim-row" style="margin-top:4px;">
-              <button type="button" class="text-ph-range" data-m="hide" title="編輯文字時先選取一段字，再按：這一段不加注音／拼音（沒選取＝整個方塊）">選取的字：不加</button>
-              <button type="button" class="text-ph-range" data-m="show" title="選取的字：要加注音／拼音（即使整個方塊設成不加）">選取的字：要加</button>
-              <button type="button" class="text-ph-range" data-m="reset" title="選取的字：恢復跟著方塊設定">還原</button>
-            </div>
+            <div class="popover-field-row-label"><span title="加不加拼音／注音就像一種字型：選取一個文字方塊＝整個方塊；編輯文字時先選取一段字，就只改那一段（跟 PowerPoint 一樣）">字型 Font（加不加注音）</span></div>
+            <div class="anim-row"><select class="text-font-select" title="字型：一般＝不加注音；拼音字型＝字上面加拼音；注音字型＝加注音符號"><option value="off">一般字型（不加注音）</option><option value="pinyin">拼音字型（字上加拼音）</option><option value="zhuyin">注音字型（加注音符號）</option></select></div>
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="預設是剛好包住文字；拖曳文字方塊四周的小方塊可以自己決定大小，文字會依方塊寬度自動換行">文字框大小 Box size</span></div>
+            <div class="anim-row"><button type="button" class="text-box-auto" title="恢復成剛好包住文字的大小（不自動換行）">恢復自動大小</button></div>
           </div>
           <div class="popover-field-row">
             <div class="popover-field-row-label"><span>超連結 Link</span></div>
@@ -9685,6 +9749,10 @@
     layout.appendChild(stageArea);
     container.appendChild(layout);
 
+    if(deckStudent){ // 學生看投影片：只留筆、橡皮擦、清空（＋放映、翻頁）
+      ["select", "text", "shape"].forEach(function(tn){ var tb = vToolbar.querySelector('button[data-tool="' + tn + '"]'); var w = tb && (tb.closest(".tool-btn-v-wrap") || tb); if(w) w.style.display = "none"; });
+      ["#btn-more-tools", "#btn-undo", "#btn-redo", "#btn-arrange", "#btn-open-layers"].forEach(function(sel){ var el = vToolbar.querySelector(sel); if(el) el.style.display = "none"; });
+    }
     // ===== 工具列自訂：分配到左側／上方／隱藏，並支援收合 =====
     var TB_ITEM_DEFS = [
       { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
@@ -10238,6 +10306,7 @@
       b.onclick = function(){
         if(NON_TOOL_BTN_IDS.indexOf(b.id) !== -1) return;
         function activate(){
+          if(deckStudent && ["pen"].indexOf(b.dataset.tool) === -1) return;
           vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
             if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
           });
@@ -10372,7 +10441,7 @@
       textLayer.querySelectorAll(".movable-text.active, .image-proxy.active, .shape-proxy.active").forEach(function(d){ d.classList.remove("active"); });
     }
     function syncObjInteractive(){
-      textLayer.classList.toggle("objs-interactive", boardState.tool === "text" || boardState.tool === "stroke-eraser" || boardState.tool === "shape");
+      textLayer.classList.toggle("objs-interactive", !deckStudent && (boardState.tool === "text" || boardState.tool === "stroke-eraser" || boardState.tool === "shape"));
     }
     syncObjInteractive();
     function activateTextToolQuietly(){
@@ -10461,6 +10530,7 @@
       selectImageObj(obj.id);
     }
     function pasteImageFiles(files){
+      if(deckStudent) return;
       files.forEach(function(f){
         downscaleImageFile(f, function(res){
           if(!res){ alert("這張圖片讀不進來（格式不支援或檔案壞掉）。\nCouldn't read this image."); return; }
@@ -10470,6 +10540,7 @@
       });
     }
     function pasteInternalObj(){
+      if(deckStudent) return;
       if(!objClipboard) return;
       var off = (pasteOffsetN++ % 6 + 1) * 3;
       var copy = JSON.parse(JSON.stringify(objClipboard.data));
@@ -10489,8 +10560,9 @@
       }
     }
     function pasteTextBox(txt){
+      if(deckStudent) return;
       var t = {
-        id: uid("t"), text: txt.replace(/\r\n?/g, "\n").trim(), x: 50, y: 50,
+        id: uid("t"), ph: newTextPh(), text: txt.replace(/\r\n?/g, "\n").trim(), x: 50, y: 50,
         color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: 0,
         align: boardState.align || "left", list: boardState.list || "none"
       };
@@ -10580,7 +10652,7 @@
       var t = texts.find(function(x){ return x.id === inPlaceEdit.textId; }); if(!t) return false;
       inPlaceEdit.syncText(); snapshotForUndo();
       var arr = mmStyleArr(t);
-      for(var i = rg[0]; i < rg[1] && i < arr.length; i++){ var st = Object.assign({}, arr[i] || {}); if(val === null) delete st[prop]; else st[prop] = val; arr[i] = (st.c || st.fs) ? st : null; }
+      for(var i = rg[0]; i < rg[1] && i < arr.length; i++){ var st = Object.assign({}, arr[i] || {}); if(val === null) delete st[prop]; else st[prop] = val; arr[i] = (st.c || st.fs || st.f) ? st : null; }
       var sp = mmArrToSpans(arr); if(sp.length) t.spans = sp; else delete t.spans;
       writeProgress(q.id, { texts: texts });
       inPlaceEdit.setHtml(mmRunsHtml(t)); setSelByOffsets(inPlaceEdit.contentEl, rg[0], rg[1]); editSel = rg;
@@ -10659,7 +10731,7 @@
             }
           } else if(val){
             snapshotForUndo();
-            var nt = { id: uid("t"), text: val, x: newPos.x, y: newPos.y, color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: boardState.step || 0, align: boardState.align || "left", list: boardState.list || "none" };
+            var nt = { id: uid("t"), text: val, ph: newTextPh(), x: newPos.x, y: newPos.y, color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: boardState.step || 0, align: boardState.align || "left", list: boardState.list || "none" };
             applyTextBgDefaults(nt);
             assignNewZ("text", nt);
             texts.push(nt); writeProgress(q.id, { texts: texts });
@@ -10777,26 +10849,28 @@
       var tg = selectedAnimTarget(), se = vToolbar.querySelector(".text-anim-select"), de = vToolbar.querySelector(".text-anim-delay");
       if(se) se.value = (tg && tg.o.anim) || "none"; if(de) de.value = String((tg && tg.o.animDelay) || 0);
     }
-    // 每個文字方塊／選取範圍自己的注音設定
+    // 字型（加不加注音）：有選取文字＝只改選取的那一段；否則改整個文字方塊；都沒選＝之後新打的字的預設
     function phTextObj(){ var id = (inPlaceEdit && inPlaceEdit.textId) || activeSelectedTextId; return id ? texts.find(function(x){ return x.id === id; }) : null; }
-    var phSel = vToolbar.querySelector(".text-ph-select");
-    if(phSel){
-      phSel.onchange = function(){ var t = phTextObj(); if(!t){ alert("請先選取一個文字方塊。\nSelect a text box first."); phSel.value = ""; return; } snapshotForUndo(); if(phSel.value) t.ph = phSel.value; else delete t.ph; writeProgress(q.id, { texts: texts }); renderTexts(); };
-      vToolbar.addEventListener("pointerover", function(){ var t = phTextObj(); phSel.value = (t && t.ph) || ""; });
+    function newTextPh(){ return boardState.phFont || ((currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off"); }
+    var fontSel = vToolbar.querySelector(".text-font-select");
+    function curFontVal(){
+      var t = phTextObj(); if(!t) return newTextPh();
+      var rg = inPlaceEdit ? (inPlaceEdit.getRange() || editSel) : null;
+      if(rg && rg[1] > rg[0]){ var st = mmStyleArr(t)[rg[0]]; if(st && st.f) return st.f; }
+      return t.ph || ((currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off");
     }
-    vToolbar.querySelectorAll(".text-ph-range").forEach(function(b){
-      b.addEventListener("mousedown", function(e){ e.preventDefault(); }); // 不要讓按鈕搶走文字選取
-      b.onclick = function(e){
-        e.stopPropagation(); var t = phTextObj(); if(!t){ alert("請先選取一個文字方塊。\nSelect a text box first."); return; }
-        var rg = inPlaceEdit && inPlaceEdit.getRange ? inPlaceEdit.getRange() : null, len = Array.from(t.text || "").length;
-        if(!rg) rg = [0, len];
-        snapshotForUndo(); var ov = Object.assign({}, t.phoneticOverride || {});
-        for(var i = rg[0]; i < rg[1]; i++){ if(b.dataset.m === "reset") delete ov[i]; else ov[i] = b.dataset.m === "hide" ? " " : "+"; }
-        if(Object.keys(ov).length) t.phoneticOverride = ov; else delete t.phoneticOverride;
-        writeProgress(q.id, { texts: texts }); b.textContent = "✓ 已套用"; var old0 = { hide: "選取的字：不加", show: "選取的字：要加", reset: "還原" }[b.dataset.m]; setTimeout(function(){ b.textContent = old0; }, 900);
-        if(!inPlaceEdit) renderTexts();
+    if(fontSel){
+      fontSel.onchange = function(){
+        var v = fontSel.value;
+        if(applySpanFromUi("f", v)) return;
+        var t = phTextObj();
+        if(t){ snapshotForUndo(); t.ph = v; mmStripSpans(t, ["f"]); writeProgress(q.id, { texts: texts }); renderTexts(); }
+        else boardState.phFont = v;
       };
-    });
+      vToolbar.addEventListener("pointerover", function(){ fontSel.value = curFontVal(); });
+    }
+    var boxAutoBtn = vToolbar.querySelector(".text-box-auto");
+    if(boxAutoBtn) boxAutoBtn.onclick = function(e){ e.stopPropagation(); var t = phTextObj(); if(!t){ alert("請先選取一個文字方塊。\nSelect a text box first."); return; } snapshotForUndo(); delete t.w; delete t.h; writeProgress(q.id, { texts: texts }); renderTexts(); };
     var spanResetBtn = vToolbar.querySelector(".text-span-reset"); if(spanResetBtn){ spanResetBtn.addEventListener("mousedown", function(e){ e.preventDefault(); }); spanResetBtn.onclick = function(e){ e.stopPropagation(); clearSpansFromUi(); }; }
     var textLinkBtn = vToolbar.querySelector(".text-link-btn"); if(textLinkBtn) textLinkBtn.onclick = function(e){ e.stopPropagation(); openLinkDialog(); };
     var animSel = vToolbar.querySelector(".text-anim-select"), animDel = vToolbar.querySelector(".text-anim-delay"), animPrev = vToolbar.querySelector(".text-anim-preview");
@@ -10836,6 +10910,7 @@
         if(btnUploadBg && bgFileInput){
           btnUploadBg.onclick = function(e){
             e.preventDefault(); e.stopPropagation();
+            if(isStudent) return;
             bgFileInput.click();
           };
           bgFileInput.onchange = function(e){
@@ -10865,6 +10940,7 @@
         if(btnRemoveBg){
           btnRemoveBg.onclick = function(e){
             e.preventDefault(); e.stopPropagation();
+            if(isStudent) return; // 底圖是老師放的，學生不能清掉
             q.bgImage = "";
             writeProgress(q.id, { bgImage: "" });
             writeSections(getSections());
@@ -11357,6 +11433,7 @@
         div.className = "movable-text" + (t.id === activeSelectedTextId ? " active" : "") + (stepHidden ? " step-hidden" : "");
         div.style.left = t.x + "%";
         div.style.top = t.y + "%";
+        if(t.w){ div.classList.add("boxed"); div.style.width = t.w + "%"; div.style.maxWidth = t.w + "%"; div.style.wordBreak = "break-word"; if(t.h) div.style.minHeight = t.h + "%"; }
         div.dataset.textId = t.id;
         applyAnim(div, t);
         div.style.zIndex = String((zrT.map[t.id] || 0) + 1);
@@ -11378,7 +11455,7 @@
         div.innerHTML = `
           ${(!isStudent && (t.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + t.step + ' 次點擊出現">' + t.step + '</span>' : ''}
           <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride, t.ph, t.spans ? { map: spanMapOf(t), base: t.fontSize || 36 } : null)}</div>
-          <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
+          <div class="resize-handle" title="拖曳調整文字框大小（文字會依寬度自動換行）"></div><div class="tb-edge tb-e" title="拖曳調整寬度"></div><div class="tb-edge tb-w" title="拖曳調整寬度"></div><div class="tb-edge tb-s" title="拖曳調整高度"></div>
         `;
         // 行距（預設 100%）：有注音（ruby）的文字本來行高就是 2.15，行距是在預設行高上再乘倍數
         if(t.link) div.classList.add("has-link");
@@ -11421,37 +11498,32 @@
         // 改用 Pointer Events（統一處理滑鼠／觸控／觸控筆，包含 iPad 手指與 Apple Pencil），
         // 並在按下時用 setPointerCapture 把後續的移動/放開事件牢牢鎖定在這個元素上，
         // 避免手指快速移動時「跑出」元素範圍，被瀏覽器誤判成滑動手勢而中斷拖曳。
-        var handle = div.querySelector(".resize-handle");
-        handle.onpointerdown = function(e){
-          e.stopPropagation(); e.preventDefault();
-          try{ handle.setPointerCapture(e.pointerId); }catch(err){}
-          var startSize = t.fontSize || 36;
-          var centerRect = div.getBoundingClientRect();
-          var centerX = centerRect.left + centerRect.width / 2;
-          var centerY = centerRect.top + centerRect.height / 2;
-          var startDist = Math.hypot(e.clientX - centerX, e.clientY - centerY) || 1;
-
-          function onResizeMove(ev){
-            var currentDist = Math.hypot(ev.clientX - centerX, ev.clientY - centerY);
-            var ratio = currentDist / startDist;
-            var newSize = Math.max(16, Math.min(120, Math.round(startSize * ratio)));
-            t.fontSize = newSize;
-            div.style.fontSize = Math.round(newSize * scale) + "px";
-            if(fontSelect) fontSelect.value = String(newSize);
-          }
-
-          function onResizeUp(){
-            handle.removeEventListener("pointermove", onResizeMove);
-            handle.removeEventListener("pointerup", onResizeUp);
-            handle.removeEventListener("pointercancel", onResizeUp);
-            writeProgress(q.id, { texts: texts });
-          }
-
-          snapshotForUndo(); // 在拖動縮放開始「之前」存一份快照，上一步就能整個復原成拖動前的大小
-          handle.addEventListener("pointermove", onResizeMove);
-          handle.addEventListener("pointerup", onResizeUp);
-          handle.addEventListener("pointercancel", onResizeUp);
-        };
+        // 文字框大小（像 PowerPoint）：預設剛好包住文字；拖曳四周的小方塊可以決定寬度／高度，文字依寬度自動換行。
+        // 位置存的是中心點，所以拖某一邊時，要同時調整中心點，讓對面那一邊不動。
+        function bindBoxHandle(hEl, edge){
+          hEl.onpointerdown = function(e){
+            e.stopPropagation(); e.preventDefault();
+            try{ hEl.setPointerCapture(e.pointerId); }catch(err){}
+            var cr = cWrap.getBoundingClientRect(), r0 = div.getBoundingClientRect();
+            var L = (r0.left - cr.left) / cr.width * 100, R = (r0.right - cr.left) / cr.width * 100, T = (r0.top - cr.top) / cr.height * 100;
+            snapshotForUndo();
+            function mv(ev){
+              var px = (ev.clientX - cr.left) / cr.width * 100, py = (ev.clientY - cr.top) / cr.height * 100;
+              var nL = L, nR = R;
+              if(edge.indexOf("e") >= 0) nR = Math.max(L + 4, px);
+              if(edge.indexOf("w") >= 0) nL = Math.min(R - 4, px);
+              t.w = Math.round((nR - nL) * 100) / 100; t.x = Math.round((nL + nR) / 2 * 100) / 100;
+              div.classList.add("boxed"); div.style.width = t.w + "%"; div.style.maxWidth = t.w + "%"; div.style.wordBreak = "break-word"; div.style.left = t.x + "%";
+              if(edge.indexOf("s") >= 0){
+                var hh = Math.max(3, py - T); t.h = Math.round(hh * 100) / 100; div.style.minHeight = t.h + "%";
+                var r2 = div.getBoundingClientRect(); t.y = Math.round((T + r2.height / cr.height * 100 / 2) * 100) / 100; div.style.top = t.y + "%";
+              }
+            }
+            function up(){ hEl.removeEventListener("pointermove", mv); hEl.removeEventListener("pointerup", up); hEl.removeEventListener("pointercancel", up); writeProgress(q.id, { texts: texts }); renderTexts(); }
+            hEl.addEventListener("pointermove", mv); hEl.addEventListener("pointerup", up); hEl.addEventListener("pointercancel", up);
+          };
+        }
+        bindBoxHandle(div.querySelector(".resize-handle"), "es"); bindBoxHandle(div.querySelector(".tb-e"), "e"); bindBoxHandle(div.querySelector(".tb-w"), "w"); bindBoxHandle(div.querySelector(".tb-s"), "s");
 
         div.onpointerdown = function(e){
           e.stopPropagation();
@@ -11522,6 +11594,7 @@
       renderMedias();
       if(typeof renderLayersPanel === "function") renderLayersPanel();
       if(typeof renderAnimPanel === "function") renderAnimPanel();
+      if(activeSelectedTextId && fontSelect && document.activeElement !== fontSelect){ var tsel = texts.find(function(x){ return x.id === activeSelectedTextId; }); if(tsel) fontSelect.value = String(tsel.fontSize || 36); }
       if(typeof renderSelection === "function" && selSet.length) renderSelection();
     }
 
@@ -12007,6 +12080,7 @@
       }
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     }
+    var imgElCache = {}; // 同一張圖片重畫時沿用同一個 <img>，不要每次都重新載入（不然每次同步都會閃一下、慢一下）
     function renderImages(){
       imageLayer.innerHTML = "";
       var zrI = zRanks();
@@ -12015,9 +12089,10 @@
       images.forEach(function(im, idx){
         var stepHidden = (im.step || 0) > revealNow;
         if(stepHidden && isStudent) return;
-        var el = document.createElement("img");
+        var cached = imgElCache[im.id], el;
+        if(cached && cached.src === im.src){ el = cached.el; el.removeAttribute("style"); }
+        else { el = document.createElement("img"); el.decoding = "async"; el.dataset.imgId = im.id; el.draggable = false; setImgSrc(el, im.src); imgElCache[im.id] = { src: im.src, el: el }; }
         el.className = "board-image" + (stepHidden ? " step-hidden" : "");
-        el.dataset.imgId = im.id; el.draggable = false; setImgSrc(el, im.src);
         applyAnim(el, im); applyObjFmt(el, im, getScaleRatio()); if(im.link && !isStudent) el.style.outline = "2px dotted #1565C0";
         el.style.left = im.x + "%"; el.style.top = im.y + "%"; el.style.width = im.w + "%";
         if(im.h){ el.style.height = im.h + "%"; el.style.objectFit = "fill"; }
@@ -12154,6 +12229,7 @@
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
       if(e.pointerType === "mouse" && e.button === 2){
+        if(deckStudent) return;
         e.preventDefault(); try{ canvas.setPointerCapture(e.pointerId); }catch(er){}
         switchToSelectTool(); startSelectInteraction(e, getPos(e));
         return;
@@ -12375,7 +12451,7 @@
           if(selObj){
             snapshotForUndo();
             selObj.fontSize = boardState.fontSize;
-            if(selObj.spans){ var ar2 = mmStyleArr(selObj); ar2.forEach(function(st, i){ if(st){ delete st.fs; if(!st.c) ar2[i] = null; } }); var sp2 = mmArrToSpans(ar2); if(sp2.length) selObj.spans = sp2; else delete selObj.spans; }
+            mmStripSpans(selObj, ["fs"]);
             writeProgress(q.id, { texts: texts });
             renderTexts();
           }
@@ -13615,7 +13691,7 @@
     }
 
     // ===== 複製格式（格式刷）：複製選取物件／表格儲存格的外觀，套用到別的物件 =====
-    var BR_PROPS = { text: ["color", "fontSize", "bold", "align", "list", "lh", "bgOn", "bgColor", "bgOp", "bdW", "bdC", "shd", "rad"], image: ["bdW", "bdC", "shd", "rad", "crop"], shape: ["color", "sw", "fill", "op", "grad", "shd", "rad"], table: ["bd", "bw", "hdr", "fs"], cell: ["bg", "c", "b", "a", "fs"] };
+    var BR_PROPS = { text: ["color", "fontSize", "bold", "align", "list", "lh", "ph", "bgOn", "bgColor", "bgOp", "bdW", "bdC", "shd", "rad"], image: ["bdW", "bdC", "shd", "rad", "crop"], shape: ["color", "sw", "fill", "op", "grad", "shd", "rad"], table: ["bd", "bw", "hdr", "fs"], cell: ["bg", "c", "b", "a", "fs"] };
     var brush = null, brushHint = null, brushLastClick = 0;
     function brushSource(){
       var rg = tblSel && selSet.length === 1 && selSet[0].k === "table" ? tblRange() : null;
@@ -13636,10 +13712,10 @@
       return {};
     }
     function brushToObj(f, k, o){
-      if(f.k === k){ BR_PROPS[k].forEach(function(pn){ if(f.p[pn] === undefined) delete o[pn]; else o[pn] = JSON.parse(JSON.stringify(f.p[pn])); }); return; }
+      if(f.k === k){ BR_PROPS[k].forEach(function(pn){ if(f.p[pn] === undefined) delete o[pn]; else o[pn] = JSON.parse(JSON.stringify(f.p[pn])); }); if(k === "text") delete o.spans; return; }
       var c = brushCommon(f);
       function set(key, v){ if(v === undefined) delete o[key]; else o[key] = v; }
-      if(k === "text"){ if(c.color) o.color = c.color; if(c.bold !== undefined) o.bold = c.bold; if(c.align) o.align = c.align; if(c.fs) o.fontSize = c.fs; if(c.bg){ o.bgOn = true; o.bgColor = c.bg; } set("shd", c.shd); set("rad", c.rad); set("bdW", c.bdW); set("bdC", c.bdC); }
+      if(k === "text"){ mmStripSpans(o, ["c", "fs"]); if(c.color) o.color = c.color; if(c.bold !== undefined) o.bold = c.bold; if(c.align) o.align = c.align; if(c.fs) o.fontSize = c.fs; if(c.bg){ o.bgOn = true; o.bgColor = c.bg; } set("shd", c.shd); set("rad", c.rad); set("bdW", c.bdW); set("bdC", c.bdC); }
       else if(k === "shape"){ if(c.color) o.color = c.color; set("shd", c.shd); set("rad", c.rad); }
       else if(k === "image"){ set("shd", c.shd); set("rad", c.rad); set("bdW", c.bdW); set("bdC", c.bdC); }
     }
@@ -13869,7 +13945,7 @@
       boardState.color = newColor;
       if(boardState.tool === "text" && !inPlaceEdit && activeSelectedTextId){ // 選取了整個文字方塊：整個方塊換色（局部顏色一併清掉）
         var tc = texts.find(function(x){ return x.id === activeSelectedTextId; });
-        if(tc){ snapshotForUndo(); tc.color = newColor; if(tc.spans){ var ar = mmStyleArr(tc); ar.forEach(function(st, i){ if(st){ delete st.c; if(!st.fs) ar[i] = null; } }); var sp0 = mmArrToSpans(ar); if(sp0.length) tc.spans = sp0; else delete tc.spans; } writeProgress(q.id, { texts: texts }); renderTexts(); }
+        if(tc){ snapshotForUndo(); tc.color = newColor; mmStripSpans(tc, ["c"]); writeProgress(q.id, { texts: texts }); renderTexts(); }
       }
       var selShapeC = activeSelectedShapeId ? shapes.find(function(x){ return x.id === activeSelectedShapeId; }) : null;
       if(selShapeC && selShapeC.color !== newColor){ selShapeC.color = newColor; writeProgress(q.id, { shapes: shapes }); renderShapeSvg(); }
@@ -13950,6 +14026,13 @@
     var clearBtn = vToolbar.querySelector("#btn-clear-draw");
     if(clearBtn){
       clearBtn.onclick = function(){
+        if(deckStudent){ // 學生：只清掉筆跡，老師放的文字／圖片／圖案／表格和底圖背景都不會動
+          if(confirm("確定要清空畫布上的筆跡嗎？（老師放的內容和背景不會被清掉）\nClear all pen strokes? (The teacher's slide content stays.)")){
+            strokes = []; localSelfSeq++; redrawStrokes();
+            writeProgress(q.id, { strokes: strokes, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+          }
+          return;
+        }
         if(confirm("確定要清空畫布上的所有內容嗎？（可以按「上一步」復原）")){
           snapshotForUndo();
           strokes = []; texts = []; images = []; shapes = []; tables = []; groups = []; selSet = []; clearObjSelection();
