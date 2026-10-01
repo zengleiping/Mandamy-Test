@@ -440,6 +440,9 @@
   .stage.stage-canvas-type,
   .layout.sidebar-collapsed .stage.stage-canvas-type, .layout.sidebar-narrow .stage.stage-canvas-type{ max-width:none; }
 
+  .stage-wrap.stage-wrap-compact{ padding:6px 8px; }
+  .stage.stage-edit-compact{ padding:6px; min-height:0; border-radius:12px; max-width:none; }
+
   /* 句子重組專屬樣式 */
   .reorder-container{display:flex;flex-direction:column;gap:24px;max-width:840px;margin:0 auto;}
   .reorder-slot-zone{
@@ -8658,6 +8661,10 @@
     // 小白板／生字練習這兩種畫布類題型，舞台區不要被一般題型的固定寬度上限卡住（見 CSS .stage-canvas-type）
     stageEl.classList.toggle("stage-canvas-type", isCanvasSec(sec) || sec.type === "hanzi");
 
+    // 老師編輯投影片：只留功能區＋畫布，畫布盡量放大（上一張／下一張在功能區右側）
+    var compactEdit = !isStudent && sec.type === "board";
+    stageEl.classList.toggle("stage-edit-compact", compactEdit);
+    if(stageEl.parentNode) stageEl.parentNode.classList.toggle("stage-wrap-compact", compactEdit);
     var navBar = document.createElement("div"); navBar.className = "stage-header-nav";
     navBar.innerHTML = `
       <div style="font-size:13.5px; font-weight:700; color:var(--seal); display:flex; align-items:center; gap:6px;">
@@ -8672,7 +8679,7 @@
     `;
     navBar.querySelector(".btn-prev-q").onclick = function(){ if(currentIndex > 0) setCurrentQ(allList[currentIndex - 1].question.id); };
     navBar.querySelector(".btn-next-q").onclick = function(){ if(currentIndex < allList.length - 1) setCurrentQ(allList[currentIndex + 1].question.id); };
-    stageEl.appendChild(navBar);
+    if(!compactEdit) stageEl.appendChild(navBar);
 
     var head = document.createElement("div"); head.className = "stage-head";
     head.innerHTML = `<div><h2 class="stage-title zh">${q.title}</h2><p class="stage-sub">${q.desc || sec.desc || "即時互動練習"}</p></div>`;
@@ -8689,7 +8696,7 @@
       actWrap.appendChild(resetBtn);
     }
     head.appendChild(actWrap);
-    stageEl.appendChild(head);
+    if(!compactEdit) stageEl.appendChild(head);
 
     if(!isStudent && !isCanvasSec(sec) && q.teacherNote && q.teacherNote.trim()){
       var noteBlock = document.createElement("div"); noteBlock.className = "teacher-note-block";
