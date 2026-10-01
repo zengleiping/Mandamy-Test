@@ -6310,16 +6310,18 @@
         tb.cells.forEach(function(row, r){
           var rh = (tb.rh[r] || 8) / 100 * H, xx = x0;
           row.forEach(function(cell, c){
-            var cw = tw * tb.cw[c], bg = cell.bg || ((tb.hdr && r === 0) ? "#F4D9CC" : "");
-            if(bg){ x.fillStyle = bg; x.fillRect(xx, yy, cw, rh); }
-            if(tb.bw !== 0){ x.strokeStyle = tb.bd || "#555"; x.lineWidth = Math.max(0.6, (tb.bw == null ? 2 : tb.bw) * sc); x.strokeRect(xx, yy, cw, rh); }
+            if(cell.m){ xx += tw * tb.cw[c]; return; }
+            var cw = 0, rhh = 0; for(var cc2 = c; cc2 < c + (cell.cs || 1); cc2++) cw += tw * tb.cw[cc2]; for(var rr2 = r; rr2 < r + (cell.rs || 1); rr2++) rhh += (tb.rh[rr2] || 8) / 100 * H;
+            var bg = cell.bg || ((tb.hdr && r === 0) ? "#F4D9CC" : ""), cwFull = tw * tb.cw[c];
+            if(bg){ x.fillStyle = bg; x.fillRect(xx, yy, cw, rhh); }
+            if(tb.bw !== 0){ x.strokeStyle = tb.bd || "#555"; x.lineWidth = Math.max(0.6, (tb.bw == null ? 2 : tb.bw) * sc); x.strokeRect(xx, yy, cw, rhh); }
             if(cell.t){
               var fsz = (cell.fs || tb.fs || 24) * sc, bold = cell.b != null ? cell.b : (tb.hdr && r === 0);
               x.font = (bold ? "700 " : "400 ") + fsz + 'px "LXGW WenKai TC", serif'; x.fillStyle = cell.c || "#2B2320"; x.textBaseline = "middle";
-              var lns = String(cell.t).split("\n"), ty = yy + rh / 2 - (lns.length - 1) * fsz * 0.65;
+              var lns = String(cell.t).split("\n"), ty = yy + rhh / 2 - (lns.length - 1) * fsz * 0.65;
               lns.forEach(function(ln, i){ var w2 = x.measureText(ln).width, al = cell.a || "center"; x.fillText(ln, al === "left" ? xx + fsz * 0.3 : al === "right" ? xx + cw - w2 - fsz * 0.3 : xx + (cw - w2) / 2, ty + i * fsz * 1.3); });
             }
-            xx += cw;
+            xx += cwFull;
           });
           yy += rh;
         });
@@ -6773,6 +6775,11 @@
     if((e.ctrlKey || e.metaKey) && (e.key === "h" || e.key === "H") && !isStudent){ e.preventDefault(); openFindReplace(); }
   });
   /* ===== 匯出簡報：PDF（每頁一張圖，當講義）／PowerPoint .pptx（文字、圖片、圖案是可編輯的物件；手寫筆跡合成一張透明圖）===== */
+  function mmTblOrigin(t, r, c){
+    if(!t.cells[r][c].m) return [r, c];
+    for(var r0 = r; r0 >= 0; r0--) for(var c0 = c; c0 >= 0; c0--){ var o = t.cells[r0][c0]; if(!o.m && (o.rs || 1) + r0 > r && (o.cs || 1) + c0 > c) return [r0, c0]; }
+    return [r, c];
+  }
   function exportDeckInfo(){
     var cur = getCurrentQInfo(), found = cur ? findSectionForQuestion(cur.question.id) : null;
     if(!found || found.sec.type !== "board"){ alert("請先點開一份「小白板」簡報（左邊列表裡的任何一張投影片），再按匯出。\nOpen a whiteboard deck first."); return null; }
@@ -6897,7 +6904,8 @@
                 return '<a:tr h="' + Math.max(1, Y(o.rh[r] || 8)) + '">' + row.map(function(cell, c){
                   var bg = hex6(cell.bg, (o.hdr && r === 0) ? "F4D9CC" : null), bold = cell.b != null ? cell.b : (o.hdr && r === 0), al = cell.a === "left" ? "l" : cell.a === "right" ? "r" : "ctr", fsz = Math.max(100, Math.round((cell.fs || o.fs || 24) * 150));
                   var paras = String(cell.t || "").split("\n").map(function(t2){ return t2 ? '<a:p><a:pPr algn="' + al + '"/><a:r><a:rPr lang="zh-TW" sz="' + fsz + '" b="' + (bold ? 1 : 0) + '" dirty="0"><a:solidFill><a:srgbClr val="' + hex6(cell.c, "2B2320") + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(t2) + '</a:t></a:r></a:p>' : '<a:p><a:pPr algn="' + al + '"/><a:endParaRPr lang="zh-TW" sz="' + fsz + '"/></a:p>'; }).join("");
-                  return '<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>' + paras + '</a:txBody><a:tcPr anchor="ctr">' + lnX("lnL") + lnX("lnR") + lnX("lnT") + lnX("lnB") + (bg ? '<a:solidFill><a:srgbClr val="' + bg + '"/></a:solidFill>' : '<a:noFill/>') + '</a:tcPr></a:tc>';
+                  var tcAttr = cell.m ? (function(){ var og = mmTblOrigin(o, r, c); return (og[1] !== c ? ' hMerge="1"' : "") + (og[0] !== r ? ' vMerge="1"' : ""); })() : ((cell.cs > 1 ? ' gridSpan="' + cell.cs + '"' : "") + (cell.rs > 1 ? ' rowSpan="' + cell.rs + '"' : ""));
+                  return '<a:tc' + tcAttr + '><a:txBody><a:bodyPr/><a:lstStyle/>' + paras + '</a:txBody><a:tcPr anchor="ctr">' + lnX("lnL") + lnX("lnR") + lnX("lnT") + lnX("lnB") + (bg ? '<a:solidFill><a:srgbClr val="' + bg + '"/></a:solidFill>' : '<a:noFill/>') + '</a:tcPr></a:tc>';
                 }).join("") + '</a:tr>';
               }).join("") + '</a:tbl>';
             shapesXml.push('<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="' + (nid++) + '" name="表格"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="' + tx0 + '" y="' + ty0 + '"/><a:ext cx="' + twE + '" cy="' + Math.max(1, thE) + '"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">' + tblXml + '</a:graphicData></a:graphic></p:graphicFrame>');
@@ -12536,7 +12544,7 @@
       if(hit && hit.k === "table" && !additive && selSet.length === 1 && sameItem(selSet[0], hit)){
         var th = tableHitCell(hit.id, p);
         if(th && th.edge){ beginTableEdgeResize(hit.id, th.edge, p); return; }
-        if(th){ var nowT = Date.now(), dbl = lastCellTap && lastCellTap.id === hit.id && lastCellTap.r === th.r && lastCellTap.c === th.c && nowT - lastCellTap.t < 500; lastCellTap = { id: hit.id, r: th.r, c: th.c, t: nowT }; if(dbl){ lastCellTap = null; tblSel = { id: hit.id, r1: th.r, c1: th.c, r2: th.r, c2: th.c }; startCellEdit(hit.id, th.r, th.c); return; } beginCellSelect(e, hit.id, th.r, th.c); return; }
+        if(th){ var nowT = Date.now(), dbl = lastCellTap && lastCellTap.id === hit.id && lastCellTap.r === th.r && lastCellTap.c === th.c && nowT - lastCellTap.t < 500; lastCellTap = { id: hit.id, r: th.r, c: th.c, t: nowT }; if(dbl) lastCellTap = null; beginCellSelect(e, hit.id, th.r, th.c, dbl); return; }
       }
       if(finishCellEditIfAny()) { /* 先結束輸入 */ }
       if(hit){
@@ -12641,6 +12649,48 @@
     var lastCellTap = null;
     var tblSel = null, tblEdit = null; // tblSel：{ id, r1, c1, r2, c2 } 目前選取的儲存格範圍；tblEdit：{ id, r, c, el, layer } 正在輸入的儲存格
     var TBL_HDR_BG = "#F4D9CC";
+    // 合併儲存格：左上角那格（origin）記 rs／cs（跨幾列／幾欄），被蓋住的格子記 m:1（內容保留但不顯示）
+    function tblOrigin(t, r, c){
+      if(!t.cells[r][c].m) return [r, c];
+      for(var r0 = r; r0 >= 0; r0--) for(var c0 = c; c0 >= 0; c0--){ var o = t.cells[r0][c0]; if(!o.m && (o.rs || 1) + r0 > r && (o.cs || 1) + c0 > c) return [r0, c0]; }
+      return [r, c];
+    }
+    function tblExpand(t, r1, c1, r2, c2){ // 範圍要包含完整的合併區塊
+      var ch = true;
+      while(ch){
+        ch = false;
+        for(var r = r1; r <= r2; r++) for(var c = c1; c <= c2; c++){
+          var og = tblOrigin(t, r, c), o = t.cells[og[0]][og[1]], er = og[0] + (o.rs || 1) - 1, ec = og[1] + (o.cs || 1) - 1;
+          if(og[0] < r1){ r1 = og[0]; ch = true; } if(og[1] < c1){ c1 = og[1]; ch = true; } if(er > r2){ r2 = er; ch = true; } if(ec > c2){ c2 = ec; ch = true; }
+        }
+      }
+      return { r1: r1, c1: c1, r2: r2, c2: c2 };
+    }
+    function tblUnmergeAt(t, r, c){
+      var o = t.cells[r][c], rs = o.rs || 1, cs = o.cs || 1; if(rs === 1 && cs === 1) return;
+      for(var i = r; i < r + rs; i++) for(var j = c; j < c + cs; j++) if(i !== r || j !== c) delete t.cells[i][j].m;
+      delete o.rs; delete o.cs;
+    }
+    function tblUnmergeTouching(t, r1, c1, r2, c2){ // 刪列欄之前：先把碰到的合併區塊拆開
+      for(var r = 0; r < t.cells.length; r++) for(var c = 0; c < t.cells[r].length; c++){
+        var o = t.cells[r][c]; if(o.m) continue; var rs = o.rs || 1, cs = o.cs || 1; if(rs === 1 && cs === 1) continue;
+        if(r + rs - 1 >= r1 && r <= r2 && c + cs - 1 >= c1 && c <= c2) tblUnmergeAt(t, r, c);
+      }
+    }
+    function tblMerge(){
+      var rg = tblRange(); if(!rg) return; var t = rg.t, e = tblExpand(t, rg.r1, rg.c1, rg.r2, rg.c2);
+      if(e.r1 === e.r2 && e.c1 === e.c2) return;
+      snapshotForUndo();
+      var texts2 = [], org = t.cells[e.r1][e.c1];
+      for(var r = e.r1; r <= e.r2; r++) for(var c = e.c1; c <= e.c2; c++){ var cell = t.cells[r][c]; if(cell.t && !cell.m || (cell.t && cell.m)){ if(String(cell.t).trim()) texts2.push(cell.t); } if(r !== e.r1 || c !== e.c1){ cell.m = 1; cell.t = ""; delete cell.rs; delete cell.cs; } }
+      org.t = texts2.join("\n"); org.rs = e.r2 - e.r1 + 1; org.cs = e.c2 - e.c1 + 1; delete org.m; delete org.po;
+      tblSel = { id: t.id, r1: e.r1, c1: e.c1, r2: e.r1, c2: e.c1 }; tblCommit();
+    }
+    function tblSplit(){
+      var rg = tblRange(); if(!rg) return; var t = rg.t; snapshotForUndo();
+      for(var r = rg.r1; r <= rg.r2; r++) for(var c = rg.c1; c <= rg.c2; c++){ var og = tblOrigin(t, r, c); tblUnmergeAt(t, og[0], og[1]); }
+      tblCommit();
+    }
     function tblById(id){ return tables.find(function(x){ return x.id === id; }); }
     function renderTables(){
       var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, scale = getScaleRatio();
@@ -12659,8 +12709,9 @@
         t.cells.forEach(function(row, r){
           html += '<tr style="height:' + ((t.rh[r] || 8) / 100 * H) + 'px;">';
           row.forEach(function(cell, c){
+            if(cell.m) return;
             var bg = cell.bg || ((t.hdr && r === 0) ? TBL_HDR_BG : ""), bold = cell.b != null ? cell.b : (t.hdr && r === 0);
-            html += '<td data-r="' + r + '" data-c="' + c + '" style="border:' + (bw ? bw * scale + "px solid " + bc : "none") + ";" + (bg ? "background:" + bg + ";" : "") + "color:" + (cell.c || "#2B2320") + ";font-weight:" + (bold ? 700 : 400) + ";text-align:" + (cell.a || "center") + ";font-size:" + Math.max(6, (cell.fs || fs0) * scale) + 'px;">' + buildPhoneticHtml(cell.t || "", cell.po) + '</td>';
+            html += '<td data-r="' + r + '" data-c="' + c + '"' + (cell.rs > 1 ? ' rowspan="' + cell.rs + '"' : "") + (cell.cs > 1 ? ' colspan="' + cell.cs + '"' : "") + ' style="border:' + (bw ? bw * scale + "px solid " + bc : "none") + ";" + (bg ? "background:" + bg + ";" : "") + "color:" + (cell.c || "#2B2320") + ";font-weight:" + (bold ? 700 : 400) + ";text-align:" + (cell.a || "center") + ";font-size:" + Math.max(6, (cell.fs || fs0) * scale) + 'px;">' + buildPhoneticHtml(cell.t || "", cell.po) + '</td>';
           });
           html += '</tr>';
         });
@@ -12681,8 +12732,9 @@
         var b = g[r][c]; if(!b) continue;
         if(p.x >= b.l - tx && p.x <= b.r + tx && p.y >= b.t - ty && p.y <= b.b + ty){
           var edge = null;
-          if(Math.abs(p.x - b.r) <= tx && c < g[r].length - 1) edge = { type: "col", i: c };
-          else if(Math.abs(p.y - b.b) <= ty && r < g.length - 1) edge = { type: "row", i: r };
+          var tcell = tblById(id).cells[r][c], ec = c + (tcell.cs || 1) - 1, er = r + (tcell.rs || 1) - 1;
+          if(Math.abs(p.x - b.r) <= tx && ec < g[r].length - 1) edge = { type: "col", i: ec };
+          else if(Math.abs(p.y - b.b) <= ty && er < g.length - 1) edge = { type: "row", i: er };
           if(edge || (p.x >= b.l && p.x <= b.r && p.y >= b.t && p.y <= b.b)) best = { r: r, c: c, edge: edge };
           if(best && best.edge) return best;
         }
@@ -12691,7 +12743,8 @@
     }
     function tblRange(){ // 目前選取範圍（沒選就是整張表）
       var t = tblSel && tblById(tblSel.id); if(!t) return null;
-      return { t: t, r1: Math.min(tblSel.r1, tblSel.r2), r2: Math.max(tblSel.r1, tblSel.r2), c1: Math.min(tblSel.c1, tblSel.c2), c2: Math.max(tblSel.c1, tblSel.c2) };
+      var ex = tblExpand(t, Math.min(tblSel.r1, tblSel.r2), Math.min(tblSel.c1, tblSel.c2), Math.max(tblSel.r1, tblSel.r2), Math.max(tblSel.c1, tblSel.c2));
+      return { t: t, r1: ex.r1, r2: ex.r2, c1: ex.c1, c2: ex.c2 };
     }
     function tblCommit(rerender){ writeProgress(q.id, { tables: tables }); if(rerender !== false){ renderTexts(); } renderSelection(); }
     function startCellEdit(id, r, c){
@@ -12710,7 +12763,7 @@
           e.preventDefault(); e.stopPropagation(); var rr = r, cc = c + (e.shiftKey ? -1 : 1);
           if(cc >= t.cw.length){ cc = 0; rr++; } if(cc < 0){ cc = t.cw.length - 1; rr--; }
           if(rr >= t.rh.length){ finishCellEdit(); tblAddRow(t.rh.length - 1, true); rr = t.rh.length - 1; }
-          if(rr < 0) return; finishCellEdit(); startCellEdit(id, rr, cc);
+          if(rr < 0) return; var og2 = tblOrigin(t, rr, cc); finishCellEdit(); startCellEdit(id, og2[0], og2[1]);
         }
       };
       td.onblur = function(){ setTimeout(function(){ if(tblEdit && tblEdit.td === td) finishCellEdit(); }, 0); };
@@ -12726,7 +12779,11 @@
       var t = tblSel ? tblById(tblSel.id) : null; if(!t && selSet.length === 1 && selSet[0].k === "table") t = tblById(selSet[0].id); if(!t) return;
       snapshotForUndo();
       var at = after ? refR + 1 : refR, h = t.rh[Math.min(refR, t.rh.length - 1)] || 8;
-      t.cells.splice(at, 0, t.cw.map(function(){ return { t: "" }; })); t.rh.splice(at, 0, h);
+      var newRow = t.cw.map(function(_, c){
+        if(at > 0 && at < t.cells.length){ var a = tblOrigin(t, at - 1, c), b = tblOrigin(t, at, c); if(a[0] === b[0] && a[1] === b[1] && (t.cells[a[0]][a[1]].rs || 1) > 1){ t.cells[a[0]][a[1]].rs++; return { t: "", m: 1 }; } }
+        return { t: "" };
+      });
+      t.cells.splice(at, 0, newRow); t.rh.splice(at, 0, h);
       tblCommit();
     }
     function tblAddCol(refC, after){
@@ -12734,13 +12791,19 @@
       snapshotForUndo();
       var at = after ? refC + 1 : refC, n = t.cw.length, f = 1 / (n + 1);
       t.cw = t.cw.map(function(x){ return x * n / (n + 1); }); t.cw.splice(at, 0, f);
-      t.cells.forEach(function(row){ row.splice(at, 0, { t: "" }); });
+      var spanDone = {};
+      t.cells.forEach(function(row, r){
+        var made = { t: "" };
+        if(at > 0 && at < row.length){ var a = tblOrigin(t, r, at - 1), b = tblOrigin(t, r, at); if(a[0] === b[0] && a[1] === b[1] && (t.cells[a[0]][a[1]].cs || 1) > 1){ made = { t: "", m: 1 }; var k = a[0] + "," + a[1]; if(!spanDone[k]){ spanDone[k] = 1; t.cells[a[0]][a[1]].cs++; } } }
+        row.splice(at, 0, made);
+      });
       t.w = Math.min(96, t.w * (n + 1) / n); tblCommit();
     }
-    function tblDelRow(){ var rg = tblRange(); if(!rg || rg.t.rh.length <= 1){ return; } snapshotForUndo(); rg.t.cells.splice(rg.r1, rg.r2 - rg.r1 + 1); rg.t.rh.splice(rg.r1, rg.r2 - rg.r1 + 1); if(!rg.t.cells.length){ return; } tblSel = { id: rg.t.id, r1: 0, c1: rg.c1, r2: 0, c2: rg.c2 }; tblCommit(); }
+    function tblDelRow(){ var rg = tblRange(); if(!rg || rg.t.rh.length <= 1){ return; } snapshotForUndo(); tblUnmergeTouching(rg.t, rg.r1, 0, rg.r2, rg.t.cw.length); rg.t.cells.splice(rg.r1, rg.r2 - rg.r1 + 1); rg.t.rh.splice(rg.r1, rg.r2 - rg.r1 + 1); if(!rg.t.cells.length){ return; } tblSel = { id: rg.t.id, r1: 0, c1: rg.c1, r2: 0, c2: rg.c2 }; tblCommit(); }
     function tblDelCol(){
       var rg = tblRange(); if(!rg || rg.t.cw.length <= 1) return; snapshotForUndo();
       var n = rg.c2 - rg.c1 + 1; if(n >= rg.t.cw.length) return;
+      tblUnmergeTouching(rg.t, 0, rg.c1, rg.t.rh.length, rg.c2);
       var removed = rg.t.cw.splice(rg.c1, n).reduce(function(a, b){ return a + b; }, 0);
       rg.t.cells.forEach(function(row){ row.splice(rg.c1, n); });
       var rest = 1 - removed; rg.t.cw = rg.t.cw.map(function(x){ return x / rest; }); rg.t.w = Math.max(10, rg.t.w * rest);
@@ -12770,11 +12833,12 @@
       var t = selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null; if(!t) return; snapshotForUndo();
       t.cw = t.cw.map(function(){ return 1 / t.cw.length; }); var tot = t.rh.reduce(function(a, b){ return a + b; }, 0); t.rh = t.rh.map(function(){ return tot / t.rh.length; }); tblCommit();
     }
-    function beginCellSelect(e, id, r0, c0){
+    function beginCellSelect(e, id, r0, c0, editOnTap){
       tblSel = { id: id, r1: r0, c1: c0, r2: r0, c2: c0 };
       renderSelection();
-      function mv(ev){ var h = tableHitCell(id, getPos(ev)); if(h && (h.r !== tblSel.r2 || h.c !== tblSel.c2)){ tblSel.r2 = h.r; tblSel.c2 = h.c; renderSelection(); } }
-      function up(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); }
+      var moved = false;
+      function mv(ev){ var h = tableHitCell(id, getPos(ev)); if(h && (h.r !== tblSel.r2 || h.c !== tblSel.c2)){ moved = true; tblSel.r2 = h.r; tblSel.c2 = h.c; renderSelection(); } }
+      function up(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); if(editOnTap && !moved){ var og = tblOrigin(tblById(id), r0, c0); startCellEdit(id, og[0], og[1]); } }
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     }
     function beginTableEdgeResize(id, edge, p0){
@@ -12820,7 +12884,7 @@
       var cur = tblRange(), cell0 = cur ? t.cells[cur.r1][cur.c1] : t.cells[0][0];
       function btn(act, label, title){ return '<button type="button" data-ta="' + act + '" title="' + title + '">' + label + '</button>'; }
       bar.innerHTML = '<b class="tt-title">表格工具 Table Tools</b>' +
-        '<span class="tt-g">' + btn("rowup", "↑列", "在上方插入一列") + btn("rowdn", "↓列", "在下方插入一列") + btn("colL", "←欄", "在左邊插入一欄") + btn("colR", "→欄", "在右邊插入一欄") + btn("delrow", "刪列", "刪除選取的列") + btn("delcol", "刪欄", "刪除選取的欄") + '</span>' +
+        '<span class="tt-g">' + btn("rowup", "↑列", "在上方插入一列") + btn("rowdn", "↓列", "在下方插入一列") + btn("colL", "←欄", "在左邊插入一欄") + btn("colR", "→欄", "在右邊插入一欄") + btn("delrow", "刪列", "刪除選取的列") + btn("delcol", "刪欄", "刪除選取的欄") + btn("merge", "⊞ 合併", "合併選取的儲存格（先拖曳選取多格）") + btn("split", "⊟ 分割", "把合併過的儲存格拆開") + '</span>' +
         '<span class="tt-g"><label title="儲存格填色">填色 <input type="color" class="tt-bg" value="' + (cell0.bg || "#FFFFFF") + '"></label>' + btn("nobg", "無色", "清除填色") +
         '<label title="文字顏色">字色 <input type="color" class="tt-fc" value="' + (cell0.c || "#2B2320") + '"></label>' + btn("bold", "<b>B</b>", "粗體") + btn("fs-", "A−", "字小一點") + btn("fs+", "A＋", "字大一點") + btn("al-l", "⇤", "靠左") + btn("al-c", "↔", "置中") + btn("al-r", "⇥", "靠右") + '</span>' +
         '<span class="tt-g"><label title="框線顏色">框線 <input type="color" class="tt-bd" value="' + (t.bd || "#555555") + '"></label><input type="number" class="tt-bw" min="0" max="8" step="1" value="' + (t.bw == null ? 2 : t.bw) + '" title="框線粗細（0＝無框線）">' +
@@ -12831,7 +12895,7 @@
         var bt = e.target.closest("button"); if(!bt) return; e.stopPropagation();
         var a = bt.dataset.ta, rg2 = tblRange(), rr = rg2 ? rg2.r2 : t.rh.length - 1, rr1 = rg2 ? rg2.r1 : 0, cc2 = rg2 ? rg2.c2 : t.cw.length - 1, cc1 = rg2 ? rg2.c1 : 0;
         if(a === "rowup") tblAddRow(rr1, false); else if(a === "rowdn") tblAddRow(rr, true); else if(a === "colL") tblAddCol(cc1, false); else if(a === "colR") tblAddCol(cc2, true);
-        else if(a === "delrow") tblDelRow(); else if(a === "delcol") tblDelCol(); else if(a === "nobg") tblSetCells("bg", null);
+        else if(a === "merge") tblMerge(); else if(a === "split") tblSplit(); else if(a === "delrow") tblDelRow(); else if(a === "delcol") tblDelCol(); else if(a === "nobg") tblSetCells("bg", null);
         else if(a === "bold") tblToggleBold(); else if(a === "fs-") tblCellFs(-2); else if(a === "fs+") tblCellFs(2);
         else if(a === "al-l") tblSetCells("a", "left"); else if(a === "al-c") tblSetCells("a", "center"); else if(a === "al-r") tblSetCells("a", "right");
         else if(a === "eq") tblEqualize(); else if(a === "del") deleteSelection();
