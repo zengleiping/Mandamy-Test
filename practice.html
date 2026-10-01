@@ -1347,7 +1347,13 @@
   .text-layer:not(.objs-interactive) .movable-text .tb-edge, .text-layer:not(.objs-interactive) .movable-text .resize-handle, .text-layer:not(.objs-interactive) .image-proxy .rh, .text-layer:not(.objs-interactive) .shape-proxy .rh{ pointer-events:auto; }
   /* ===== 功能區（Ribbon）：頁籤＋群組，仿 PowerPoint ===== */
   .board-area.ribbon-mode:not(.canvas-fs-active) .draw-toolbar-vertical{ display:none !important; }
-  .board-area.ribbon-mode.canvas-fs-active .draw-toolbar-top{ display:none !important; }
+  .board-area.ribbon-mode.canvas-fs-active:not(.fs-edit) .draw-toolbar-top{ display:none !important; }
+  /* 全螢幕編輯：功能區留在上方、畫布撐滿剩下的空間 */
+  .board-area.ribbon-mode.canvas-fs-active.fs-edit{ flex-direction:column; padding:8px; }
+  .board-area.ribbon-mode.fs-edit .draw-toolbar-top{ position:relative !important; top:auto !important; left:auto !important; right:auto !important; width:100% !important; flex:none; margin:0 0 6px; background:var(--surface-2); }
+  .board-area.ribbon-mode.fs-edit .draw-toolbar-vertical{ display:none !important; }
+  .board-area.ribbon-mode.fs-edit .canvas-fs-exit-btn{ display:none; }
+  .board-area.ribbon-mode.fs-edit .draw-board-layout{ flex:1; min-height:0; height:auto; }
   .draw-toolbar-top.ribbon{ display:block; padding:0; overflow:visible; }
   .rb-tabs{ display:flex; align-items:flex-end; gap:2px; padding:4px 10px 0; border-bottom:1.5px solid rgba(28,33,30,.12); flex-wrap:nowrap; overflow-x:auto; }
   .rb-qat{ display:flex; gap:2px; align-items:center; margin-right:10px; padding-bottom:3px; }
@@ -9171,6 +9177,8 @@
   // 接著維持全螢幕，不用每換一題都重新點一次。實際「搬到 body 底下蓋滿視窗」的邏輯統一寫在
   // setupCanvasFullscreen() 這個共用函式，renderDrawBoard／renderHanziBoard 各自呼叫一次。
   var canvasFullscreen = false;
+  var canvasFsMode = "present"; // "present"＝放映（左側浮動工具列）；"edit"＝全螢幕編輯（功能區在上方、畫布撐滿，只有老師的投影片）
+  var canvasFsPrevEdit = false;  // 從全螢幕編輯按「放映」的，結束放映後回到全螢幕編輯
   var ANIM_NAMES = { none: "無", fade: "淡入", flyL: "從左飛入", flyR: "從右飛入", flyT: "從上飛入", flyB: "從下飛入", zoom: "放大", wipe: "擦去", bounce: "彈跳", pulse: "脈衝（強調）", spin: "旋轉進入" };
   var objClipboard = null;    // 應用程式內部的複製：{ token, kind:"text"|"image", data }，跟系統剪貼簿用 token 對應
   var objKeyHandlers = null;  // 複製／剪下／貼上／Delete 的 document 監聽器，換題目前先移除
@@ -9190,7 +9198,7 @@
       if(!toggleBtn) return;
       // 板類（.tool-btn-v）跟生字練習學生端（普通 .btn）用的按鈕視覺不一樣，各自用對應的內容格式
       if(toggleBtn.classList.contains("tool-btn-v")){
-        toggleBtn.innerHTML = canvasFullscreen
+        toggleBtn.innerHTML = (canvasFullscreen && canvasFsMode === "present")
           ? '<span class="tool-btn-v-icon">⤡</span><span class="tool-btn-v-label">結束<br>放映</span>'
           : '<span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">放映</span>';
       } else {
@@ -9199,32 +9207,39 @@
       toggleBtn.title = canvasFullscreen
         ? "退出全螢幕，回到原本版面 Exit fullscreen canvas"
         : "投影片放映（全螢幕）：整個畫面都是投影片，工具列浮在上面 Slide show — toolbar floats on top";
-      toggleBtn.classList.toggle("active", canvasFullscreen);
+      toggleBtn.classList.toggle("active", canvasFullscreen && canvasFsMode === "present");
     }
-    function enter(){
-      canvasFullscreen = true;
+    function enter(mode){
+      canvasFullscreen = true; canvasFsMode = (mode === "edit" && !isStudent) ? "edit" : "present";
       document.body.appendChild(container);
+      container.classList.toggle("fs-edit", canvasFsMode === "edit");
       container.classList.add("canvas-fs-active");
       document.body.classList.add("canvas-fs-open");
       updateBtn();
       requestAnimationFrame(refit);
     }
     function exit(){
-      canvasFullscreen = false;
-      container.classList.remove("canvas-fs-active");
+      canvasFullscreen = false; canvasFsPrevEdit = false;
+      container.classList.remove("canvas-fs-active", "fs-edit");
       document.body.classList.remove("canvas-fs-open");
       if(container.parentNode === document.body) originalParent.appendChild(container);
       updateBtn();
       requestAnimationFrame(refit);
     }
-    if(toggleBtn) toggleBtn.onclick = function(e){ e.preventDefault(); e.stopPropagation(); if(canvasFullscreen) exit(); else enter(); };
+    function endPresent(){ if(canvasFsPrevEdit){ canvasFsPrevEdit = false; enter("edit"); } else exit(); }
+    if(toggleBtn) toggleBtn.onclick = function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(canvasFullscreen && canvasFsMode === "present") endPresent();
+      else { canvasFsPrevEdit = canvasFullscreen && canvasFsMode === "edit"; enter("present"); }
+    };
+    container.addEventListener("mm-fs-edit", function(){ if(canvasFullscreen && canvasFsMode === "edit") exit(); else enter("edit"); });
     var exitBtn = container.querySelector(".canvas-fs-exit-btn");
     if(exitBtn) exitBtn.onclick = function(e){ e.preventDefault(); e.stopPropagation(); exit(); };
     if(canvasFsKeyHandler) document.removeEventListener("keydown", canvasFsKeyHandler);
-    canvasFsKeyHandler = function(e){ if(e.key === "Escape" && canvasFullscreen) exit(); };
+    canvasFsKeyHandler = function(e){ if(e.key === "Escape" && canvasFullscreen){ if(canvasFsMode === "present") endPresent(); else exit(); } };
     document.addEventListener("keydown", canvasFsKeyHandler);
     updateBtn();
-    if(canvasFullscreen) enter(); // 之前就開著全螢幕、現在是換題目後重新渲染，新題目的畫布接著維持全螢幕
+    if(canvasFullscreen) enter(canvasFsMode); // 之前就開著全螢幕、現在是換題目後重新渲染，新題目的畫布接著維持全螢幕
     return { exit: exit };
   }
 
@@ -10098,13 +10113,16 @@
       ["undo", "redo"].forEach(function(k){ var n = itemNode(k); if(n){ n.classList.add("rb-qat-btn"); rbQat.appendChild(n); } });
       var qatSep = document.createElement("span"); qatSep.className = "rb-qat-sep"; rbQat.appendChild(qatSep);
       ["pen", "eraser", "clear"].forEach(function(k){ var n = itemNode(k); if(n){ n.classList.add("rb-qat-btn"); rbQat.appendChild(n); } });
+      var rbFsEdit = rbBtn("⛶", "全螢幕<br>編輯", function(){ container.dispatchEvent(new CustomEvent("mm-fs-edit")); }, "全螢幕編輯：畫布放到最大，功能區留在上方（Esc 退出）");
+      rbFsEdit.id = "btn-fs-edit"; rbFsEdit.onclick = null; rbFsEdit.addEventListener("click", function(e){ e.stopPropagation(); container.dispatchEvent(new CustomEvent("mm-fs-edit")); }); rbNavSlot.appendChild(rbFsEdit);
+      new MutationObserver(function(){ var on = container.classList.contains("fs-edit"); rbFsEdit.querySelector(".tool-btn-v-label").innerHTML = on ? "結束<br>全螢幕" : "全螢幕<br>編輯"; rbFsEdit.classList.toggle("active", on); }).observe(container, { attributes: true, attributeFilter: ["class"] });
       var navN = tbItems.nav ? tbItems.nav.nodes : []; navN.forEach(function(n){ rbNavSlot.appendChild(n); });
       ["insert", "transition", "media", "notes"].forEach(function(k){ var it = tbItems[k]; if(it) it.nodes.forEach(function(n){ n.style.display = "none"; }); }); // 已經拆成功能區的按鈕；這幾個原本的按鈕留在原處當「引擎」（不顯示）
       rbShow(rbCur);
       // 放映（全螢幕）時：功能區收起，左邊浮出簡單的放映工具列（放映／翻頁／筆／橡皮擦／清除／放映工具）；結束放映再放回功能區
       var fsSlots = [];
       function rbFsSync(){
-        var inFs = container.classList.contains("canvas-fs-active");
+        var inFs = container.classList.contains("canvas-fs-active") && !container.classList.contains("fs-edit");
         if(inFs && !fsSlots.length){
           ["fs", "nav", "pen", "eraser", "clear", "present", "select", "text"].forEach(function(k){
             var it = tbItems[k]; if(!it) return;
@@ -10514,7 +10532,7 @@
     }
     // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-format-painter", "btn-insert", "btn-anim-pane", "btn-present", "btn-canvas-size", "btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
+    var NON_TOOL_BTN_IDS = ["btn-format-painter", "btn-insert", "btn-anim-pane", "btn-present", "btn-canvas-size", "btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-fs-edit", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
 
     // 目前選定工具「本來該有」的游標樣式——跟放大縮小/自動拖曳無關，單純工具本身的樣子。
     // 抽成函式是因為畫布縮放後的「靠近墨跡才恢復成工具游標」也要用到同一份邏輯（見下面
