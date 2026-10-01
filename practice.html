@@ -1341,6 +1341,7 @@
   .movable-text rt.ph-overridden{ opacity:1; color:var(--seal); }
   .movable-text:has(ruby){ line-height:2.15; padding-top:0.3em !important; }
 
+  .text-layer:not(.objs-interactive) .movable-text .tb-edge, .text-layer:not(.objs-interactive) .movable-text .resize-handle, .text-layer:not(.objs-interactive) .image-proxy .rh, .text-layer:not(.objs-interactive) .shape-proxy .rh{ pointer-events:auto; }
   .tb-edge{ display:none; position:absolute; width:11px; height:11px; background:#fff; border:2px solid #1E88E5; border-radius:3px; z-index:10; touch-action:none; box-shadow:0 2px 6px rgba(0,0,0,.25); }
   .tb-e{ right:-7px; top:50%; margin-top:-6px; cursor:ew-resize !important; } .tb-w{ left:-7px; top:50%; margin-top:-6px; cursor:ew-resize !important; } .tb-s{ bottom:-7px; left:50%; margin-left:-6px; cursor:ns-resize !important; }
   .movable-text:hover .tb-edge, .movable-text.active .tb-edge{ display:block; }
@@ -2048,7 +2049,7 @@
       <label>共用媒體（選填，題組共用的聽力音檔／圖片／影片）Shared Media</label>
       <div id="sec-media-list" class="media-edit-list"></div>
       <input type="file" id="f-sec-media-file" accept="image/*,audio/*,video/*" multiple style="display:none;">
-      <button type="button" class="btn btn-sm" id="btn-add-sec-media">＋ 新增媒體 Add Media</button>
+      <button type="button" class="btn btn-sm" id="btn-add-sec-media">＋ 新增媒體 Add Media</button> <button type="button" class="btn btn-sm" id="btn-add-sec-youtube">▶ YouTube 網址</button>
     </div>
     <div class="dialog-foot">
       <button type="button" class="btn btn-ghost" id="btn-cancel-section">取消 Cancel</button>
@@ -2070,7 +2071,7 @@
       <label>本題媒體（選填，圖片／音檔／影片）Question Media</label>
       <div id="q-media-list" class="media-edit-list"></div>
       <input type="file" id="f-q-media-file" accept="image/*,audio/*,video/*" multiple style="display:none;">
-      <button type="button" class="btn btn-sm" id="btn-add-q-media">＋ 新增媒體 Add Media</button>
+      <button type="button" class="btn btn-sm" id="btn-add-q-media">＋ 新增媒體 Add Media</button> <button type="button" class="btn btn-sm" id="btn-add-q-youtube">▶ YouTube 網址</button>
 
       <div class="teacher-note-field">
         <label style="margin-top:0;">🔒 老師備注（僅老師可見，學生看不到）Teacher Notes (teacher only, hidden from students)</label>
@@ -7289,7 +7290,7 @@
       }
       items.forEach(function(m){
         var row = document.createElement("div"); row.className = "media-row";
-        var typeLabel = m.type === "image" ? "圖片 Image" : (m.type === "audio" ? "音檔 Audio" : "影片 Video");
+        var typeLabel = m.type === "image" ? "圖片 Image" : (m.type === "audio" ? "音檔 Audio" : (m.type === "youtube" ? "YouTube" : "影片 Video"));
         row.innerHTML =
           '<span class="media-row-type">' + typeLabel + '</span>' +
           '<span class="media-row-name">' + escapeHtml(m.name || "") + '</span>' +
@@ -7321,6 +7322,7 @@
     render();
     return {
       getItems: function(){ return items; },
+      addItem: function(it){ items.push(it); render(); },
       setItems: function(arr){ items = (arr || []).slice(); render(); }
     };
   }
@@ -7329,7 +7331,14 @@
   var btnAddSecMedia = document.getElementById("btn-add-sec-media");
   if(btnAddSecMedia) btnAddSecMedia.onclick = function(){ document.getElementById("f-sec-media-file").click(); };
 
+  function addYoutubeTo(mgr){
+    var u = prompt("貼上 YouTube 影片網址 Paste a YouTube link", ""); if(!u) return;
+    var id = parseYouTubeId(u); if(!id){ alert("看不出這是 YouTube 網址。\nNot a valid YouTube link."); return; }
+    mgr.addItem({ id: uid("media"), type: "youtube", ytId: id, name: "YouTube" });
+  }
   var qMediaManager = createMediaManager(document.getElementById("q-media-list"), document.getElementById("f-q-media-file"));
+  var btnAddQYt = document.getElementById("btn-add-q-youtube"); if(btnAddQYt) btnAddQYt.onclick = function(){ addYoutubeTo(qMediaManager); };
+  var btnAddSecYt = document.getElementById("btn-add-sec-youtube"); if(btnAddSecYt) btnAddSecYt.onclick = function(){ addYoutubeTo(secMediaManager); };
   var btnAddQMedia = document.getElementById("btn-add-q-media");
   if(btnAddQMedia) btnAddQMedia.onclick = function(){ document.getElementById("f-q-media-file").click(); };
 
@@ -8526,8 +8535,12 @@
     var wrap = document.createElement("div"); wrap.className = "media-item media-item-" + m.type;
     if(m.type === "image"){
       var img = document.createElement("img"); img.className = "media-image"; img.src = m.src; img.alt = m.name || "圖片"; wrap.appendChild(img);
+    } else if(m.type === "youtube"){
+      var fr = document.createElement("iframe"); fr.className = "media-youtube"; fr.src = "https://www.youtube.com/embed/" + encodeURIComponent(m.ytId) + "?rel=0"; fr.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"; fr.allowFullscreen = true; fr.style.cssText = "width:min(560px,100%);aspect-ratio:16/9;border:0;border-radius:10px;background:#000;"; wrap.appendChild(fr);
     } else if(m.type === "audio"){
-      var audio = document.createElement("audio"); audio.className = "media-audio"; audio.controls = true; audio.src = m.src; wrap.appendChild(audio);
+      var audio = document.createElement("audio"); audio.className = "media-audio"; audio.controls = true;
+      if(String(m.src || "").indexOf("mm:") === 0) resolveMediaSrc(m.src, m.name).then(function(u){ if(u) audio.src = u; }); else audio.src = m.src;
+      wrap.appendChild(audio);
     } else if(m.type === "video"){
       var video = document.createElement("video"); video.className = "media-video"; video.controls = true; video.src = m.src; wrap.appendChild(video);
     }
@@ -8574,7 +8587,7 @@
     var sec = currentInfo.section; var q = currentInfo.question;
     var allList = getAllQuestionsList(); var currentIndex = allList.findIndex(function(it){ return it.question.id === q.id; });
     var mediaFingerprint = (sec.media || []).map(function(m){ return m.id; }).join(",") + "|" + (q.media || []).map(function(m){ return m.id; }).join(",");
-    var stageSignature = JSON.stringify([q.id, sec.title, sec.desc || "", q.title, q.desc || "", currentIndex, allList.length, currentClassMode, !!isStudent, mediaFingerprint, (isCanvasSec(sec) ? "" : (q.teacherNote || ""))]);
+    var stageSignature = JSON.stringify([q.id, sec.type, sec.title, sec.desc || "", q.title, q.desc || "", currentIndex, allList.length, currentClassMode, !!isStudent, mediaFingerprint, (isCanvasSec(sec) ? "" : (q.teacherNote || ""))]);
 
     if((isCanvasSec(sec) || sec.type === "hanzi") && liveBoardQId === q.id && stageSignature === lastStageSignature && liveBoardRefresh && liveBoardRefresh()){
       return; // 局部刷新成功：只更新畫布內容（筆畫／文字／格線／底圖），不重建整個舞台
@@ -9204,6 +9217,23 @@
     var deckStudent = !!(isStudent && slideSecInfo && slideSecInfo.sec.type === "board");
     // 小白板：只留筆、文字、橡皮擦、清空、圖案（多媒體放在題目上方，由題目設定，不是浮在畫布上）
     var simpleBoard = !!(slideSecInfo && slideSecInfo.sec.type === "whiteboard");
+    // 跟 PowerPoint 一樣：老師預設是「選取」（指標）；學生和小白板預設是筆
+    if(isStudent || simpleBoard){ if(boardState.tool === "select") boardState.tool = "pen"; }
+    else if(!window.__mmToolInit){ window.__mmToolInit = true; boardState.tool = "select"; }
+    // 小白板：舊的「懸浮」媒體（YouTube／音檔）搬到題目媒體（顯示在題目上方）。只在老師單機模式做一次。
+    if(simpleBoard && !isStudent && !inRoom() && Array.isArray(progress.medias) && progress.medias.length){
+      var secsM = getSections(), qM = slideSecInfo && secsM[slideSecInfo.secId] && secsM[slideSecInfo.secId].questions[q.id];
+      if(qM){
+        qM.media = (qM.media || []).slice();
+        progress.medias.forEach(function(mm){
+          if(mm.kind === "youtube" && mm.ytId) qM.media.push({ id: uid("media"), type: "youtube", ytId: mm.ytId, name: mm.name || "YouTube" });
+          else if(mm.kind === "audio" && progress.mediaData && progress.mediaData[mm.id]) qM.media.push({ id: uid("media"), type: "audio", src: progress.mediaData[mm.id], name: mm.name || "音檔" });
+        });
+        progress.medias = []; progress.mediaData = {};
+        writeSections(secsM);
+        writeProgress(q.id, { medias: [], mediaData: {} });
+      }
+    }
     setTimeout(function(){ prefetchNeighbors(q.id); }, 300);
     var slideSiblingIds = slideSecInfo ? getSortedQuestionKeys(slideSecInfo.sec) : [];
     var slideIndex = slideSiblingIds.indexOf(q.id);
@@ -9773,6 +9803,10 @@
       var hideEl = function(el){ if(!el) return; var w = el.closest && el.closest(".tool-btn-v-wrap"); (w || el).style.display = "none"; };
       ['button[data-tool="select"]', "#btn-more-tools", "#btn-undo", "#btn-redo", "#btn-arrange", "#btn-transition", "#btn-present", "#btn-insert", "#btn-format-painter", "#btn-anim-pane", "#btn-notes", "#btn-canvas-size", "#btn-media", ".slide-nav-row", ".slide-nav-counter", "#btn-slide-prev", "#btn-slide-next"].forEach(function(sel){ hideEl(vToolbar.querySelector(sel)); });
       var hs = vToolbar.querySelector("#btn-slide-prev"); if(hs && hs.parentNode) hs.parentNode.style.display = "none";
+    }
+    if(slideSecInfo && slideSecInfo.sec.type === "board"){ // 投影片的清空只清筆跡，名稱也跟著改
+      var clrB = vToolbar.querySelector("#btn-clear-draw");
+      if(clrB){ var clrL = clrB.querySelector(".tool-btn-v-label"); if(clrL) clrL.innerHTML = "清除<br>筆跡"; clrB.title = "清除筆跡：只清掉畫筆寫的字，投影片上的文字、圖片和背景不會動"; }
     }
     if(deckStudent){ // 學生看投影片：只留筆、橡皮擦、清空（＋放映、翻頁）
       ["select", "text", "shape"].forEach(function(tn){ var tb = vToolbar.querySelector('button[data-tool="' + tn + '"]'); var w = tb && (tb.closest(".tool-btn-v-wrap") || tb); if(w) w.style.display = "none"; });
@@ -10654,7 +10688,7 @@
 
     // ===== 文字就地編輯：像 PPT，直接在文字原本的位置、原本的樣式裡打字 =====
     // Enter＝換行；點一下別處／Esc／Ctrl+Enter＝確認。正在編輯時 renderTexts() 不會重建文字層（見上面的 guard）。
-    var inPlaceEdit = null, editSel = null;
+    var inPlaceEdit = null, editSel = null, lastCreatedTextId = null;
     function spanMapOf(t){ var m = {}, arr = mmStyleArr(t); arr.forEach(function(st, i){ if(st) m[i] = st; }); return m; }
     document.addEventListener("selectionchange", function(){
       if(!document.body.contains(cWrap) || !inPlaceEdit) return;
@@ -10759,11 +10793,15 @@
             var nt = { id: uid("t"), text: val, ph: newTextPh(), x: newPos.x, y: newPos.y, color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: boardState.step || 0, align: boardState.align || "left", list: boardState.list || "none" };
             applyTextBgDefaults(nt);
             assignNewZ("text", nt);
-            texts.push(nt); writeProgress(q.id, { texts: texts });
+            texts.push(nt); writeProgress(q.id, { texts: texts }); lastCreatedTextId = nt.id;
           }
         }
         clearObjSelection();
         renderTexts();
+        if(commit && !t0 && val && !isStudent && !simpleBoard && lastCreatedTextId){ // 文字方塊工具用一次就回到「選取」，新文字方塊維持選取狀態（跟 PowerPoint 一樣）
+          var nid2 = lastCreatedTextId; lastCreatedTextId = null;
+          setTimeout(function(){ switchToSelectTool(); selSet = [{ k: "text", id: nid2 }]; renderSelection(); }, 0);
+        }
       }
       inPlaceEdit = { finish: finish, refreshStyle: refreshStyle, textId: textId, contentEl: content, contains: function(n){ return content.contains(n); },
         setHtml: function(h){ content.innerHTML = h; try{ content.focus(); }catch(er){} },
@@ -12764,13 +12802,28 @@
       document.body.appendChild(back);
     }
     function finishCellEditIfAny(){ if(tblEdit){ finishCellEdit(); return true; } return false; }
+    var activeFromSel = false;
+    function syncActiveFromSelection(){ // 選取工具選到「一個」文字／圖片／圖案時，也當成「目前選取的物件」：邊框把手、字型顏色大小才會套用到它
+      var one = (boardState.tool === "select" && selSet.length === 1) ? selSet[0] : null;
+      if(one && (one.k === "text" || one.k === "image" || one.k === "shape")){
+        activeSelectedTextId = one.k === "text" ? one.id : null; activeSelectedImageId = one.k === "image" ? one.id : null; activeSelectedShapeId = one.k === "shape" ? one.id : null; activeFromSel = true;
+        textLayer.querySelectorAll(".movable-text").forEach(function(d){ d.classList.toggle("active", d.dataset.textId === activeSelectedTextId); });
+        textLayer.querySelectorAll(".image-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.imgId === activeSelectedImageId); });
+        textLayer.querySelectorAll(".shape-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.shapeId === activeSelectedShapeId); });
+      } else if(activeFromSel){
+        activeFromSel = false; activeSelectedTextId = null; activeSelectedImageId = null; activeSelectedShapeId = null;
+        textLayer.querySelectorAll(".movable-text.active, .image-proxy.active, .shape-proxy.active").forEach(function(d){ d.classList.remove("active"); });
+      }
+    }
     function renderSelection(){
       selectLayer.innerHTML = "";
+      syncActiveFromSelection();
       if(!selSet.length){ tblSel = null; return; }
       if(!(selSet.length === 1 && selSet[0].k === "table")) tblSel = null;
       var any = false;
       selSet.forEach(function(it){
         var b = itemBox(it); if(!b) return; any = true;
+        if(selSet.length === 1) return; // 只選一個：只畫外框＋把手，不重複畫虛線框
         var d = document.createElement("div"); d.className = "select-item-box";
         d.style.cssText = "left:" + b.l + "%;top:" + b.t + "%;width:" + (b.r - b.l) + "%;height:" + (b.b - b.t) + "%;";
         selectLayer.appendChild(d);
@@ -12815,6 +12868,14 @@
     function startSelectInteraction(e, p){
       var additive = e.shiftKey || e.metaKey || e.ctrlKey;
       var hit = hitTestItem(p);
+      // 連點兩下文字方塊＝編輯文字（跟 PowerPoint 一樣）
+      if(hit && hit.k === "text" && !additive){
+        var nowTap = Date.now();
+        if(lastSelTap && lastSelTap.id === hit.id && nowTap - lastSelTap.t < 450 && Math.hypot(e.clientX - lastSelTap.x, e.clientY - lastSelTap.y) < 14){
+          lastSelTap = null; selSet = [hit]; renderSelection(); var cx0 = e.clientX, cy0 = e.clientY; beginMoveSelection(p, function(){ editTextInPlace(hit.id, null, { x: cx0, y: cy0 }); }); return;
+        }
+        lastSelTap = { id: hit.id, t: nowTap, x: e.clientX, y: e.clientY };
+      } else lastSelTap = null;
       if(hit && hit.k === "table" && !additive && selSet.length === 1 && sameItem(selSet[0], hit)){
         var th = tableHitCell(hit.id, p);
         if(th && th.edge){ beginTableEdgeResize(hit.id, th.edge, p); return; }
@@ -12837,7 +12898,7 @@
         beginMarquee(p, additive);
       }
     }
-    function beginMoveSelection(p0){
+    function beginMoveSelection(p0, onTap){
       var orig = selSet.map(function(it){
         if(it.k === "text"){ var o = texts.find(function(x){ return x.id === it.id; }); return o ? { it: it, o: o, x: o.x, y: o.y } : null; }
         if(it.k === "image"){ var o2 = images.find(function(x){ return x.id === it.id; }); return o2 ? { it: it, o: o2, x: o2.x, y: o2.y } : null; }
@@ -12883,7 +12944,7 @@
         window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
         if(raf){ cancelAnimationFrame(raf); apply(); }
         drawGuides(null, null);
-        if(!moved) return;
+        if(!moved){ if(onTap) onTap(); return; }
         var patch = {}, kinds = {};
         orig.forEach(function(g){ kinds[g.it.k] = true; });
         if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes; if(kinds.table) patch.tables = tables;
@@ -12920,7 +12981,7 @@
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     }
     // ===== 真正的表格物件：{ id, x, y（左上角％）, w（佔頁寬％）, cw（每欄寬度比例，總和 1）, rh（每列高度，佔頁高％）, cells[r][c]={ t, bg, c, b, a, fs }, bd, bw, hdr, step, z, anim } =====
-    var lastCellTap = null;
+    var lastCellTap = null, lastSelTap = null;
     var tblSel = null, tblEdit = null; // tblSel：{ id, r1, c1, r2, c2 } 目前選取的儲存格範圍；tblEdit：{ id, r, c, el, layer } 正在輸入的儲存格
     var TBL_HDR_BG = "#F4D9CC";
     // 合併儲存格：左上角那格（origin）記 rs／cs（跨幾列／幾欄），被蓋住的格子記 m:1（內容保留但不顯示）
@@ -13311,6 +13372,9 @@
       if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", selectKeys); return; }
       if(editableTarget(e.target)) return;
       var mod = e.ctrlKey || e.metaKey;
+      if((e.key === "Enter" || e.key === "F2") && !mod && boardState.tool === "select" && selSet.length === 1 && selSet[0].k === "text" && !inPlaceEdit){
+        e.preventDefault(); editTextInPlace(selSet[0].id, null, null); return;
+      }
       if(mod && (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y")){
         var ub = vToolbar.querySelector((e.shiftKey || e.key === "y" || e.key === "Y") ? "#btn-redo" : "#btn-undo");
         if(ub){ e.preventDefault(); ub.click(); } return;
@@ -13969,7 +14033,7 @@
     function applyBrushColor(newColor){
       if(applySpanFromUi("c", newColor)){ vToolbar.querySelectorAll(".brush-color-native").forEach(function(x){ x.value = newColor; }); return; }
       boardState.color = newColor;
-      if(boardState.tool === "text" && !inPlaceEdit && activeSelectedTextId){ // 選取了整個文字方塊：整個方塊換色（局部顏色一併清掉）
+      if((boardState.tool === "text" || boardState.tool === "select") && !inPlaceEdit && activeSelectedTextId){ // 選取了整個文字方塊：整個方塊換色（局部顏色一併清掉）
         var tc = texts.find(function(x){ return x.id === activeSelectedTextId; });
         if(tc){ snapshotForUndo(); tc.color = newColor; mmStripSpans(tc, ["c"]); writeProgress(q.id, { texts: texts }); renderTexts(); }
       }
@@ -14052,8 +14116,8 @@
     var clearBtn = vToolbar.querySelector("#btn-clear-draw");
     if(clearBtn){
       clearBtn.onclick = function(){
-        if(deckStudent){ // 學生：只清掉筆跡，老師放的文字／圖片／圖案／表格和底圖背景都不會動
-          if(confirm("確定要清空畫布上的筆跡嗎？（老師放的內容和背景不會被清掉）\nClear all pen strokes? (The teacher's slide content stays.)")){
+        if(deckStudent || (slideSecInfo && slideSecInfo.sec.type === "board")){ // 投影片：只清掉筆跡，文字／圖片／圖案／表格和底圖背景都不會動
+          if(confirm("確定要清除畫筆的筆跡嗎？（投影片上的文字、圖片、底圖和背景都不會被清掉）\nClear pen strokes only? (Slide content and background stay.)")){
             strokes = []; localSelfSeq++; redrawStrokes();
             writeProgress(q.id, { strokes: strokes, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
           }
