@@ -897,6 +897,35 @@
   .mm-timer button{ border:none; background:rgba(255,255,255,.18); color:#fff; border-radius:8px; padding:4px 9px; cursor:pointer; font-size:14px; }
   .mm-timer.mt-end{ background:#B23B32; animation:mtBlink .7s infinite alternate; }
   @keyframes mtBlink{ to{ opacity:.55; } }
+  .obj-link-badge{ position:absolute; left:-10px; top:-12px; font-size:13px; pointer-events:none; }
+  .anim-panel{ right:274px; width:330px; }
+  .ap-row{ flex-wrap:wrap; }
+  .ap-row .lp-name{ flex:1; min-width:70px; }
+  .ap-n{ min-width:20px; height:20px; border-radius:50%; background:var(--seal); color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .ap-row select{ font-size:11.5px; padding:2px 3px; border-radius:6px; border:1.5px solid rgba(28,33,30,.2); background:var(--surface); color:var(--ink); max-width:112px; }
+  .ap-sub{ font-size:11.5px; font-weight:800; color:var(--ink-soft); margin:8px 2px 2px; }
+  .ap-add{ font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:7px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; }
+  .ap-foot{ display:flex; gap:6px; padding:6px 8px; }
+  .ap-foot button{ flex:1; font-size:12px; font-weight:700; padding:5px 8px; border-radius:8px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); cursor:pointer; }
+  .insert-popover{ min-width:210px; }
+  .ins-shapes{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:4px 0; }
+  .ins-lab{ font-size:12px; font-weight:700; color:var(--ink-soft); width:100%; }
+  .table-obj{ position:absolute; pointer-events:none; }
+  .table-obj.step-hidden{ opacity:.35; }
+  .table-obj.editing{ pointer-events:auto; }
+  .table-obj td{ padding:.18em .35em; vertical-align:middle; white-space:pre-wrap; word-break:break-word; overflow:hidden; line-height:1.35; }
+  .table-obj td[contenteditable]{ outline:2px solid var(--seal); outline-offset:-2px; background:#fff !important; user-select:text; cursor:text; }
+  .tbl-sel{ position:absolute; background:rgba(30,136,229,.22); border:2px solid #1E88E5; pointer-events:none; box-sizing:border-box; }
+  .tbl-grip{ position:absolute; width:22px; height:22px; background:var(--seal); color:#fff; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:14px; cursor:move; pointer-events:auto; touch-action:none; z-index:46; }
+  .tbl-scale{ position:absolute; width:12px; height:12px; background:#fff; border:2px solid var(--seal); border-radius:3px; cursor:nwse-resize; pointer-events:auto; touch-action:none; z-index:46; }
+  .table-tools{ position:absolute; z-index:47; pointer-events:auto; display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; max-width:640px; padding:8px 10px; background:var(--surface); border:1.5px solid var(--seal); border-radius:10px; box-shadow:0 8px 22px rgba(0,0,0,.22); font-size:12px; }
+  .table-tools .tt-title{ color:var(--seal); width:100%; font-size:12.5px; }
+  .table-tools .tt-g{ display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+  .table-tools button{ font-size:12px; font-weight:700; padding:3px 8px; border-radius:7px; border:1.5px solid rgba(28,33,30,.18); background:var(--surface); color:var(--ink); cursor:pointer; }
+  .table-tools button:hover{ border-color:var(--seal); color:var(--seal); }
+  .table-tools input[type=color]{ width:26px; height:22px; padding:0; border:1.5px solid rgba(28,33,30,.2); border-radius:5px; vertical-align:middle; }
+  .table-tools input[type=number]{ width:42px; padding:2px 4px; }
+  .table-tools .tt-hint{ width:100%; color:var(--ink-soft); font-size:11px; }
   .shape-table-btn{ width:100%; margin:2px 0 6px; padding:5px 8px; border-radius:8px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); font-weight:700; font-size:12.5px; cursor:pointer; }
   .laser-layer{ position:absolute; inset:0; z-index:60; cursor:none; touch-action:none; }
   .laser-dot{ position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:radial-gradient(circle,#fff 0 12%,#ff1e1e 30%,rgba(255,30,30,.55) 60%,rgba(255,30,30,0) 75%); box-shadow:0 0 14px 4px rgba(255,30,30,.55); pointer-events:none; }
@@ -5762,7 +5791,7 @@
     var srcProg = currentProj.progress || {};
     Object.keys(srcProg).forEach(function(qid){
       var pp = srcProg[qid] || {}, one = {};
-      ["texts", "images", "shapes", "medias", "mediaData", "gridType", "canvasRatio", "bgColor", "bgOp"].forEach(function(k){ if(pp[k] !== undefined && pp[k] !== null && !(Array.isArray(pp[k]) && !pp[k].length)) one[k] = pp[k]; });
+      ["texts", "images", "shapes", "tables", "groups", "medias", "mediaData", "gridType", "canvasRatio", "bgColor", "bgOp"].forEach(function(k){ if(pp[k] !== undefined && pp[k] !== null && !(Array.isArray(pp[k]) && !pp[k].length)) one[k] = pp[k]; });
       if(pp.bgImage) one.bgImage = pp.bgImage;
       if(Object.keys(one).length) seededProgress[qid] = JSON.parse(JSON.stringify(one));
     });
@@ -6237,8 +6266,10 @@
       });
     });
   }
-  function drawSlideThumb(q, cb, W0, asCanvas){
-    var prog = getProgress(q.id) || {};
+  function drawSlideThumb(q, cb, W0, asCanvas, live){
+    var prog0 = getProgress(q.id) || {}, rvl = prog0.revealStep || 0;
+    var prog = live ? Object.assign({}, prog0) : prog0;
+    if(live){ ["texts", "images", "shapes", "tables"].forEach(function(k){ if(prog[k]) prog[k] = prog[k].filter(function(o){ return (o.step || 0) <= rvl; }); }); }
     var bg = prog.bgImage || q.bgImage || "";
     var imgs = prog.images || [];
     Promise.all([loadThumbImg(bg)].concat(imgs.map(function(im){ return loadThumbImg(im.src); }))).then(function(loaded){
@@ -6274,6 +6305,25 @@
         x.stroke(); x.restore();
       });
       var sc = W / 640;
+      (prog.tables || []).forEach(function(tb){
+        var x0 = tb.x / 100 * W, y0 = tb.y / 100 * H, tw = tb.w / 100 * W, yy = y0;
+        tb.cells.forEach(function(row, r){
+          var rh = (tb.rh[r] || 8) / 100 * H, xx = x0;
+          row.forEach(function(cell, c){
+            var cw = tw * tb.cw[c], bg = cell.bg || ((tb.hdr && r === 0) ? "#F4D9CC" : "");
+            if(bg){ x.fillStyle = bg; x.fillRect(xx, yy, cw, rh); }
+            if(tb.bw !== 0){ x.strokeStyle = tb.bd || "#555"; x.lineWidth = Math.max(0.6, (tb.bw == null ? 2 : tb.bw) * sc); x.strokeRect(xx, yy, cw, rh); }
+            if(cell.t){
+              var fsz = (cell.fs || tb.fs || 24) * sc, bold = cell.b != null ? cell.b : (tb.hdr && r === 0);
+              x.font = (bold ? "700 " : "400 ") + fsz + 'px "LXGW WenKai TC", serif'; x.fillStyle = cell.c || "#2B2320"; x.textBaseline = "middle";
+              var lns = String(cell.t).split("\n"), ty = yy + rh / 2 - (lns.length - 1) * fsz * 0.65;
+              lns.forEach(function(ln, i){ var w2 = x.measureText(ln).width, al = cell.a || "center"; x.fillText(ln, al === "left" ? xx + fsz * 0.3 : al === "right" ? xx + cw - w2 - fsz * 0.3 : xx + (cw - w2) / 2, ty + i * fsz * 1.3); });
+            }
+            xx += cw;
+          });
+          yy += rh;
+        });
+      });
       var lc = document.createElement("canvas"); lc.width = W; lc.height = H;
       var l = lc.getContext("2d");
       (prog.strokes || []).forEach(function(st){
@@ -6540,38 +6590,128 @@
       nb.click();
     }, sec * 1000);
   }
-  /* ===== 簡報者檢視：另開視窗（備忘稿／下一張／計時器／遠端翻頁），用 BroadcastChannel 跟放映視窗同步 ===== */
-  var presenterWin = null, presenterBC = null;
-  function pvPost(){
+  /* ===== 簡報者檢視：另開視窗。大大的目前這一張（可以直接在上面用雷射筆／筆／螢光筆／橡皮擦，同步到放映視窗）＋備忘稿＋下一張＋計時器＋翻頁。用 BroadcastChannel 跟放映視窗同步 ===== */
+  var presenterWin = null, presenterBC = null, pvBigSig = "", pvBigBusy = false;
+  function pvBigImage(info, cb){ // 目前這一張（只畫「已經出現」的物件）做成大圖給簡報者視窗
+    var pr = getProgress(info.question.id) || {};
+    var sig = slideThumbSig(info.question, pr) + "|" + (pr.revealStep || 0) + "|" + JSON.stringify(pr.tables || []).length;
+    if(sig === pvBigSig){ cb(null, sig); return; }
+    if(pvBigBusy){ cb(null, null); return; }
+    pvBigBusy = true;
+    drawSlideThumb(info.question, function(cv){
+      pvBigBusy = false; var url = ""; try{ url = cv.toDataURL("image/jpeg", 0.82); }catch(e){}
+      cb({ url: url, ratio: cv.width / cv.height }, sig);
+    }, 1100, true, true);
+  }
+  function pvPost(force){
     if(!presenterBC || !presenterWin || presenterWin.closed) return;
     var info = getCurrentQInfo(); if(!info) return;
     var found = findSectionForQuestion(info.question.id); if(!found) return;
     var keys = getSortedQuestionKeys(found.sec), idx = keys.indexOf(info.question.id);
     var nq = keys[idx + 1] ? found.sec.questions[keys[idx + 1]] : null;
     var pr = getProgress(info.question.id) || {};
-    var mx = 0; ["texts", "images", "shapes"].forEach(function(k){ (pr[k] || []).forEach(function(o){ mx = Math.max(mx, o.step || 0); }); });
+    var mx = 0; ["texts", "images", "shapes", "tables"].forEach(function(k){ (pr[k] || []).forEach(function(o){ mx = Math.max(mx, o.step || 0); }); });
     var nc = nq ? slideThumbCache[nq.id] : null; if(nq && !nc) scheduleSlideThumb(nq.id);
-    var cc = slideThumbCache[info.question.id];
-    presenterBC.postMessage({ type: "state", title: info.question.title || "", note: info.question.teacherNote || "", idx: idx + 1, total: keys.length, step: pr.revealStep || 0, maxStep: mx, nextTitle: nq ? nq.title : "", nextThumb: nc ? nc.url : "", curThumb: cc ? cc.url : "" });
+    if(force) pvBigSig = "";
+    pvBigImage(info, function(big, sig){
+      var msg = { type: "state", title: info.question.title || "", note: info.question.teacherNote || "", idx: idx + 1, total: keys.length, step: pr.revealStep || 0, maxStep: mx, nextTitle: nq ? nq.title : "", nextThumb: nc ? nc.url : "" };
+      if(big && big.url){ msg.cur = big.url; msg.ratio = big.ratio; pvBigSig = sig; }
+      presenterBC.postMessage(msg);
+    });
+  }
+  function pvPopupScript(){ // 這個函式會被轉成字串放進簡報者視窗裡執行（所以不能用外面的變數）
+    var bc = new BroadcastChannel("mandamy-presenter"), sec = 0, run = true;
+    var $ = function(i){ return document.getElementById(i); };
+    function f2(n){ return String(n).padStart(2, "0"); }
+    setInterval(function(){ if(run){ sec++; $("timer").textContent = f2(Math.floor(sec / 60)) + ":" + f2(sec % 60); } }, 1000);
+    $("tp").onclick = function(){ run = !run; this.textContent = run ? "暫停" : "繼續"; };
+    $("tr").onclick = function(){ sec = 0; $("timer").textContent = "00:00"; };
+    $("nx").onclick = function(){ bc.postMessage({ type: "next" }); };
+    $("pv").onclick = function(){ bc.postMessage({ type: "prev" }); };
+    $("exit").onclick = function(){ bc.postMessage({ type: "closed" }); try{ window.opener && window.opener.focus(); }catch(e){} window.close(); };
+    window.addEventListener("beforeunload", function(){ bc.postMessage({ type: "closed" }); });
+    var tool = "none", color = "#E53935", img = $("big"), ov = $("ov"), cx = ov.getContext("2d"), drawing = null;
+    var SIZES = { pen: 3, hl: 16 };
+    function setTool(t){
+      tool = t; document.querySelectorAll(".tl").forEach(function(b){ b.classList.toggle("on", b.dataset.t === t); });
+      ov.style.cursor = t === "none" ? "default" : t === "laser" ? "none" : t === "erase" ? "cell" : "crosshair";
+    }
+    document.querySelectorAll(".tl").forEach(function(b){ b.onclick = function(){ setTool(b.dataset.t); }; });
+    $("col").oninput = function(){ color = this.value; };
+    function sizeCanvas(){ var r = img.getBoundingClientRect(); ov.width = Math.round(r.width); ov.height = Math.round(r.height); ov.style.width = r.width + "px"; ov.style.height = r.height + "px"; ov.style.left = (r.left - img.parentNode.getBoundingClientRect().left) + "px"; ov.style.top = (r.top - img.parentNode.getBoundingClientRect().top) + "px"; }
+    window.addEventListener("resize", sizeCanvas); img.onload = function(){ sizeCanvas(); cx.clearRect(0, 0, ov.width, ov.height); };
+    function pos(e){ var r = ov.getBoundingClientRect(); return { x: Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100)), y: Math.max(0, Math.min(100, (e.clientY - r.top) / r.height * 100)) }; }
+    var lastLaser = 0;
+    ov.addEventListener("pointerdown", function(e){
+      if(tool === "none") return; e.preventDefault(); try{ ov.setPointerCapture(e.pointerId); }catch(x){}
+      var p = pos(e);
+      if(tool === "laser"){ bc.postMessage({ type: "laser", x: p.x, y: p.y, on: true }); drawing = { laser: true }; return; }
+      if(tool === "erase"){ bc.postMessage({ type: "erase", x: p.x, y: p.y }); drawing = { erase: true }; return; }
+      drawing = { pts: [p], hl: tool === "hl" }; 
+    });
+    ov.addEventListener("pointermove", function(e){
+      var p = pos(e);
+      if(tool === "laser"){ var n = Date.now(); if(n - lastLaser > 30){ lastLaser = n; bc.postMessage({ type: "laser", x: p.x, y: p.y, on: true }); } return; }
+      if(!drawing) return;
+      if(drawing.erase){ bc.postMessage({ type: "erase", x: p.x, y: p.y }); return; }
+      drawing.pts.push(p);
+      cx.clearRect(0, 0, ov.width, ov.height); cx.lineCap = "round"; cx.lineJoin = "round"; cx.strokeStyle = drawing.hl ? "#FFE23B" : color; cx.globalAlpha = drawing.hl ? 0.4 : 1; cx.lineWidth = (drawing.hl ? SIZES.hl : SIZES.pen) * ov.width / 640;
+      cx.beginPath(); drawing.pts.forEach(function(q, i){ var X = q.x / 100 * ov.width, Y = q.y / 100 * ov.height; if(i) cx.lineTo(X, Y); else cx.moveTo(X, Y); }); cx.stroke();
+    });
+    function end(){
+      if(tool === "laser"){ bc.postMessage({ type: "laser", on: false }); }
+      if(drawing && drawing.pts && drawing.pts.length > 1) bc.postMessage({ type: "stroke", pts: drawing.pts, color: drawing.hl ? "#FFE23B" : color, size: drawing.hl ? SIZES.hl : SIZES.pen, opacity: drawing.hl ? 0.4 : 1 });
+      drawing = null;
+    }
+    ov.addEventListener("pointerup", end); ov.addEventListener("pointercancel", end); ov.addEventListener("pointerleave", function(){ if(tool === "laser") bc.postMessage({ type: "laser", on: false }); });
+    document.addEventListener("keydown", function(e){
+      if(e.key === "ArrowRight" || e.key === " " || e.key === "PageDown"){ e.preventDefault(); bc.postMessage({ type: "next" }); }
+      else if(e.key === "ArrowLeft" || e.key === "PageUp"){ e.preventDefault(); bc.postMessage({ type: "prev" }); }
+      else if(e.key === "Escape"){ setTool("none"); }
+      else if(e.key === "l" || e.key === "L") setTool("laser");
+    });
+    bc.onmessage = function(e){
+      var m = e.data; if(!m || m.type !== "state") return;
+      $("t").textContent = m.title || "簡報者檢視";
+      $("pos").textContent = "第 " + m.idx + " / " + m.total + " 張" + (m.maxStep ? "　步驟 " + m.step + "/" + m.maxStep : "");
+      var n = $("note"); n.textContent = m.note || "（這一頁沒有備忘稿）"; n.style.opacity = m.note ? 1 : 0.5;
+      var ni = $("nimg"); ni.style.display = m.nextThumb ? "block" : "none"; if(m.nextThumb) ni.src = m.nextThumb;
+      $("ntitle").textContent = m.nextTitle || "（最後一張）";
+      if(m.cur){ img.src = m.cur; }
+    };
+    bc.postMessage({ type: "hello" }); setInterval(function(){ bc.postMessage({ type: "hello" }); }, 1500);
+    setTool("none");
   }
   function openPresenterView(){
-    if(presenterWin && !presenterWin.closed){ presenterWin.focus(); pvPost(); return; }
-    var w = window.open("", "mandamy-presenter", "width=560,height=780");
+    if(presenterWin && !presenterWin.closed){ presenterWin.focus(); pvPost(true); return; }
+    var w = window.open("", "mandamy-presenter", "width=1100,height=860");
     if(!w){ alert("瀏覽器擋住了新視窗，請允許這個網站的彈出視窗後再試一次。\nPop-up blocked — please allow pop-ups for this site."); return; }
     presenterWin = w;
     if(!presenterBC){
       presenterBC = new BroadcastChannel("mandamy-presenter");
       presenterBC.onmessage = function(e){
-        var m = e.data || {};
+        var m = e.data || {}, api = window.__mmPresenterApi;
         if(m.type === "hello") pvPost();
         else if(m.type === "next"){ var nb = document.querySelector("#btn-slide-next"); if(nb && !nb.disabled) nb.click(); }
         else if(m.type === "prev"){ var pb = document.querySelector("#btn-slide-prev"); if(pb && !pb.disabled) pb.click(); }
+        else if(m.type === "closed"){ presenterWin = null; }
+        else if(api){
+          if(m.type === "laser") api.laser(m.x, m.y, m.on);
+          else if(m.type === "stroke") api.stroke(m.pts, m.color, m.size, m.opacity);
+          else if(m.type === "erase") api.erase(m.x, m.y);
+        }
       };
     }
-    w.document.open();
-    w.document.write('<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>簡報者檢視</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:system-ui,"Noto Sans TC",sans-serif;background:#1c211e;color:#f4efe6;display:flex;flex-direction:column;height:100vh}header{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#2a312d}header b{flex:1;font-size:15px}#timer{font-size:26px;font-variant-numeric:tabular-nums;font-weight:800}button{font:inherit;font-weight:700;padding:8px 14px;border-radius:10px;border:1.5px solid #8a9a90;background:#3a443e;color:#fff;cursor:pointer}button:hover{border-color:#e8825a}main{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}.cur{font-size:15px;color:#c9d4cc}#note{white-space:pre-wrap;font-size:22px;line-height:1.6;background:#fff8e6;color:#2b2b2b;border-radius:12px;padding:14px;min-height:140px}.nx{display:flex;gap:12px;align-items:center}.nx img{width:200px;border-radius:8px;background:#fff}.nav{display:flex;gap:10px;padding:12px 14px;background:#2a312d}.nav button{flex:1;font-size:20px;padding:12px}small{color:#9fb0a5}</style></head><body><header><b id="t">簡報者檢視</b><span id="timer">00:00</span><button id="tp">暫停</button><button id="tr">歸零</button></header><main><div class="cur" id="pos"></div><div id="note"></div><div><small>下一張 Next</small><div class="nx"><img id="nimg" alt=""><span id="ntitle"></span></div></div></main><div class="nav"><button id="pv">◀ 上一步</button><button id="nx">下一步 ▶</button></div><script>var bc=new BroadcastChannel("mandamy-presenter"),sec=0,run=true;function f(n){return String(n).padStart(2,"0")}setInterval(function(){if(run){sec++;document.getElementById("timer").textContent=f(Math.floor(sec/60))+":"+f(sec%60)}},1000);document.getElementById("tp").onclick=function(){run=!run;this.textContent=run?"暫停":"繼續"};document.getElementById("tr").onclick=function(){sec=0;document.getElementById("timer").textContent="00:00"};document.getElementById("nx").onclick=function(){bc.postMessage({type:"next"})};document.getElementById("pv").onclick=function(){bc.postMessage({type:"prev"})};document.addEventListener("keydown",function(e){if(e.key==="ArrowRight"||e.key===" "||e.key==="PageDown"){e.preventDefault();bc.postMessage({type:"next"})}else if(e.key==="ArrowLeft"||e.key==="PageUp"){e.preventDefault();bc.postMessage({type:"prev"})}});bc.onmessage=function(e){var m=e.data;if(!m||m.type!=="state")return;document.getElementById("t").textContent=m.title||"簡報者檢視";document.getElementById("pos").textContent="第 "+m.idx+" / "+m.total+" 張"+(m.maxStep?"　・　步驟 "+m.step+"/"+m.maxStep:"");var n=document.getElementById("note");n.textContent=m.note||"（這一頁沒有備忘稿）";n.style.opacity=m.note?1:.5;var im=document.getElementById("nimg");im.style.display=m.nextThumb?"block":"none";if(m.nextThumb)im.src=m.nextThumb;document.getElementById("ntitle").textContent=m.nextTitle||"（最後一張）"};bc.postMessage({type:"hello"});setInterval(function(){bc.postMessage({type:"hello"})},4000);<\/script></body></html>');
-    w.document.close();
-    setTimeout(pvPost, 400);
+    var css = 'body{margin:0;font-family:system-ui,"Noto Sans TC",sans-serif;background:#1c211e;color:#f4efe6;display:flex;flex-direction:column;height:100vh;overflow:hidden}header{display:flex;gap:10px;align-items:center;padding:8px 14px;background:#2a312d;flex-wrap:wrap}header b{flex:1;font-size:15px;min-width:120px}#timer{font-size:24px;font-variant-numeric:tabular-nums;font-weight:800}button{font:inherit;font-weight:700;padding:7px 13px;border-radius:10px;border:1.5px solid #8a9a90;background:#3a443e;color:#fff;cursor:pointer}button:hover{border-color:#e8825a}#exit{background:#B23B32;border-color:#B23B32}.tools{display:flex;gap:6px;align-items:center;padding:6px 14px;background:#232a26;flex-wrap:wrap}.tl.on{background:#e8825a;border-color:#e8825a}#col{width:38px;height:32px;padding:0;border:none;background:none}.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;padding:8px}.wrap{position:relative;max-width:100%;max-height:100%;display:flex}#big{max-width:100%;max-height:calc(100vh - 330px);min-height:120px;background:#fff;border-radius:6px;display:block;object-fit:contain}#ov{position:absolute;touch-action:none}.bottom{display:flex;gap:12px;padding:8px 14px;background:#232a26;align-items:stretch;max-height:150px}#note{flex:1;white-space:pre-wrap;font-size:17px;line-height:1.5;background:#fff8e6;color:#2b2b2b;border-radius:10px;padding:8px 12px;overflow:auto}.nx{display:flex;flex-direction:column;gap:2px;font-size:12px;color:#9fb0a5;max-width:210px}.nx img{width:180px;border-radius:6px;background:#fff}.nav{display:flex;gap:10px;padding:8px 14px;background:#2a312d}.nav button{flex:1;font-size:18px;padding:10px}';
+    var html = '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>簡報者檢視</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>' + css + '</style></head><body>' +
+      '<header><b id="t">簡報者檢視</b><span id="pos" style="font-size:13px;color:#c9d4cc"></span><span id="timer">00:00</span><button id="tp">暫停</button><button id="tr">歸零</button><button id="exit" title="關閉這個視窗，回到放映視窗">✕ 結束簡報者檢視</button></header>' +
+      '<div class="tools"><button class="tl" data-t="none" title="指標（不畫）">🖱 指標</button><button class="tl" data-t="laser" title="雷射筆（L）：放映視窗會出現紅點">🔴 雷射筆</button><button class="tl" data-t="pen" title="筆：直接畫在投影片上">🖊 筆</button><input type="color" id="col" value="#E53935" title="筆的顏色"><button class="tl" data-t="hl" title="螢光筆">🖍 螢光筆</button><button class="tl" data-t="erase" title="橡皮擦：點到的筆跡整條擦掉">🧽 橡皮擦</button><span style="flex:1"></span><span style="font-size:12px;color:#9fb0a5">在下面的投影片上操作，放映視窗會同步看到</span></div>' +
+      '<div class="stage"><div class="wrap"><img id="big" alt=""><canvas id="ov"></canvas></div></div>' +
+      '<div class="bottom"><div id="note"></div><div class="nx"><span>下一張 Next</span><img id="nimg" alt=""><span id="ntitle"></span></div></div>' +
+      '<div class="nav"><button id="pv">◀ 上一步</button><button id="nx">下一步 ▶</button></div>' +
+      '<scr' + 'ipt>(' + pvPopupScript.toString() + ')();</scr' + 'ipt></body></html>';
+    w.document.open(); w.document.write(html); w.document.close();
+    setTimeout(function(){ pvPost(true); }, 500);
   }
   /* ===== 尋找與取代（Ctrl/⌘+H）：文字方塊、投影片標題、備忘稿；範圍可選「這份簡報」或「整個專案」 ===== */
   function openFindReplace(){
@@ -6603,8 +6743,9 @@
         if($(".fr-n").checked){ var m2 = (t.q.teacherNote || "").match(re); if(m2){ hits += m2.length; if(doReplace){ secs[t.secId].questions[t.qId].teacherNote = t.q.teacherNote.replace(re, function(){ return rep; }); secsChanged = true; } } }
         if($(".fr-t").checked && t.sec.type === "board"){
           var pr = getProgress(t.qId) || {}, changedT = false;
+          (pr.tables || []).forEach(function(tb){ tb.cells.forEach(function(row){ row.forEach(function(cell){ var m4 = String(cell.t || "").match(re); if(m4){ hits += m4.length; if(doReplace){ cell.t = cell.t.replace(re, function(){ return rep; }); delete cell.po; changedT = true; } } }); }); });
           (pr.texts || []).forEach(function(o){ var m3 = String(o.text || "").match(re); if(m3){ hits += m3.length; if(doReplace){ o.text = o.text.replace(re, function(){ return rep; }); delete o.phoneticOverride; changedT = true; } } });
-          if(doReplace && changedT) writeProgress(t.qId, { texts: pr.texts });
+          if(doReplace && changedT) writeProgress(t.qId, { texts: pr.texts, tables: pr.tables });
         }
         if(hits){ total += hits; out.push({ t: t, hits: hits }); }
       });
@@ -6722,6 +6863,7 @@
         var entries = [];
         (prog.images || []).forEach(function(o, i){ entries.push({ k: "image", o: o, z: (o.z != null ? o.z : i), n: entries.length }); });
         (prog.shapes || []).forEach(function(o, i){ entries.push({ k: "shape", o: o, z: (o.z != null ? o.z : 1000 + i), n: entries.length }); });
+        (prog.tables || []).forEach(function(o, i){ entries.push({ k: "table", o: o, z: (o.z != null ? o.z : 1500 + i), n: entries.length }); });
         (prog.texts || []).forEach(function(o, i){ entries.push({ k: "text", o: o, z: (o.z != null ? o.z : 2000 + i), n: entries.length }); });
         entries.sort(function(a, b){ return (a.z - b.z) || (a.n - b.n); });
         // 手寫筆跡：合成一張透明 PNG 放在圖片／圖案之上、文字之下（跟畫面上的層次一致）
@@ -6747,6 +6889,18 @@
           if(e.k === "image"){
             var wE = X(o.w), hE = o.h ? Y(o.h) : wE * (o.ar || 1);
             await addPic(o.src, X(o.x) - wE / 2, Y(o.y) - hE / 2, wE, hE, o.crop, "圖片");
+          } else if(e.k === "table"){
+            var tx0 = X(o.x), ty0 = Y(o.y), twE = X(o.w), thE = o.rh.reduce(function(a, b){ return a + Y(b); }, 0);
+            var lnX = function(tag){ return o.bw === 0 ? '<a:' + tag + ' w="0"><a:noFill/></a:' + tag + '>' : '<a:' + tag + ' w="' + Math.round((o.bw == null ? 2 : o.bw) * 1.5 * 12700) + '"><a:solidFill><a:srgbClr val="' + hex6(o.bd, "555555") + '"/></a:solidFill></a:' + tag + '>'; };
+            var tblXml = '<a:tbl><a:tblPr' + (o.hdr ? ' firstRow="1"' : "") + '/><a:tblGrid>' + o.cw.map(function(f){ return '<a:gridCol w="' + Math.max(1, Math.round(twE * f)) + '"/>'; }).join("") + '</a:tblGrid>' +
+              o.cells.map(function(row, r){
+                return '<a:tr h="' + Math.max(1, Y(o.rh[r] || 8)) + '">' + row.map(function(cell, c){
+                  var bg = hex6(cell.bg, (o.hdr && r === 0) ? "F4D9CC" : null), bold = cell.b != null ? cell.b : (o.hdr && r === 0), al = cell.a === "left" ? "l" : cell.a === "right" ? "r" : "ctr", fsz = Math.max(100, Math.round((cell.fs || o.fs || 24) * 150));
+                  var paras = String(cell.t || "").split("\n").map(function(t2){ return t2 ? '<a:p><a:pPr algn="' + al + '"/><a:r><a:rPr lang="zh-TW" sz="' + fsz + '" b="' + (bold ? 1 : 0) + '" dirty="0"><a:solidFill><a:srgbClr val="' + hex6(cell.c, "2B2320") + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(t2) + '</a:t></a:r></a:p>' : '<a:p><a:pPr algn="' + al + '"/><a:endParaRPr lang="zh-TW" sz="' + fsz + '"/></a:p>'; }).join("");
+                  return '<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>' + paras + '</a:txBody><a:tcPr anchor="ctr">' + lnX("lnL") + lnX("lnR") + lnX("lnT") + lnX("lnB") + (bg ? '<a:solidFill><a:srgbClr val="' + bg + '"/></a:solidFill>' : '<a:noFill/>') + '</a:tcPr></a:tc>';
+                }).join("") + '</a:tr>';
+              }).join("") + '</a:tbl>';
+            shapesXml.push('<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="' + (nid++) + '" name="表格"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="' + tx0 + '" y="' + ty0 + '"/><a:ext cx="' + twE + '" cy="' + Math.max(1, thE) + '"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">' + tblXml + '</a:graphicData></a:graphic></p:graphicFrame>');
           } else if(e.k === "shape"){
             var gx = X(o.x), gy = Y(o.y), gw = X(o.w), gh = Y(o.h), col = hex6(o.color, "B23B32"), lw = Math.max(1, (o.sw || 3)) * 1.5 * 12700;
             var isLine = o.type === "line" || o.type === "arrow", alpha = (o.op == null ? 1 : o.op);
@@ -8778,7 +8932,7 @@
   var pinnedExtraTools = {};
   // 2026-10-01 工具列自訂：哪些工具放左側／上方／隱藏、順序、收合狀態，存在這台裝置的 localStorage（每台裝置各自記，不同步）
   var TB_STORE_KEY = "mandamy-toolbar-layout-v1";
-  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "transition", "present", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
+  var TB_DEFAULT = { left: ["fs", "pen", "select", "text", "shape", "eraser"], top: ["nav", "insert", "transition", "present", "media", "notes", "canvassize", "arrange", "undo", "redo", "clear"], hidden: [], collapsedLeft: false, collapsedTop: false, hiddenLeft: false, hiddenTop: false };
   var tbConfig = null;
   function loadTbConfig(){
     if(tbConfig) return tbConfig;
@@ -8859,6 +9013,7 @@
     var medias = progress.medias || []; // 2026-09-30 嵌入媒體：{ id, kind:'youtube'|'audio', ytId, name, x, y, w }（x／y＝左上角百分比）；音檔本體存在 progress.mediaData[id]
     var mediaEls = {};
     var shapes = progress.shapes || []; // 2026-10-01 圖形：{ id, type:'rect'|'ellipse'|'triangle'|'line'|'arrow', x,y,w,h（左上角＋大小，百分比）, fx,fy（線／箭頭起點在右／下）, color, sw, fill, step }
+    var tables = progress.tables || []; // 2026-10-02 真正的表格物件
     var groups = progress.groups || []; // 2026-10-01 群組：[{ id, members:[{ k:'text'|'image'|'shape'|'stroke', id }] }]，用「選取」工具框選後組成
     var images = progress.images || []; // 2026-09-30 貼上的圖片物件：{ id, src, x, y, w, ar, step }（x／y＝中心點百分比、w＝寬度佔畫布寬百分比、ar＝高／寬）
     // 2026-09-29 修正：localSelfSeq 是「這台裝置這次打開這一題以來，自己寫入 strokes 的次數」，
@@ -8943,6 +9098,24 @@
           <button type="button" class="trans-opt ${slideSecInfo.sec.transition === 'book' ? 'active' : ''}" data-trans="book">翻書 Page turn</button>
         </div>
       </div>` : ''}
+      ${!isStudent ? `
+      <div class="tool-btn-v-wrap">
+        <button type="button" class="tool-btn-v" id="btn-insert" title="插入：圖片、圖案、表格、多媒體、文字方塊、超連結 Insert"><span class="tool-btn-v-icon">➕</span><span class="tool-btn-v-label">插入</span></button>
+        <div class="color-popover insert-popover">
+          <div class="color-popover-title">插入 Insert</div>
+          <button type="button" class="trans-opt ins-img">🖼 圖片… Picture</button>
+          <button type="button" class="trans-opt ins-text">📝 文字方塊 Text box</button>
+          <div class="ins-shapes"><span class="ins-lab">🔷 圖案 Shapes</span>
+            <button type="button" class="shape-type-btn ins-shape" data-shape="rect" title="矩形">▭</button><button type="button" class="shape-type-btn ins-shape" data-shape="ellipse" title="橢圓">◯</button><button type="button" class="shape-type-btn ins-shape" data-shape="triangle" title="三角形">△</button><button type="button" class="shape-type-btn ins-shape" data-shape="line" title="直線">／</button><button type="button" class="shape-type-btn ins-shape" data-shape="arrow" title="箭頭">➜</button></div>
+          <button type="button" class="trans-opt ins-table">▦ 表格… Table</button>
+          <div class="ins-lab" style="margin-top:4px;">🎬 多媒體 Media</div>
+          <button type="button" class="trans-opt ins-yt">▶ YouTube 影片…</button>
+          <button type="button" class="trans-opt ins-audio">🔊 音檔…</button>
+          <button type="button" class="trans-opt ins-link">🔗 超連結… Link（選取物件後）</button>
+          <input type="file" class="ins-img-file" accept="image/*" multiple style="display:none;">
+        </div>
+      </div>` : ''}
+      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-anim-pane" title="動畫窗格：集中檢視與編輯這一頁所有物件的動畫 Animation pane"><span class="tool-btn-v-icon">🎞</span><span class="tool-btn-v-label">動畫窗格</span></button>` : ''}
       ${!isStudent ? `
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v" id="btn-present" title="放映工具：雷射筆、螢光筆、簡報者檢視 Slide show tools"><span class="tool-btn-v-icon">🔴</span><span class="tool-btn-v-label">放映工具</span></button>
@@ -9031,6 +9204,10 @@
               <select class="text-anim-delay" title="延遲（接在上一個之後）"><option value="0">同時</option><option value="0.5">延遲 0.5 秒</option><option value="1">延遲 1 秒</option><option value="2">延遲 2 秒</option></select>
               <button type="button" class="text-anim-preview" title="預覽動畫">▶ 預覽</button>
             </div>
+          </div>
+          <div class="popover-field-row">
+            <div class="popover-field-row-label"><span>超連結 Link</span></div>
+            <div class="anim-row"><button type="button" class="text-link-btn" title="選取文字方塊後，設定跳到某張投影片或開啟網址（Ctrl/⌘+K）">🔗 設定超連結…</button></div>
           </div>
         </div>
       </div>
@@ -9402,6 +9579,8 @@
     var TB_ITEM_DEFS = [
       { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
       { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [vToolbar.querySelector(".slide-nav-row"), vToolbar.querySelector(".slide-nav-counter")]; } },
+      { key: "insert", label: "插入（圖片／圖案／表格／多媒體／連結）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-insert"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "anim", label: "動畫窗格", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-anim-pane")]; } },
       { key: "present", label: "放映工具（雷射筆／螢光筆／簡報者檢視）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-present"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "transition", label: "轉場", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
       { key: "media", label: "媒體（YouTube／音檔）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-media"); return [b && b.closest(".tool-btn-v-wrap")]; } },
@@ -9932,7 +10111,7 @@
     }
     // 這幾個按鈕不是「筆／文字」之類單純的工具切換鈕，不能被下面這段通用點擊處理蓋掉 onclick，
     // 一律排除，各自的點擊行為在下面另外綁定。
-    var NON_TOOL_BTN_IDS = ["btn-canvas-size", "btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
+    var NON_TOOL_BTN_IDS = ["btn-insert", "btn-anim-pane", "btn-present", "btn-canvas-size", "btn-upload-bg", "btn-remove-bg", "btn-clear-draw", "btn-record-trace", "btn-clear-trace", "btn-personal-trace", "btn-canvas-fs", "btn-eraser", "btn-undo", "btn-redo", "btn-more-tools", "btn-slide-prev", "btn-slide-next", "btn-transition", "btn-media", "btn-arrange", "btn-notes"];
 
     // 目前選定工具「本來該有」的游標樣式——跟放大縮小/自動拖曳無關，單純工具本身的樣子。
     // 抽成函式是因為畫布縮放後的「靠近墨跡才恢復成工具游標」也要用到同一份邏輯（見下面
@@ -10006,6 +10185,7 @@
       var pr = getProgress(qId);
       var mx = (pr.texts || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, 0);
       mx = (pr.images || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
+      mx = (pr.tables || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
       return (pr.shapes || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
     }
     function slideStepNext(){
@@ -10442,6 +10622,7 @@
       var tg = selectedAnimTarget(), se = vToolbar.querySelector(".text-anim-select"), de = vToolbar.querySelector(".text-anim-delay");
       if(se) se.value = (tg && tg.o.anim) || "none"; if(de) de.value = String((tg && tg.o.animDelay) || 0);
     }
+    var textLinkBtn = vToolbar.querySelector(".text-link-btn"); if(textLinkBtn) textLinkBtn.onclick = function(e){ e.stopPropagation(); openLinkDialog(); };
     var animSel = vToolbar.querySelector(".text-anim-select"), animDel = vToolbar.querySelector(".text-anim-delay"), animPrev = vToolbar.querySelector(".text-anim-preview");
     function setAnimProps(){
       var tg = selectedAnimTarget(); if(!tg){ alert("請先點選一個文字方塊、圖片或圖案，再設定動畫。\nSelect an object first."); syncAnimUi(); return; }
@@ -11019,6 +11200,7 @@
         if(t.list === "bullet") div.classList.add("list-bullet"); else if(t.list === "number") div.classList.add("list-number");
 
         div.innerHTML = `
+          ${(!isStudent && t.link) ? '<span class="obj-link-badge" title="有超連結">🔗</span>' : ''}
           ${(!isStudent && (t.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + t.step + ' 次點擊出現">' + t.step + '</span>' : ''}
           <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride)}</div>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
@@ -11160,8 +11342,10 @@
       });
       renderImages();
       renderShapes();
+      renderTables();
       renderMedias();
       if(typeof renderLayersPanel === "function") renderLayersPanel();
+      if(typeof renderAnimPanel === "function") renderAnimPanel();
       if(typeof renderSelection === "function" && selSet.length) renderSelection();
     }
 
@@ -11407,11 +11591,12 @@
 
 
     /* ===== 上下層：文字／圖形／圖片共用一套 z 順序（物件的 z 欄位；沒有 z 的用預設：圖片 < 圖形 < 文字，依陣列順序）===== */
-    function objZ(kind, o, idx){ return (o.z !== undefined && o.z !== null) ? o.z : (kind === "image" ? idx : (kind === "shape" ? 1000 + idx : 2000 + idx)); }
+    function objZ(kind, o, idx){ return (o.z !== undefined && o.z !== null) ? o.z : (kind === "image" ? idx : (kind === "shape" ? 1000 + idx : (kind === "table" ? 1500 + idx : 2000 + idx))); }
     function buildZList(){
       var L = [];
       images.forEach(function(o, i){ L.push({ kind: "image", o: o, z: objZ("image", o, i), n: L.length }); });
       shapes.forEach(function(o, i){ L.push({ kind: "shape", o: o, z: objZ("shape", o, i), n: L.length }); });
+      tables.forEach(function(o, i){ L.push({ kind: "table", o: o, z: objZ("table", o, i), n: L.length }); });
       texts.forEach(function(o, i){ L.push({ kind: "text", o: o, z: objZ("text", o, i), n: L.length }); });
       L.sort(function(a, b){ return (a.z - b.z) || (a.n - b.n); });
       return L;
@@ -11423,7 +11608,7 @@
     }
     function hasExplicitZ(){
       function hz(o){ return o.z !== undefined && o.z !== null; }
-      return images.some(hz) || shapes.some(hz) || texts.some(hz);
+      return images.some(hz) || shapes.some(hz) || texts.some(hz) || tables.some(hz);
     }
     // 新物件：文字放最上面；圖片／圖形放在「最底下那個文字」的下面（維持原本「圖形在文字後面」的習慣）。
     // 只有在使用者調整過上下層（已經有 z）之後才需要明確指定，沒有調整過就靠預設順序。
@@ -12139,6 +12324,7 @@
     function itemBox(it){
       if(it.k === "text") return elBox(textLayer.querySelector('.movable-text[data-text-id="' + it.id + '"]'));
       if(it.k === "image") return elBox(cWrap.querySelector('.board-image[data-img-id="' + it.id + '"]'));
+      if(it.k === "table") return elBox(cWrap.querySelector('.table-obj[data-table-id="' + it.id + '"]'));
       if(it.k === "shape"){
         var sh = shapes.find(function(x){ return x.id === it.id; }); if(!sh) return null;
         var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, padX = 4 / W * 100, padY = 4 / H * 100;
@@ -12152,6 +12338,7 @@
       texts.forEach(function(o){ out.push({ k: "text", id: o.id }); });
       images.forEach(function(o){ out.push({ k: "image", id: o.id }); });
       shapes.forEach(function(o){ out.push({ k: "shape", id: o.id }); });
+      tables.forEach(function(o){ out.push({ k: "table", id: o.id }); });
       strokes.forEach(function(o){ if(o.id && !o.isEraser) out.push({ k: "stroke", id: o.id }); });
       return out;
     }
@@ -12206,12 +12393,13 @@
     function deleteSelection(){
       if(!selSet.length) return;
       snapshotForUndo();
-      var ids = { text: {}, image: {}, shape: {}, stroke: {} };
+      var ids = { text: {}, image: {}, shape: {}, table: {}, stroke: {} };
       selSet.forEach(function(it){ ids[it.k][it.id] = true; });
       var patch = { groups: null };
       if(Object.keys(ids.text).length){ texts = texts.filter(function(o){ return !ids.text[o.id]; }); patch.texts = texts; }
       if(Object.keys(ids.image).length){ images = images.filter(function(o){ return !ids.image[o.id]; }); patch.images = images; }
       if(Object.keys(ids.shape).length){ shapes = shapes.filter(function(o){ return !ids.shape[o.id]; }); patch.shapes = shapes; }
+      if(Object.keys(ids.table).length){ tables = tables.filter(function(o){ return !ids.table[o.id]; }); patch.tables = tables; tblSel = null; }
       if(Object.keys(ids.stroke).length){ strokes = strokes.filter(function(o){ return !ids.stroke[o.id]; }); localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; }
       groups = groups.map(function(g){ return { id: g.id, members: g.members.filter(function(m){ return !ids[m.k][m.id]; }) }; }).filter(function(g){ return g.members.length >= 2; });
       patch.groups = groups;
@@ -12222,7 +12410,7 @@
     }
     // ===== 物件格式：框線／陰影／圓角（文字方塊、圖片、圖案）、圖片裁剪／去背、圖案漸層填色 =====
     function openObjFormat(){
-      var items = expandGroups(selSet).filter(function(it){ return it.k !== "stroke"; });
+      var items = expandGroups(selSet).filter(function(it){ return it.k !== "stroke" && it.k !== "table"; });
       var objs = items.map(function(it){ return { k: it.k, o: selItemObj(it) }; }).filter(function(x){ return x.o; });
       if(!objs.length) return;
       snapshotForUndo();
@@ -12295,9 +12483,11 @@
       back.addEventListener("click", function(e){ if(e.target === back) back.remove(); });
       document.body.appendChild(back);
     }
+    function finishCellEditIfAny(){ if(tblEdit){ finishCellEdit(); return true; } return false; }
     function renderSelection(){
       selectLayer.innerHTML = "";
-      if(!selSet.length) return;
+      if(!selSet.length){ tblSel = null; return; }
+      if(!(selSet.length === 1 && selSet[0].k === "table")) tblSel = null;
       var any = false;
       selSet.forEach(function(it){
         var b = itemBox(it); if(!b) return; any = true;
@@ -12318,7 +12508,8 @@
         (inGroup ? '<button type="button" data-act="ungroup" title="解散群組（Ctrl/⌘+Shift+G）">解散群組</button>' : '') +
         '<button type="button" data-act="copy" title="複製（Ctrl/⌘+C）；貼上 Ctrl/⌘+V、重複製作 Ctrl/⌘+D">⧉ 複製</button>' +
         '<button type="button" data-act="dup" title="重複製作（Ctrl/⌘+D）">重複製作</button>' +
-        (items.some(function(x){ return x.k !== "stroke"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
+        (items.some(function(x){ return x.k !== "stroke"; }) ? '<button type="button" data-act="link" title="超連結（Ctrl/⌘+K）：跳到投影片或開啟網址">🔗 連結</button>' : '') +
+        (items.some(function(x){ return x.k !== "stroke" && x.k !== "table"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
         '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>' +
         (selUnits().length >= 2 ? '<span class="sb-sep"></span>' +
           [["l","⇤","靠左對齊"],["c","⇔","水平置中"],["r","⇥","靠右對齊"],["t","⤒","靠上對齊"],["m","⇕","垂直置中"],["b","⤓","靠下對齊"]].map(function(a){ return '<button type="button" class="sb-al" data-act="al-' + a[0] + '" title="' + a[2] + '">' + a[1] + '</button>'; }).join("") +
@@ -12333,13 +12524,21 @@
         else if(bt.dataset.act === "copy"){ copySelection(); bt.textContent = "✓ 已複製"; }
         else if(bt.dataset.act === "dup") duplicateSelection();
         else if(bt.dataset.act === "fmt") openObjFormat();
+        else if(bt.dataset.act === "link") openLinkDialog();
         else if(/^al-/.test(bt.dataset.act)) alignSelection(bt.dataset.act.slice(3));
       });
       selectLayer.appendChild(bar);
+      renderTableTools(u);
     }
     function startSelectInteraction(e, p){
       var additive = e.shiftKey || e.metaKey || e.ctrlKey;
       var hit = hitTestItem(p);
+      if(hit && hit.k === "table" && !additive && selSet.length === 1 && sameItem(selSet[0], hit)){
+        var th = tableHitCell(hit.id, p);
+        if(th && th.edge){ beginTableEdgeResize(hit.id, th.edge, p); return; }
+        if(th){ var nowT = Date.now(), dbl = lastCellTap && lastCellTap.id === hit.id && lastCellTap.r === th.r && lastCellTap.c === th.c && nowT - lastCellTap.t < 500; lastCellTap = { id: hit.id, r: th.r, c: th.c, t: nowT }; if(dbl){ lastCellTap = null; tblSel = { id: hit.id, r1: th.r, c1: th.c, r2: th.r, c2: th.c }; startCellEdit(hit.id, th.r, th.c); return; } beginCellSelect(e, hit.id, th.r, th.c); return; }
+      }
+      if(finishCellEditIfAny()) { /* 先結束輸入 */ }
       if(hit){
         var hitSet = expandGroups([hit]);
         if(additive){
@@ -12361,6 +12560,7 @@
         if(it.k === "text"){ var o = texts.find(function(x){ return x.id === it.id; }); return o ? { it: it, o: o, x: o.x, y: o.y } : null; }
         if(it.k === "image"){ var o2 = images.find(function(x){ return x.id === it.id; }); return o2 ? { it: it, o: o2, x: o2.x, y: o2.y } : null; }
         if(it.k === "shape"){ var o3 = shapes.find(function(x){ return x.id === it.id; }); return o3 ? { it: it, o: o3, x: o3.x, y: o3.y } : null; }
+        if(it.k === "table"){ var o4 = tables.find(function(x){ return x.id === it.id; }); return o4 ? { it: it, o: o4, x: o4.x, y: o4.y } : null; }
         var st = strokes.find(function(x){ return x.id === it.id; }); return st ? { it: it, o: st, pts: st.points.map(function(pt){ return { x: pt.x, y: pt.y, t: pt.t }; }) } : null;
       }).filter(Boolean);
       var moved = false, raf = 0, last = null;
@@ -12404,7 +12604,7 @@
         if(!moved) return;
         var patch = {}, kinds = {};
         orig.forEach(function(g){ kinds[g.it.k] = true; });
-        if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+        if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes; if(kinds.table) patch.tables = tables;
         if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; }
         writeProgress(q.id, patch);
       }
@@ -12437,37 +12637,237 @@
       }
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     }
-    // ===== 插入表格：R×C 個矩形格子＋每格一個文字方塊，自動群組（可以解散群組後個別調整）=====
-    function insertTable(rows, cols, header){
-      rows = Math.max(1, Math.min(12, rows | 0)); cols = Math.max(1, Math.min(10, cols | 0));
-      var W = cWrap.clientWidth || 640, H = cWrap.clientHeight || 400;
-      var tw = Math.min(90, cols * 18), cellW = tw / cols, cellHpx = Math.min(H * 0.6 / rows, 72), cellH = cellHpx / H * 100, th = cellH * rows;
-      var x0 = 50 - tw / 2, y0 = Math.max(4, 50 - th / 2);
-      var fs = Math.max(10, Math.min(28, Math.round(cellW / 100 * 640 / 5.2), Math.round(cellH / 100 * 640 * (H / W) * 0.45)));
+    // ===== 真正的表格物件：{ id, x, y（左上角％）, w（佔頁寬％）, cw（每欄寬度比例，總和 1）, rh（每列高度，佔頁高％）, cells[r][c]={ t, bg, c, b, a, fs }, bd, bw, hdr, step, z, anim } =====
+    var lastCellTap = null;
+    var tblSel = null, tblEdit = null; // tblSel：{ id, r1, c1, r2, c2 } 目前選取的儲存格範圍；tblEdit：{ id, r, c, el, layer } 正在輸入的儲存格
+    var TBL_HDR_BG = "#F4D9CC";
+    function tblById(id){ return tables.find(function(x){ return x.id === id; }); }
+    function renderTables(){
+      var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, scale = getScaleRatio();
+      Array.prototype.slice.call(cWrap.querySelectorAll(".table-obj")).forEach(function(e){ if(!(tblEdit && e === tblEdit.el)) e.remove(); });
+      var zr = zRanks(), revealNow = getProgress(q.id).revealStep || 0;
+      tables.forEach(function(t){
+        var hid = (t.step || 0) > revealNow; if(hid && isStudent) return;
+        var rank = zr.map[t.id] || 0, inText = rank > zr.minText, layer = inText ? textLayer : imageLayer;
+        var div;
+        if(tblEdit && tblEdit.id === t.id){ div = tblEdit.el; layer.appendChild(div); tblEdit.layer = layer; div.style.zIndex = String(inText ? rank + 1 : rank); return; }
+        div = document.createElement("div"); div.className = "table-obj" + (hid ? " step-hidden" : ""); div.dataset.tableId = t.id;
+        div.style.left = t.x + "%"; div.style.top = t.y + "%"; div.style.width = t.w + "%"; div.style.zIndex = String(inText ? rank + 1 : rank);
+        applyAnim(div, t);
+        var bw = Math.max(0, t.bw == null ? 2 : t.bw), bc = t.bd || "#555555", fs0 = t.fs || 24;
+        var html = '<table style="table-layout:fixed;width:100%;border-collapse:collapse;"><colgroup>' + t.cw.map(function(f){ return '<col style="width:' + (f * 100) + '%">'; }).join("") + '</colgroup><tbody>';
+        t.cells.forEach(function(row, r){
+          html += '<tr style="height:' + ((t.rh[r] || 8) / 100 * H) + 'px;">';
+          row.forEach(function(cell, c){
+            var bg = cell.bg || ((t.hdr && r === 0) ? TBL_HDR_BG : ""), bold = cell.b != null ? cell.b : (t.hdr && r === 0);
+            html += '<td data-r="' + r + '" data-c="' + c + '" style="border:' + (bw ? bw * scale + "px solid " + bc : "none") + ";" + (bg ? "background:" + bg + ";" : "") + "color:" + (cell.c || "#2B2320") + ";font-weight:" + (bold ? 700 : 400) + ";text-align:" + (cell.a || "center") + ";font-size:" + Math.max(6, (cell.fs || fs0) * scale) + 'px;">' + buildPhoneticHtml(cell.t || "", cell.po) + '</td>';
+          });
+          html += '</tr>';
+        });
+        div.innerHTML = html + '</tbody></table>';
+        layer.appendChild(div);
+      });
+    }
+    function tdBox(id, r, c){ return elBox(cWrap.querySelector('.table-obj[data-table-id="' + id + '"] td[data-r="' + r + '"][data-c="' + c + '"]')); }
+    function tableGeom(id){ // 每個儲存格在頁面上的框（%），用來判斷點到哪一格、哪條格線
+      var t = tblById(id); if(!t) return null; var rows = [];
+      for(var r = 0; r < t.rh.length; r++){ var rowB = []; for(var c = 0; c < t.cw.length; c++) rowB.push(tdBox(id, r, c)); rows.push(rowB); }
+      return rows;
+    }
+    function tableHitCell(id, p){
+      var g = tableGeom(id); if(!g) return null;
+      var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, tx = 7 / W * 100, ty = 7 / H * 100, best = null;
+      for(var r = 0; r < g.length; r++) for(var c = 0; c < g[r].length; c++){
+        var b = g[r][c]; if(!b) continue;
+        if(p.x >= b.l - tx && p.x <= b.r + tx && p.y >= b.t - ty && p.y <= b.b + ty){
+          var edge = null;
+          if(Math.abs(p.x - b.r) <= tx && c < g[r].length - 1) edge = { type: "col", i: c };
+          else if(Math.abs(p.y - b.b) <= ty && r < g.length - 1) edge = { type: "row", i: r };
+          if(edge || (p.x >= b.l && p.x <= b.r && p.y >= b.t && p.y <= b.b)) best = { r: r, c: c, edge: edge };
+          if(best && best.edge) return best;
+        }
+      }
+      return best;
+    }
+    function tblRange(){ // 目前選取範圍（沒選就是整張表）
+      var t = tblSel && tblById(tblSel.id); if(!t) return null;
+      return { t: t, r1: Math.min(tblSel.r1, tblSel.r2), r2: Math.max(tblSel.r1, tblSel.r2), c1: Math.min(tblSel.c1, tblSel.c2), c2: Math.max(tblSel.c1, tblSel.c2) };
+    }
+    function tblCommit(rerender){ writeProgress(q.id, { tables: tables }); if(rerender !== false){ renderTexts(); } renderSelection(); }
+    function startCellEdit(id, r, c){
+      var t = tblById(id), td = cWrap.querySelector('.table-obj[data-table-id="' + id + '"] td[data-r="' + r + '"][data-c="' + c + '"]'); if(!t || !td) return;
+      if(tblEdit) finishCellEdit();
       snapshotForUndo();
-      var members = [];
-      for(var r = 0; r < rows; r++){
-        for(var c = 0; c < cols; c++){
-          var isH = header && r === 0;
-          var sh = { id: uid("sh"), type: "rect", x: Math.round((x0 + c * cellW) * 100) / 100, y: Math.round((y0 + r * cellH) * 100) / 100, w: Math.round(cellW * 100) / 100, h: Math.round(cellH * 100) / 100, fx: false, fy: false, color: isH ? "#E8825A" : "#555555", sw: 2, fill: isH, op: isH ? 0.35 : 1, step: 0 };
-          assignNewZ("shape", sh); shapes.push(sh); members.push({ k: "shape", id: sh.id });
+      var div = td.closest(".table-obj"); div.classList.add("editing");
+      td.textContent = t.cells[r][c].t || "";
+      td.contentEditable = "plaintext-only"; if(td.contentEditable !== "plaintext-only") td.contentEditable = "true";
+      tblEdit = { id: id, r: r, c: c, el: div, td: td };
+      tblSel = { id: id, r1: r, c1: c, r2: r, c2: c };
+      td.focus(); var rg = document.createRange(); rg.selectNodeContents(td); var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg);
+      td.onkeydown = function(e){
+        if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); finishCellEdit(); return; }
+        if(e.key === "Tab"){
+          e.preventDefault(); e.stopPropagation(); var rr = r, cc = c + (e.shiftKey ? -1 : 1);
+          if(cc >= t.cw.length){ cc = 0; rr++; } if(cc < 0){ cc = t.cw.length - 1; rr--; }
+          if(rr >= t.rh.length){ finishCellEdit(); tblAddRow(t.rh.length - 1, true); rr = t.rh.length - 1; }
+          if(rr < 0) return; finishCellEdit(); startCellEdit(id, rr, cc);
+        }
+      };
+      td.onblur = function(){ setTimeout(function(){ if(tblEdit && tblEdit.td === td) finishCellEdit(); }, 0); };
+    }
+    function finishCellEdit(){
+      if(!tblEdit) return; var e = tblEdit; tblEdit = null;
+      var t = tblById(e.id); e.td.onblur = null; e.td.onkeydown = null;
+      if(t && t.cells[e.r] && t.cells[e.r][e.c]){ var v = e.td.innerText.replace(/\n$/, ""); if(v !== (t.cells[e.r][e.c].t || "")){ t.cells[e.r][e.c].t = v; delete t.cells[e.r][e.c].po; } }
+      e.el.classList.remove("editing"); e.td.contentEditable = "false";
+      writeProgress(q.id, { tables: tables }); renderTexts();
+    }
+    function tblAddRow(refR, after){
+      var t = tblSel ? tblById(tblSel.id) : null; if(!t && selSet.length === 1 && selSet[0].k === "table") t = tblById(selSet[0].id); if(!t) return;
+      snapshotForUndo();
+      var at = after ? refR + 1 : refR, h = t.rh[Math.min(refR, t.rh.length - 1)] || 8;
+      t.cells.splice(at, 0, t.cw.map(function(){ return { t: "" }; })); t.rh.splice(at, 0, h);
+      tblCommit();
+    }
+    function tblAddCol(refC, after){
+      var t = tblSel ? tblById(tblSel.id) : null; if(!t && selSet.length === 1 && selSet[0].k === "table") t = tblById(selSet[0].id); if(!t) return;
+      snapshotForUndo();
+      var at = after ? refC + 1 : refC, n = t.cw.length, f = 1 / (n + 1);
+      t.cw = t.cw.map(function(x){ return x * n / (n + 1); }); t.cw.splice(at, 0, f);
+      t.cells.forEach(function(row){ row.splice(at, 0, { t: "" }); });
+      t.w = Math.min(96, t.w * (n + 1) / n); tblCommit();
+    }
+    function tblDelRow(){ var rg = tblRange(); if(!rg || rg.t.rh.length <= 1){ return; } snapshotForUndo(); rg.t.cells.splice(rg.r1, rg.r2 - rg.r1 + 1); rg.t.rh.splice(rg.r1, rg.r2 - rg.r1 + 1); if(!rg.t.cells.length){ return; } tblSel = { id: rg.t.id, r1: 0, c1: rg.c1, r2: 0, c2: rg.c2 }; tblCommit(); }
+    function tblDelCol(){
+      var rg = tblRange(); if(!rg || rg.t.cw.length <= 1) return; snapshotForUndo();
+      var n = rg.c2 - rg.c1 + 1; if(n >= rg.t.cw.length) return;
+      var removed = rg.t.cw.splice(rg.c1, n).reduce(function(a, b){ return a + b; }, 0);
+      rg.t.cells.forEach(function(row){ row.splice(rg.c1, n); });
+      var rest = 1 - removed; rg.t.cw = rg.t.cw.map(function(x){ return x / rest; }); rg.t.w = Math.max(10, rg.t.w * rest);
+      tblSel = { id: rg.t.id, r1: rg.r1, c1: 0, r2: rg.r2, c2: 0 }; tblCommit();
+    }
+    function tblSetCells(prop, val){
+      var rg = tblRange(); var t = rg ? rg.t : (selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null); if(!t) return;
+      var r1 = rg ? rg.r1 : 0, r2 = rg ? rg.r2 : t.rh.length - 1, c1 = rg ? rg.c1 : 0, c2 = rg ? rg.c2 : t.cw.length - 1;
+      snapshotForUndo();
+      for(var r = r1; r <= r2; r++) for(var c = c1; c <= c2; c++){ var cell = t.cells[r][c]; if(val === null || val === "") delete cell[prop]; else cell[prop] = val; }
+      tblCommit();
+    }
+    function tblCellFs(delta){
+      var rg = tblRange(); var t = rg ? rg.t : (selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null); if(!t) return;
+      var r1 = rg ? rg.r1 : 0, r2 = rg ? rg.r2 : t.rh.length - 1, c1 = rg ? rg.c1 : 0, c2 = rg ? rg.c2 : t.cw.length - 1;
+      snapshotForUndo();
+      for(var r = r1; r <= r2; r++) for(var c = c1; c <= c2; c++){ var cell = t.cells[r][c]; cell.fs = Math.max(8, Math.min(120, (cell.fs || t.fs || 24) + delta)); }
+      tblCommit();
+    }
+    function tblToggleBold(){
+      var rg = tblRange(); var t = rg ? rg.t : (selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null); if(!t) return;
+      var r1 = rg ? rg.r1 : 0, c1 = rg ? rg.c1 : 0, cur = t.cells[r1][c1], was = cur.b != null ? cur.b : (t.hdr && r1 === 0);
+      tblSetCells("b", !was);
+    }
+    function tblProp(prop, val){ var t = selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null; if(!t) return; snapshotForUndo(); t[prop] = val; tblCommit(); }
+    function tblEqualize(){
+      var t = selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null; if(!t) return; snapshotForUndo();
+      t.cw = t.cw.map(function(){ return 1 / t.cw.length; }); var tot = t.rh.reduce(function(a, b){ return a + b; }, 0); t.rh = t.rh.map(function(){ return tot / t.rh.length; }); tblCommit();
+    }
+    function beginCellSelect(e, id, r0, c0){
+      tblSel = { id: id, r1: r0, c1: c0, r2: r0, c2: c0 };
+      renderSelection();
+      function mv(ev){ var h = tableHitCell(id, getPos(ev)); if(h && (h.r !== tblSel.r2 || h.c !== tblSel.c2)){ tblSel.r2 = h.r; tblSel.c2 = h.c; renderSelection(); } }
+      function up(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); }
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    }
+    function beginTableEdgeResize(id, edge, p0){
+      var t = tblById(id); if(!t) return; var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, snap = false;
+      var cw0 = t.cw.slice(), rh0 = t.rh.slice(), w0 = t.w;
+      function mv(ev){
+        var p = getPos(ev), dx = p.x - p0.x, dy = p.y - p0.y; if(!snap){ snapshotForUndo(); snap = true; }
+        if(edge.type === "col"){
+          var d = dx / t.w, a = cw0[edge.i] + d, b = cw0[edge.i + 1] - d, mn = 0.04;
+          if(a < mn){ b -= (mn - a); a = mn; } if(b < mn){ a -= (mn - b); b = mn; }
+          t.cw[edge.i] = a; t.cw[edge.i + 1] = b;
+        } else { t.rh[edge.i] = Math.max(3, rh0[edge.i] + dy); }
+        renderTexts();
+      }
+      function up(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); if(snap) writeProgress(q.id, { tables: tables }); }
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    }
+    function beginTableScale(id, p0){ // 拖右下角方塊：整張表等比例調整寬度（高度跟著一起放大縮小）
+      var t = tblById(id); if(!t) return; var w0 = t.w, rh0 = t.rh.slice(), snap = false;
+      function mv(ev){ var p = getPos(ev); if(!snap){ snapshotForUndo(); snap = true; } var nw = Math.max(10, Math.min(98, w0 + (p.x - p0.x))), k = nw / w0; t.w = nw; t.rh = rh0.map(function(h){ return h * k; }); renderTexts(); }
+      function up(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); if(snap) writeProgress(q.id, { tables: tables }); }
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    }
+    function renderTableTools(u){
+      var old = selectLayer.querySelectorAll(".tbl-sel,.table-tools,.tbl-grip,.tbl-scale"); old.forEach(function(n){ n.remove(); });
+      var single = selSet.length === 1 && selSet[0].k === "table"; if(!single) { return; }
+      var t = tblById(selSet[0].id); if(!t) return;
+      if(tblSel && tblSel.id === t.id){
+        var rg = tblRange();
+        for(var r = rg.r1; r <= rg.r2; r++) for(var c = rg.c1; c <= rg.c2; c++){
+          var b = tdBox(t.id, r, c); if(!b) continue; var d = document.createElement("div"); d.className = "tbl-sel";
+          d.style.cssText = "left:" + b.l + "%;top:" + b.t + "%;width:" + (b.r - b.l) + "%;height:" + (b.b - b.t) + "%;"; selectLayer.appendChild(d);
         }
       }
-      for(var r2 = 0; r2 < rows; r2++){
-        for(var c2 = 0; c2 < cols; c2++){
-          var isH2 = header && r2 === 0;
-          var tx = { id: uid("t"), text: isH2 ? "標題" : "文字", x: Math.round((x0 + (c2 + 0.5) * cellW) * 100) / 100, y: Math.round((y0 + (r2 + 0.5) * cellH) * 100) / 100, color: isH2 ? "#2B2320" : "#8A8A8A", fontSize: fs, bold: isH2, step: 0, align: "center", list: "none" };
-          assignNewZ("text", tx); texts.push(tx); members.push({ k: "text", id: tx.id });
-        }
+      var grip = document.createElement("div"); grip.className = "tbl-grip"; grip.title = "拖曳整張表格移動"; grip.textContent = "✥";
+      grip.style.cssText = "left:calc(" + u.l + "% - 26px);top:calc(" + u.t + "% - 4px);";
+      grip.addEventListener("pointerdown", function(e){ e.stopPropagation(); e.preventDefault(); beginMoveSelection(getPos(e)); });
+      selectLayer.appendChild(grip);
+      var sc = document.createElement("div"); sc.className = "tbl-scale"; sc.title = "拖曳調整整張表格大小"; sc.style.cssText = "left:calc(" + u.r + "% - 6px);top:calc(" + u.b + "% - 6px);";
+      sc.addEventListener("pointerdown", function(e){ e.stopPropagation(); e.preventDefault(); beginTableScale(t.id, getPos(e)); });
+      selectLayer.appendChild(sc);
+      var bar = document.createElement("div"); bar.className = "table-tools";
+      var cur = tblRange(), cell0 = cur ? t.cells[cur.r1][cur.c1] : t.cells[0][0];
+      function btn(act, label, title){ return '<button type="button" data-ta="' + act + '" title="' + title + '">' + label + '</button>'; }
+      bar.innerHTML = '<b class="tt-title">表格工具 Table Tools</b>' +
+        '<span class="tt-g">' + btn("rowup", "↑列", "在上方插入一列") + btn("rowdn", "↓列", "在下方插入一列") + btn("colL", "←欄", "在左邊插入一欄") + btn("colR", "→欄", "在右邊插入一欄") + btn("delrow", "刪列", "刪除選取的列") + btn("delcol", "刪欄", "刪除選取的欄") + '</span>' +
+        '<span class="tt-g"><label title="儲存格填色">填色 <input type="color" class="tt-bg" value="' + (cell0.bg || "#FFFFFF") + '"></label>' + btn("nobg", "無色", "清除填色") +
+        '<label title="文字顏色">字色 <input type="color" class="tt-fc" value="' + (cell0.c || "#2B2320") + '"></label>' + btn("bold", "<b>B</b>", "粗體") + btn("fs-", "A−", "字小一點") + btn("fs+", "A＋", "字大一點") + btn("al-l", "⇤", "靠左") + btn("al-c", "↔", "置中") + btn("al-r", "⇥", "靠右") + '</span>' +
+        '<span class="tt-g"><label title="框線顏色">框線 <input type="color" class="tt-bd" value="' + (t.bd || "#555555") + '"></label><input type="number" class="tt-bw" min="0" max="8" step="1" value="' + (t.bw == null ? 2 : t.bw) + '" title="框線粗細（0＝無框線）">' +
+        '<label title="第一列當標題列"><input type="checkbox" class="tt-hdr" ' + (t.hdr ? "checked" : "") + '> 標題列</label>' + btn("eq", "平均", "平均分配欄寬與列高") + btn("del", "🗑 刪除表格", "刪除整張表格") + '</span>' +
+        '<span class="tt-hint">點一下格子選取（拖曳可選多格）；點兩下輸入文字；Tab 跳下一格；拖曳格線調整欄寬列高</span>';
+      bar.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+      bar.addEventListener("click", function(e){
+        var bt = e.target.closest("button"); if(!bt) return; e.stopPropagation();
+        var a = bt.dataset.ta, rg2 = tblRange(), rr = rg2 ? rg2.r2 : t.rh.length - 1, rr1 = rg2 ? rg2.r1 : 0, cc2 = rg2 ? rg2.c2 : t.cw.length - 1, cc1 = rg2 ? rg2.c1 : 0;
+        if(a === "rowup") tblAddRow(rr1, false); else if(a === "rowdn") tblAddRow(rr, true); else if(a === "colL") tblAddCol(cc1, false); else if(a === "colR") tblAddCol(cc2, true);
+        else if(a === "delrow") tblDelRow(); else if(a === "delcol") tblDelCol(); else if(a === "nobg") tblSetCells("bg", null);
+        else if(a === "bold") tblToggleBold(); else if(a === "fs-") tblCellFs(-2); else if(a === "fs+") tblCellFs(2);
+        else if(a === "al-l") tblSetCells("a", "left"); else if(a === "al-c") tblSetCells("a", "center"); else if(a === "al-r") tblSetCells("a", "right");
+        else if(a === "eq") tblEqualize(); else if(a === "del") deleteSelection();
+      });
+      bar.querySelector(".tt-bg").oninput = function(e){ tblSetCellsLive("bg", e.target.value); };
+      bar.querySelector(".tt-fc").oninput = function(e){ tblSetCellsLive("c", e.target.value); };
+      bar.querySelector(".tt-bd").oninput = function(e){ t.bd = e.target.value; writeProgress(q.id, { tables: tables }); renderTexts(); };
+      bar.querySelector(".tt-bw").onchange = function(e){ tblProp("bw", Math.max(0, Math.min(8, Number(e.target.value) || 0))); };
+      bar.querySelector(".tt-hdr").onchange = function(e){ tblProp("hdr", e.target.checked); };
+      // 顏色選擇器拖動時連續更新，只在第一次存復原點
+      var liveSnap = false;
+      function tblSetCellsLive(prop, val){
+        var rg3 = tblRange(); var r1 = rg3 ? rg3.r1 : 0, r2 = rg3 ? rg3.r2 : t.rh.length - 1, c1 = rg3 ? rg3.c1 : 0, c2 = rg3 ? rg3.c2 : t.cw.length - 1;
+        if(!liveSnap){ snapshotForUndo(); liveSnap = true; setTimeout(function(){ liveSnap = false; }, 1500); }
+        for(var r = r1; r <= r2; r++) for(var c = c1; c <= c2; c++) t.cells[r][c][prop] = val;
+        writeProgress(q.id, { tables: tables }); renderTexts();
       }
-      groups.push({ id: uid("g"), members: members });
-      writeProgress(q.id, { shapes: shapes, texts: texts, groups: groups });
-      switchToSelectTool(); selSet = members.slice(); renderTexts(); renderSelection();
+      bar.style.left = "min(" + u.l + "%, calc(100% - 640px))"; if(u.t > 38) bar.style.bottom = "calc(" + (100 - u.t) + "% + 46px)"; else bar.style.top = "calc(" + u.b + "% + 10px)";
+      selectLayer.appendChild(bar);
+    }
+    function insertTable(rows, cols, header){
+      rows = Math.max(1, Math.min(20, rows | 0)); cols = Math.max(1, Math.min(12, cols | 0));
+      var W = cWrap.clientWidth || 640, H = cWrap.clientHeight || 400;
+      var w = Math.min(92, Math.max(30, cols * 17)), cellHpx = Math.min(H * 0.7 / rows, 64), rowH = cellHpx / H * 100;
+      var fs = Math.max(10, Math.min(28, Math.round((w / cols) / 100 * 640 / 5.5), Math.round(cellHpx / H * 640 * (H / W) * 0.5)));
+      var t = { id: uid("tb"), x: Math.round((50 - w / 2) * 10) / 10, y: Math.max(3, Math.round((50 - rowH * rows / 2) * 10) / 10), w: w, cw: [], rh: [], cells: [], bd: "#555555", bw: 2, fs: fs, hdr: !!header, step: 0 };
+      for(var c = 0; c < cols; c++) t.cw.push(1 / cols);
+      for(var r = 0; r < rows; r++){ t.rh.push(rowH); t.cells.push(t.cw.map(function(){ return { t: "" }; })); }
+      snapshotForUndo(); assignNewZ("table", t); tables.push(t);
+      writeProgress(q.id, { tables: tables });
+      switchToSelectTool(); selSet = [{ k: "table", id: t.id }]; tblSel = { id: t.id, r1: 0, c1: 0, r2: 0, c2: 0 }; renderTexts(); renderSelection();
     }
     function openTableDialog(){
       var back = document.createElement("div"); back.className = "tb-modal-back";
       var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(380px,94vw)"; back.appendChild(modal);
-      modal.innerHTML = '<h3>▦ 插入表格 Insert table</h3><div style="display:flex;gap:10px;align-items:center;font-size:14px;flex-wrap:wrap;">列數 <input type="number" class="tb-r" min="1" max="12" value="3" style="width:64px;padding:4px 6px;"> × 欄數 <input type="number" class="tb-c" min="1" max="10" value="3" style="width:64px;padding:4px 6px;"></div><label style="display:flex;gap:6px;margin:10px 0;font-size:13px;"><input type="checkbox" class="tb-h" checked> 第一列當標題列（橘色底）</label><div class="tb-hint">表格會放在這一頁中間，格子和文字已經自動群組；點兩下格子裡的字就能改，想個別調整請先「解散群組」。</div><div class="tb-foot"><button type="button" class="primary tb-ok">插入</button><button type="button" class="tb-cancel">取消</button></div>';
+      modal.innerHTML = '<h3>▦ 插入表格 Insert table</h3><div style="display:flex;gap:10px;align-items:center;font-size:14px;flex-wrap:wrap;">列數 <input type="number" class="tb-r" min="1" max="20" value="3" style="width:64px;padding:4px 6px;"> × 欄數 <input type="number" class="tb-c" min="1" max="12" value="3" style="width:64px;padding:4px 6px;"></div><label style="display:flex;gap:6px;margin:10px 0;font-size:13px;"><input type="checkbox" class="tb-h" checked> 第一列當標題列</label><div class="tb-hint">插入後會自動跳出「表格工具」：可以增減列欄、每一格設不同顏色／字色、對齊、框線。點兩下格子輸入文字。</div><div class="tb-foot"><button type="button" class="primary tb-ok">插入</button><button type="button" class="tb-cancel">取消</button></div>';
       modal.querySelector(".tb-ok").onclick = function(){ insertTable(Number(modal.querySelector(".tb-r").value), Number(modal.querySelector(".tb-c").value), modal.querySelector(".tb-h").checked); back.remove(); };
       modal.querySelector(".tb-cancel").onclick = function(){ back.remove(); };
       back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
@@ -12480,6 +12880,7 @@
       if(it.k === "text") return texts.find(function(x){ return x.id === it.id; });
       if(it.k === "image") return images.find(function(x){ return x.id === it.id; });
       if(it.k === "shape") return shapes.find(function(x){ return x.id === it.id; });
+      if(it.k === "table") return tables.find(function(x){ return x.id === it.id; });
       return strokes.find(function(x){ return x.id === it.id; });
     }
     function shiftItems(items, dx, dy){
@@ -12493,7 +12894,7 @@
     }
     function commitKinds(kinds){
       var patch = {};
-      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes; if(kinds.table) patch.tables = tables;
       if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; redrawStrokes(); }
       writeProgress(q.id, patch); renderTexts(); renderSelection();
     }
@@ -12511,21 +12912,21 @@
       snapshotForUndo();
       var idMap = {}, made = [], kinds = {};
       clip.items.forEach(function(ci){
-        var d = JSON.parse(JSON.stringify(ci.data)), nid = uid(ci.k === "image" ? "im" : ci.k === "shape" ? "sh" : ci.k === "stroke" ? "s" : "t");
+        var d = JSON.parse(JSON.stringify(ci.data)), nid = uid(ci.k === "image" ? "im" : ci.k === "shape" ? "sh" : ci.k === "table" ? "tb" : ci.k === "stroke" ? "s" : "t");
         idMap[ci.oldId] = nid; d.id = nid;
         if(ci.k === "stroke"){ d.points.forEach(function(pt){ pt.x += off; pt.y += off; }); strokes.push(d); }
         else {
           d.x = Math.round((d.x + off) * 100) / 100; d.y = Math.round((d.y + off) * 100) / 100;
           d.z = undefined; delete d.z;
           assignNewZ(ci.k, d);
-          (ci.k === "image" ? images : ci.k === "shape" ? shapes : texts).push(d);
+          (ci.k === "image" ? images : ci.k === "shape" ? shapes : ci.k === "table" ? tables : texts).push(d);
         }
         kinds[ci.k] = true; made.push({ k: ci.k, id: nid });
       });
       clip.groups.forEach(function(ids){ groups.push({ id: uid("g"), members: ids.filter(function(i){ return idMap[i]; }).map(function(i){ var k = clip.items.find(function(c){ return c.oldId === i; }).k; return { k: k, id: idMap[i] }; }) }); });
       groups = groups.filter(function(g){ return g.members.length >= 2; });
       var patch = { groups: groups };
-      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes; if(kinds.table) patch.tables = tables;
       if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; redrawStrokes(); }
       writeProgress(q.id, patch);
       if(boardState.tool !== "select") switchToSelectTool();
@@ -12593,7 +12994,7 @@
     function applyZOrder(list){ // list：由下到上
       snapshotForUndo();
       list.forEach(function(it, i){ it.o.z = i + 1; });
-      writeProgress(q.id, { texts: texts, images: images, shapes: shapes });
+      writeProgress(q.id, { texts: texts, images: images, shapes: shapes, tables: tables });
       renderTexts();
     }
     function moveLayer(idx, mode){ // idx：在「由下到上」清單裡的位置
@@ -12606,11 +13007,13 @@
     function layerLabel(it){
       if(it.k === "text") return '<span class="lp-ic">T</span><span class="lp-tx">' + escapeHtml(String(it.o.text || "").replace(/\s+/g, " ").slice(0, 16) || "（空白文字）") + '</span>';
       if(it.k === "image") return '<img class="lp-th" src="' + it.o.src + '" alt=""><span class="lp-tx">圖片</span>';
+      if(it.k === "table") return '<span class="lp-ic">▦</span><span class="lp-tx">表格 ' + it.o.rh.length + "×" + it.o.cw.length + '</span>';
       var nm = { rect: "矩形", ellipse: "橢圓", triangle: "三角形", line: "直線", arrow: "箭頭" }[it.o.type] || "圖形";
       return '<span class="lp-dot" style="background:' + escapeHtml(it.o.color || "#B23B32") + '"></span><span class="lp-tx">' + nm + '</span>';
     }
     function selectFromLayers(it, ev){
       var item = { k: it.k, id: it.o.id };
+      if(it.k === "table" && boardState.tool !== "select"){ switchToSelectTool(); selSet = [item]; renderSelection(); renderLayersPanel(); return; }
       if(boardState.tool === "select"){
         var set = expandGroups([item]);
         if(ev && (ev.shiftKey || ev.metaKey || ev.ctrlKey)){
@@ -12687,6 +13090,104 @@
       var ob = vToolbar.querySelector("#btn-open-layers");
       if(ob) ob.addEventListener("click", function(e){ e.stopPropagation(); toggleLayersPanel(true); });
     })();
+
+    // ===== 動畫窗格：集中檢視／編輯這一頁所有物件的動畫（效果、開始方式、順序、預覽）=====
+    var animPanel = null;
+    function animObjs(){
+      var out = [];
+      texts.forEach(function(o){ out.push({ k: "text", o: o }); }); images.forEach(function(o){ out.push({ k: "image", o: o }); });
+      shapes.forEach(function(o){ out.push({ k: "shape", o: o }); }); tables.forEach(function(o){ out.push({ k: "table", o: o }); });
+      return out;
+    }
+    function animRows(){
+      var rows = animObjs().filter(function(x){ return (x.o.anim && x.o.anim !== "none") || (x.o.step || 0) > 0; });
+      rows.forEach(function(x, i){ x.z = objZ(x.k, x.o, i); });
+      rows.sort(function(a, b){ return ((a.o.step || 0) - (b.o.step || 0)) || ((a.o.ao || 0) - (b.o.ao || 0)) || (a.z - b.z); });
+      return rows;
+    }
+    function animModes(rows){
+      return rows.map(function(x, i){
+        if(i === 0) return "click"; var pv = rows[i - 1].o;
+        if((x.o.step || 0) > (pv.step || 0)) return "click";
+        return ((x.o.animDelay || 0) > (pv.animDelay || 0)) ? "after" : "with";
+      });
+    }
+    function animApply(rows, modes){ // 依「開始方式」重新算每個物件的點擊次數與延遲
+      var step = 0, prevDelay = 0;
+      rows.forEach(function(x, i){
+        var m = modes[i];
+        if(i === 0 || m === "click"){ step++; prevDelay = 0; x.o.animDelay = undefined; }
+        else if(m === "with"){ x.o.animDelay = undefined; prevDelay = 0; }
+        else { prevDelay = prevDelay + 0.8; x.o.animDelay = Math.round(prevDelay * 10) / 10; }
+        x.o.step = step; x.o.ao = i;
+      });
+    }
+    function animCommit(){ writeProgress(q.id, { texts: texts, images: images, shapes: shapes, tables: tables }); renderTexts(); if(typeof updateSlideNavUi === "function") updateSlideNavUi(); }
+    function animPlayAll(){
+      var mx = maxStepOf(q.id); if(!mx){ return; }
+      writeProgress(q.id, { revealStep: 0 }); var k = 0;
+      (function nextStep(){ k++; if(k > mx) return; setTimeout(function(){ writeProgress(q.id, { revealStep: k }); nextStep(); }, 1500); })();
+    }
+    function renderAnimPanel(){
+      if(!animPanel || animPanel.style.display === "none") return;
+      var body = animPanel.querySelector(".lp-body"); body.innerHTML = "";
+      var rows = animRows(), modes = animModes(rows), revealNow = getProgress(q.id).revealStep || 0;
+      if(!rows.length){ var em = document.createElement("div"); em.className = "lp-empty"; em.textContent = "這一頁還沒有動畫。從下面挑一個物件按「＋ 動畫」。"; body.appendChild(em); }
+      rows.forEach(function(x, i){
+        var row = document.createElement("div"); row.className = "lp-row ap-row";
+        row.innerHTML = '<span class="ap-n" title="第幾次點擊出現">' + (x.o.step || 0) + '</span><div class="lp-name">' + layerLabel(x) + '</div>' +
+          '<select class="ap-eff" title="動畫效果">' + Object.keys(ANIM_NAMES).map(function(k){ return '<option value="' + k + '"' + ((x.o.anim || "none") === k ? " selected" : "") + '>' + ANIM_NAMES[k] + '</option>'; }).join("") + '</select>' +
+          '<select class="ap-mode" title="開始方式"><option value="click"' + (modes[i] === "click" ? " selected" : "") + '>點擊時</option><option value="with"' + (modes[i] === "with" ? " selected" : "") + '>與前一個同時</option><option value="after"' + (modes[i] === "after" ? " selected" : "") + '>接在前一個之後</option></select>' +
+          '<div class="lp-btns"><button type="button" data-a="up" title="往前（先出現）">↑</button><button type="button" data-a="down" title="往後（後出現）">↓</button><button type="button" data-a="del" title="移除動畫">✕</button></div>';
+        row.addEventListener("click", function(e){ if(e.target.closest("button,select")) return; if(typeof selectFromLayers === "function") selectFromLayers(x, e); });
+        row.querySelector(".ap-eff").onchange = function(e){ snapshotForUndo(); x.o.anim = e.target.value === "none" ? undefined : e.target.value; animCommit(); };
+        row.querySelector(".ap-mode").onchange = function(e){ snapshotForUndo(); modes[i] = e.target.value; animApply(rows, modes); animCommit(); };
+        row.querySelector(".lp-btns").addEventListener("click", function(e){
+          var bt = e.target.closest("button"); if(!bt) return; e.stopPropagation(); var a = bt.dataset.a;
+          snapshotForUndo();
+          if(a === "del"){ x.o.anim = undefined; x.o.step = 0; x.o.animDelay = undefined; x.o.ao = undefined; var r2 = rows.slice(), m2 = modes.slice(); r2.splice(i, 1); m2.splice(i, 1); if(m2.length) m2[0] = "click"; animApply(r2, m2); }
+          else { var j = a === "up" ? i - 1 : i + 1; if(j < 0 || j >= rows.length) return; var tr = rows[i]; rows[i] = rows[j]; rows[j] = tr; var tm = modes[i]; modes[i] = modes[j]; modes[j] = tm; modes[0] = "click"; animApply(rows, modes); }
+          animCommit();
+        });
+        body.appendChild(row);
+      });
+      var rest = animObjs().filter(function(x){ return rows.indexOf(rows.find(function(r){ return r.o === x.o; })) === -1; });
+      if(rest.length){
+        var h = document.createElement("div"); h.className = "ap-sub"; h.textContent = "還沒有動畫的物件"; body.appendChild(h);
+        rest.forEach(function(x){
+          var row = document.createElement("div"); row.className = "lp-row ap-row";
+          row.innerHTML = '<div class="lp-name">' + layerLabel(x) + '</div><button type="button" class="ap-add" title="加上淡入動畫（點擊時出現）">＋ 動畫</button>';
+          row.addEventListener("click", function(e){ if(e.target.closest("button")) return; if(typeof selectFromLayers === "function") selectFromLayers(x, e); });
+          row.querySelector(".ap-add").onclick = function(e){ e.stopPropagation(); snapshotForUndo(); var rr = animRows(), md = animModes(rr); x.o.anim = "fade"; rr.push(x); md.push("click"); animApply(rr, md); animCommit(); };
+          body.appendChild(row);
+        });
+      }
+    }
+    function toggleAnimPanel(on){
+      if(!animPanel){
+        animPanel = document.createElement("div"); animPanel.className = "layers-panel anim-panel"; animPanel.style.display = "none";
+        animPanel.innerHTML = '<div class="lp-head"><span>🎞 動畫窗格 Animation Pane</span><button type="button" class="lp-x" title="關閉">✕</button></div><div class="lp-body"></div><div class="lp-foot ap-foot"><button type="button" class="ap-play">▶ 預覽全部</button><button type="button" class="ap-reset">⏮ 回到起點</button></div>';
+        animPanel.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+        animPanel.querySelector(".lp-x").onclick = function(){ toggleAnimPanel(false); };
+        animPanel.querySelector(".ap-play").onclick = animPlayAll;
+        animPanel.querySelector(".ap-reset").onclick = function(){ writeProgress(q.id, { revealStep: 0 }); };
+        var head = animPanel.querySelector(".lp-head");
+        head.onpointerdown = function(e){
+          if(e.target.closest("button")) return;
+          e.preventDefault(); try{ head.setPointerCapture(e.pointerId); }catch(er){}
+          var cr = container.getBoundingClientRect(), pr = animPanel.getBoundingClientRect(), dx = e.clientX - pr.left, dy = e.clientY - pr.top;
+          function mv(ev){ animPanel.style.left = Math.max(0, Math.min(cr.width - 80, ev.clientX - cr.left - dx)) + "px"; animPanel.style.top = Math.max(0, Math.min(cr.height - 40, ev.clientY - cr.top - dy)) + "px"; animPanel.style.right = "auto"; }
+          function up(){ head.removeEventListener("pointermove", mv); head.removeEventListener("pointerup", up); head.removeEventListener("pointercancel", up); }
+          head.addEventListener("pointermove", mv); head.addEventListener("pointerup", up); head.addEventListener("pointercancel", up);
+        };
+        container.appendChild(animPanel);
+      }
+      var show = on === undefined ? animPanel.style.display === "none" : on;
+      animPanel.style.display = show ? "flex" : "none";
+      var ab = vToolbar.querySelector("#btn-anim-pane"); if(ab) ab.classList.toggle("active", show);
+      if(show) renderAnimPanel();
+    }
+    (function(){ var ab = vToolbar.querySelector("#btn-anim-pane"); if(ab) ab.addEventListener("click", function(e){ e.stopPropagation(); toggleAnimPanel(); }); })();
 
     // ===== 📐 畫布大小（老師）=====
     var canvasSizeBtn = vToolbar.querySelector("#btn-canvas-size");
@@ -12876,6 +13377,80 @@
       };
     }
 
+    // ===== 插入功能表 =====
+    var insImgFile = vToolbar.querySelector(".ins-img-file");
+    function insBind(sel, fn){ var el = vToolbar.querySelector(sel); if(el) el.onclick = function(e){ e.stopPropagation(); fn(e); }; }
+    insBind(".ins-img", function(){ insImgFile.click(); });
+    if(insImgFile) insImgFile.onchange = function(){ var fl = Array.prototype.slice.call(insImgFile.files || []); insImgFile.value = ""; if(fl.length) pasteImageFiles(fl); };
+    insBind(".ins-text", function(){ var tb = vToolbar.querySelector('button[data-tool="text"]'); if(tb) tb.click(); });
+    vToolbar.querySelectorAll(".ins-shape").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); boardState.shapeType = b.dataset.shape; var tb = vToolbar.querySelector('button[data-tool="shape"]'); if(tb) tb.click(); vToolbar.querySelectorAll(".shape-type-btn").forEach(function(x){ if(x.dataset.shape) x.classList.toggle("active", x.dataset.shape === b.dataset.shape); }); }; });
+    insBind(".ins-table", function(){ openTableDialog(); });
+    insBind(".ins-yt", function(){ var b = vToolbar.querySelector("#btn-add-youtube"); if(b) b.click(); });
+    insBind(".ins-audio", function(){ var b = vToolbar.querySelector("#btn-add-audio"); if(b) b.click(); });
+    insBind(".ins-link", function(){ openLinkDialog(); });
+    // ===== 超連結：文字方塊／圖片／圖案／表格 被選取時都能設定「跳到某張投影片」或「開啟網址」 =====
+    function linkTargets(){
+      var items = selSet.length ? expandGroups(selSet).filter(function(it){ return it.k !== "stroke"; }) : [];
+      var objs = items.map(selItemObj).filter(Boolean);
+      if(!objs.length){
+        [activeSelectedTextId && texts.find(function(x){ return x.id === activeSelectedTextId; }), activeSelectedImageId && images.find(function(x){ return x.id === activeSelectedImageId; }), activeSelectedShapeId && shapes.find(function(x){ return x.id === activeSelectedShapeId; })].forEach(function(o){ if(o) objs.push(o); });
+      }
+      return objs;
+    }
+    function openLinkDialog(){
+      var objs = linkTargets();
+      if(!objs.length){ alert("請先選取文字方塊、圖片、圖案或表格（用「選取」或「文字方塊」工具點一下），再設定超連結。\nSelect an object first."); return; }
+      snapshotForUndo();
+      var lk = objs[0].link || {};
+      var back = document.createElement("div"); back.className = "tb-modal-back";
+      var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(480px,94vw)"; back.appendChild(modal);
+      var slideOpts = slideSiblingIds.map(function(id, i){ var qq = slideSecInfo && slideSecInfo.sec.questions[id]; return '<option value="' + id + '">' + (i + 1) + '. ' + escapeHtml((qq && qq.title) || "") + '</option>'; }).join("");
+      modal.innerHTML = '<h3>🔗 超連結 Link</h3><div class="tb-hint">套用到選取的 ' + objs.length + ' 個物件。放映時輕點物件就會啟動（編輯時按住 Ctrl/⌘ 點）。</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;margin:10px 0;font-size:13px;"><label><input type="radio" name="lk" value="" class="lk-none"> 無連結</label>' +
+        '<label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="lk" value="slide" class="lk-slide"> 跳到投影片 <select class="lk-ls" style="flex:1;min-width:0;">' + slideOpts + '</select></label>' +
+        '<label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="lk" value="url" class="lk-url"> 開啟網址 <input type="text" class="lk-lu" placeholder="https://…" style="flex:1;min-width:0;padding:4px 6px;"></label></div>' +
+        '<div class="tb-foot"><button type="button" class="primary lk-ok">完成</button></div>';
+      var $ = function(c){ return modal.querySelector(c); };
+      $(".lk-" + (lk.t || "none")).checked = true; if(lk.t === "slide" && lk.id) $(".lk-ls").value = lk.id; $(".lk-lu").value = lk.url || "";
+      function apply(){
+        var t = (modal.querySelector('input[name="lk"]:checked') || {}).value || "";
+        objs.forEach(function(o){ if(t === "slide") o.link = { t: "slide", id: $(".lk-ls").value }; else if(t === "url" && $(".lk-lu").value.trim()) o.link = { t: "url", url: $(".lk-lu").value.trim() }; else delete o.link; });
+        var patch = { texts: texts, images: images, shapes: shapes, tables: tables }; writeProgress(q.id, patch); renderTexts();
+      }
+      modal.querySelectorAll('input[name="lk"]').forEach(function(r){ r.onchange = apply; });
+      $(".lk-ls").onchange = function(){ $(".lk-slide").checked = true; apply(); };
+      $(".lk-lu").oninput = function(){ $(".lk-url").checked = true; apply(); };
+      $(".lk-ok").onclick = function(){ back.remove(); };
+      back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
+      document.body.appendChild(back);
+    }
+    document.addEventListener("keydown", function linkKey(e){
+      if(!document.body.contains(cWrap)){ document.removeEventListener("keydown", linkKey); return; }
+      if(isStudent || !(e.ctrlKey || e.metaKey) || (e.key !== "k" && e.key !== "K")) return;
+      e.preventDefault(); if(inPlaceEdit){ alert("請先按空白處完成文字輸入，再選取這個文字方塊按 Ctrl/⌘+K 設定超連結（連結是整個文字方塊）。"); return; } openLinkDialog();
+    });
+
+    // ===== 簡報者視窗遙控：雷射筆紅點／加筆跡／擦筆跡 =====
+    var pvDot = null, pvDotTimer = 0;
+    window.__mmPresenterApi = {
+      laser: function(x, y, on){
+        if(!document.body.contains(cWrap)) return;
+        if(!pvDot){ pvDot = document.createElement("div"); pvDot.className = "laser-dot"; pvDot.style.cssText = "position:absolute;z-index:61;pointer-events:none;"; }
+        if(!on){ pvDot.remove(); return; }
+        if(!pvDot.parentNode) cWrap.appendChild(pvDot);
+        pvDot.style.left = x + "%"; pvDot.style.top = y + "%";
+        clearTimeout(pvDotTimer); pvDotTimer = setTimeout(function(){ if(pvDot) pvDot.remove(); }, 2500);
+      },
+      stroke: function(pts, color, size, opacity){
+        if(!document.body.contains(cWrap) || !pts || pts.length < 2) return;
+        snapshotForUndo();
+        var st = { id: uid("st"), points: pts.map(function(pt){ return { x: pt.x, y: pt.y }; }), color: color, size: size, opacity: opacity, isEraser: false };
+        strokes.push(st); localSelfSeq++;
+        writeProgress(q.id, { strokes: strokes, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+        redrawStrokes();
+      },
+      erase: function(x, y){ if(document.body.contains(cWrap)) checkStrokeHit({ x: x, y: y }); }
+    };
     // ===== 放映工具：雷射筆／螢光筆／簡報者檢視 =====
     var laserOn = false, laserLayer = null;
     function setLaser(on){
@@ -12988,28 +13563,28 @@
       if(btnRedo){ btnRedo.disabled = !redoStack.length; btnRedo.style.opacity = redoStack.length ? "1" : "0.4"; }
     }
     function snapshotForUndo(){
-      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups }));
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups }));
       if(undoStack.length > 60) undoStack.shift();
       redoStack.length = 0; // 有新的操作，「下一步」的歷史就作廢了，跟一般軟體的 undo/redo 行為一致
       updateUndoRedoBtns();
     }
     function applyUndoRedoSnapshot(snapText){
       var obj = JSON.parse(snapText);
-      strokes = obj.strokes; texts = obj.texts; images = obj.images || []; shapes = obj.shapes || []; groups = obj.groups || [];
+      strokes = obj.strokes; texts = obj.texts; images = obj.images || []; shapes = obj.shapes || []; tables = obj.tables || []; groups = obj.groups || [];
       clearObjSelection(); selSet = [];
       redrawStrokes(); renderTexts(); renderSelection();
       localSelfSeq++;
-      writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+      writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
       updateUndoRedoBtns();
     }
     if(btnUndo) btnUndo.onclick = function(){
       if(!undoStack.length) return;
-      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups }));
+      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups }));
       applyUndoRedoSnapshot(undoStack.pop());
     };
     if(btnRedo) btnRedo.onclick = function(){
       if(!redoStack.length) return;
-      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups }));
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups }));
       applyUndoRedoSnapshot(redoStack.pop());
     };
     updateUndoRedoBtns();
@@ -13019,7 +13594,7 @@
       clearBtn.onclick = function(){
         if(confirm("確定要清空畫布上的所有內容嗎？（可以按「上一步」復原）")){
           snapshotForUndo();
-          strokes = []; texts = []; images = []; shapes = []; groups = []; selSet = []; clearObjSelection();
+          strokes = []; texts = []; images = []; shapes = []; tables = []; groups = []; selSet = []; clearObjSelection();
           // 2026-09-29 修正：清空只是把陣列設空、寫回雲端，並沒有真的把畫布這張點陣圖擦乾淨——
           // 以前是靠 refreshFromProgress() 收到雲端回音時「整個重畫」順便清空畫面，但那個函式現在
           // 已經改成「內容看起來沒變就跳過重畫」（見上面 strokesRev／同步節流的說明）：清空之後本機
@@ -13030,7 +13605,7 @@
           // 自己這邊就地重畫，不要依賴、也不要等雲端回音才更新畫面。
           redrawStrokes(); renderTexts();
           localSelfSeq++;
-          writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+          writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
         }
       };
     }
@@ -13138,6 +13713,7 @@
       texts = freshProgress.texts || [];
       images = freshProgress.images || [];
       shapes = freshProgress.shapes || [];
+      tables = freshProgress.tables || [];
       groups = freshProgress.groups || [];
       medias = freshProgress.medias || [];
       var freshGrid = freshProgress.gridType || q.gridType || "none";
