@@ -910,6 +910,7 @@
   .board-area .brush-mode, .canvas-stage-wrap.brush-mode{ cursor:copy; }
   .canvas-stage-wrap.brush-mode *{ cursor:copy !important; }
   .brush-hint{ position:absolute; left:50%; top:10px; transform:translateX(-50%); z-index:62; background:var(--ink); color:#fff; font-size:12.5px; font-weight:700; padding:6px 14px; border-radius:999px; pointer-events:none; white-space:nowrap; box-shadow:0 6px 18px rgba(0,0,0,.28); }
+  .movable-text .rs{ line-height:inherit; }
   .insert-popover{ min-width:210px; }
   .ins-shapes{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:4px 0; }
   .ins-lab{ font-size:12px; font-weight:700; color:var(--ink-soft); width:100%; }
@@ -6761,7 +6762,7 @@
         if($(".fr-t").checked && t.sec.type === "board"){
           var pr = getProgress(t.qId) || {}, changedT = false;
           (pr.tables || []).forEach(function(tb){ tb.cells.forEach(function(row){ row.forEach(function(cell){ var m4 = String(cell.t || "").match(re); if(m4){ hits += m4.length; if(doReplace){ cell.t = cell.t.replace(re, function(){ return rep; }); delete cell.po; changedT = true; } } }); }); });
-          (pr.texts || []).forEach(function(o){ var m3 = String(o.text || "").match(re); if(m3){ hits += m3.length; if(doReplace){ o.text = o.text.replace(re, function(){ return rep; }); delete o.phoneticOverride; changedT = true; } } });
+          (pr.texts || []).forEach(function(o){ var m3 = String(o.text || "").match(re); if(m3){ hits += m3.length; if(doReplace){ mmRemapText(o, o.text.replace(re, function(){ return rep; })); changedT = true; } } });
           if(doReplace && changedT) writeProgress(t.qId, { texts: pr.texts, tables: pr.tables });
         }
         if(hits){ total += hits; out.push({ t: t, hits: hits }); }
@@ -6944,9 +6945,22 @@
             var tcol = hex6(o.color, "2B2320"), al = o.align === "center" ? "ctr" : o.align === "right" ? "r" : "l";
             var bg2 = o.bgOn ? '<a:solidFill><a:srgbClr val="' + hex6(o.bgColor, "FFF3B0") + '">' + ((o.bgOp != null && o.bgOp < 1) ? '<a:alpha val="' + Math.round(o.bgOp * 100000) + '"/>' : "") + '</a:srgbClr></a:solidFill>' : '<a:noFill/>';
             var ln2 = o.bdW > 0 ? '<a:ln w="' + Math.round(o.bdW * 1.5 * 12700) + '"><a:solidFill><a:srgbClr val="' + hex6(o.bdC, "333333") + '"/></a:solidFill></a:ln>' : '<a:ln><a:noFill/></a:ln>';
+            var styleArr = mmStyleArr(o), lineOff = 0;
+            var runX = function(txt, st){
+              var szv = Math.max(100, Math.round(((st && st.fs) || fsU) * 1.5 * 100)), colv = hex6(st && st.c, tcol);
+              return '<a:r><a:rPr lang="zh-TW" sz="' + szv + '" b="' + (bold ? 1 : 0) + '" dirty="0"><a:solidFill><a:srgbClr val="' + colv + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(txt) + '</a:t></a:r>';
+            };
             var paras = lines.map(function(t, li){
               var pre = o.list === "bullet" ? "• " : o.list === "number" ? (li + 1) + ". " : "";
-              return '<a:p><a:pPr algn="' + al + '">' + (o.lh && Math.abs(o.lh - 1) > 0.02 ? '<a:lnSpc><a:spcPct val="' + Math.round(o.lh * 100000) + '"/></a:lnSpc>' : "") + '</a:pPr><a:r><a:rPr lang="zh-TW" sz="' + Math.max(100, Math.round(fsU * 1.5 * 100)) + '" b="' + (bold ? 1 : 0) + '" dirty="0"><a:solidFill><a:srgbClr val="' + tcol + '"/></a:solidFill><a:latin typeface="Microsoft JhengHei"/><a:ea typeface="Microsoft JhengHei"/></a:rPr><a:t>' + XE(pre + t) + '</a:t></a:r></a:p>';
+              var chs = Array.from(t), runs = (pre ? runX(pre, null) : ""), i2 = 0;
+              while(i2 < chs.length){
+                var st0 = styleArr[lineOff + i2], j2 = i2 + 1;
+                while(j2 < chs.length && ((styleArr[lineOff + j2] && st0 && styleArr[lineOff + j2].c === st0.c && styleArr[lineOff + j2].fs === st0.fs) || (!styleArr[lineOff + j2] && !st0))) j2++;
+                runs += runX(chs.slice(i2, j2).join(""), st0); i2 = j2;
+              }
+              if(!chs.length) runs += runX("", null);
+              lineOff += chs.length + 1;
+              return '<a:p><a:pPr algn="' + al + '">' + (o.lh && Math.abs(o.lh - 1) > 0.02 ? '<a:lnSpc><a:spcPct val="' + Math.round(o.lh * 100000) + '"/></a:lnSpc>' : "") + '</a:pPr>' + runs + '</a:p>';
             }).join("");
             shapesXml.push('<p:sp><p:nvSpPr><p:cNvPr id="' + (nid++) + '" name="文字方塊"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(X(o.x) - tw / 2) + '" y="' + Math.round(Y(o.y) - th / 2) + '"/><a:ext cx="' + Math.round(tw) + '" cy="' + Math.round(th) + '"/></a:xfrm><a:prstGeom prst="' + (o.rad > 0 ? "roundRect" : "rect") + '"><a:avLst/></a:prstGeom>' + bg2 + ln2 + '</p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>' + paras + '</p:txBody></p:sp>');
           }
@@ -7491,52 +7505,99 @@
   // 那個字上面的注音自己改，改過的字就用 overrides 裡存的版本，其餘沒改過的字照樣自動產生。
   // 2026-09-30：文字可以有多行（段落）——依換行拆成一行一個 <div class="tl">，每行各自加註音；
   // overrides／data-ph-idx 的索引仍然是「整段文字第幾個字元」（換行也算一個字元），跟以前單行時一致。
-  function buildPhoneticHtml(text, overrides, modeArg){
+  // 文字方塊裡「局部」的顏色／大小：t.spans = [{ s, e, c?, fs? }]（字的位置範圍，c＝顏色、fs＝字級）。
+  // 文字被編輯時，spans 與 phoneticOverride 都依「改了哪一段」重新對位，沒被改到的字保留格式。
+  function mmStyleArr(t){
+    var n = Array.from(t.text || "").length, arr = new Array(n).fill(null);
+    (t.spans || []).forEach(function(sp){ for(var i = sp.s; i < sp.e && i < n; i++) arr[i] = { c: sp.c, fs: sp.fs }; });
+    return arr;
+  }
+  function mmArrToSpans(arr){
+    var out = [], cur = null;
+    arr.forEach(function(st, i){
+      if(st && (st.c || st.fs)){
+        var key = (st.c || "") + "|" + (st.fs || "");
+        if(cur && cur.key === key && cur.e === i){ cur.e = i + 1; } else { cur = { s: i, e: i + 1, c: st.c, fs: st.fs, key: key }; out.push(cur); }
+      } else cur = null;
+    });
+    return out.map(function(o){ var r = { s: o.s, e: o.e }; if(o.c) r.c = o.c; if(o.fs) r.fs = o.fs; return r; });
+  }
+  function mmRemapText(t, newText){
+    var a = Array.from(t.text || ""), b = Array.from(newText || "");
+    var p = 0; while(p < a.length && p < b.length && a[p] === b[p]) p++;
+    var q = 0; while(q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++;
+    var delta = b.length - a.length;
+    function mapIdx(i){ if(i < p) return i; if(i >= a.length - q) return i + delta; return -1; }
+    var oldArr = mmStyleArr(t), newArr = new Array(b.length).fill(null);
+    oldArr.forEach(function(st, i){ var j = mapIdx(i); if(j >= 0 && j < b.length) newArr[j] = st; });
+    var sp = mmArrToSpans(newArr); if(sp.length) t.spans = sp; else delete t.spans;
+    if(t.phoneticOverride){
+      var no = {}; Object.keys(t.phoneticOverride).forEach(function(k){ var j = mapIdx(Number(k)); if(j >= 0) no[j] = t.phoneticOverride[k]; });
+      if(Object.keys(no).length) t.phoneticOverride = no; else delete t.phoneticOverride;
+    }
+    t.text = newText;
+  }
+  function mmRunsHtml(t){ // 編輯時顯示用：依 spans 分段，不含注音
+    var chars = Array.from(t.text || ""), arr = mmStyleArr(t), base = t.fontSize || 36, html = "", i = 0;
+    while(i < chars.length){
+      var st = arr[i], j = i + 1; while(j < chars.length && ((arr[j] && st && arr[j].c === st.c && arr[j].fs === st.fs) || (!arr[j] && !st))) j++;
+      var seg = escapeHtml(chars.slice(i, j).join(""));
+      html += (st && (st.c || st.fs)) ? '<span class="rs" style="' + (st.c ? "color:" + st.c + ";" : "") + (st.fs ? "font-size:" + (st.fs / base) + "em;" : "") + '">' + seg + '</span>' : seg;
+      i = j;
+    }
+    return html;
+  }
+  function buildPhoneticHtml(text, overrides, modeArg, sp){
     if(!text) return "";
     var base = 0;
     return String(text).split("\n").map(function(line){
-      var h = buildPhoneticLine(line, overrides, base, modeArg);
+      var h = buildPhoneticLine(line, overrides, base, modeArg, sp);
       base += Array.from(line).length + 1;
       return '<div class="tl">' + h + '</div>';
     }).join("");
   }
-  function buildPhoneticLine(text, overrides, baseIdx, modeArg){
+  function buildPhoneticLine(text, overrides, baseIdx, modeArg, sp){
     if(!text) return "";
     baseIdx = baseIdx || 0;
+    function W(i, h){ // 局部顏色／大小：把這個字包起來
+      var st = sp && sp.map && sp.map[baseIdx + i]; if(!st || !(st.c || st.fs)) return h;
+      return '<span class="rs" style="' + (st.c ? "color:" + st.c + ";" : "") + (st.fs ? "font-size:" + (st.fs / (sp.base || 36)) + "em;" : "") + '">' + h + '</span>';
+    }
+    function plain(){ if(!sp || !sp.map) return escapeHtml(text); return Array.from(text).map(function(ch, i){ return W(i, escapeHtml(ch)); }).join(""); }
     // 每個文字方塊可以自己決定（modeArg）：跟隨整份簡報／不加／拼音／注音；
     // 方塊裡「選取的範圍」可以再個別設定：overrides[字的位置] = " "（這個字不加）或 "+"（這個字要加，即使整個方塊關掉）
     var mode = (modeArg === "pinyin" || modeArg === "zhuyin" || modeArg === "off") ? modeArg : currentPhoneticMode;
     var showAll = true;
     if(mode !== "pinyin" && mode !== "zhuyin"){
       var anyOn = false; if(overrides){ for(var kk in overrides){ if(overrides[kk] === "+"){ anyOn = true; break; } } }
-      if(!anyOn) return escapeHtml(text);
+      if(!anyOn) return plain();
       mode = (currentPhoneticMode === "zhuyin") ? "zhuyin" : "pinyin"; showAll = false;
     }
-    if(typeof pinyinPro === "undefined" || typeof pinyinPro.pinyin !== "function") return escapeHtml(text);
+    if(typeof pinyinPro === "undefined" || typeof pinyinPro.pinyin !== "function") return plain();
     var chars = Array.from(text);
     var symbols;
     try{
       symbols = mode === "zhuyin"
         ? pinyinPro.pinyin(text, { toneType: "num", type: "array" })
         : pinyinPro.pinyin(text, { type: "array" });
-    } catch(e){ return escapeHtml(text); }
-    if(!symbols || symbols.length !== chars.length) return escapeHtml(text);
+    } catch(e){ return plain(); }
+    if(!symbols || symbols.length !== chars.length) return plain();
     var html = "";
     for(var i = 0; i < chars.length; i++){
       var ch = chars[i];
-      if(!isHanChar(ch)){ html += escapeHtml(ch); continue; }
+      if(!isHanChar(ch)){ html += W(i, escapeHtml(ch)); continue; }
       var ovv = overrides && typeof overrides[baseIdx + i] === "string" ? overrides[baseIdx + i] : "";
-      if(ovv === " " || (!showAll && ovv !== "+")){ html += (showAll ? "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt></rt></ruby>" : escapeHtml(ch)); continue; }
+      if(ovv === " " || (!showAll && ovv !== "+")){ html += W(i, showAll ? "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt></rt></ruby>" : escapeHtml(ch)); continue; }
       var hasOverride = ovv !== "" && ovv !== "+";
       var annotation = hasOverride ? overrides[baseIdx + i]
         : (mode === "zhuyin" ? pinyinSyllableToZhuyin(symbols[i]) : symbols[i]);
       if(mode === "zhuyin" && currentPhoneticLayout === "right"){
         // 直式、在字右邊：把注音拆成「符號本體」和「聲調符號」，本體直排，聲調放在右邊（輕聲 ˙ 放在上方）
         var ann = String(annotation || ""), tone = "", neutral = false, main = ann.replace(/[ˊˇˋ˙]/g, function(m){ if(m === "˙") neutral = true; else tone = m; return ""; });
-        html += "<span class=\"zy-r\" data-ph-idx=\"" + (baseIdx + i) + "\"><span class=\"zy-c\">" + escapeHtml(ch) + "</span><span class=\"zy-s" + (hasOverride ? " ph-overridden" : "") + "\"><span class=\"zy-col\">" + (neutral ? "<span class=\"zy-n\">˙</span>" : "") + "<span class=\"zy-m\">" + Array.from(main).map(function(c){ return "<span class=\"zy-ch\">" + escapeHtml(c) + "</span>"; }).join("") + "</span></span>" + (tone ? "<span class=\"zy-t\">" + tone + "</span>" : "") + "</span></span>";
+        html += W(i, "<span class=\"zy-r\" data-ph-idx=\"" + (baseIdx + i) + "\"><span class=\"zy-c\">" + escapeHtml(ch) + "</span><span class=\"zy-s" + (hasOverride ? " ph-overridden" : "") + "\"><span class=\"zy-col\">" + (neutral ? "<span class=\"zy-n\">˙</span>" : "") + "<span class=\"zy-m\">" + Array.from(main).map(function(c){ return "<span class=\"zy-ch\">" + escapeHtml(c) + "</span>"; }).join("") + "</span></span>" + (tone ? "<span class=\"zy-t\">" + tone + "</span>" : "") + "</span></span>");
         continue;
       }
-      html += "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt" + (hasOverride ? " class=\"ph-overridden\"" : "") + ">" + escapeHtml(annotation || "") + "</rt></ruby>";
+      html += W(i, "<ruby data-ph-idx=\"" + (baseIdx + i) + "\">" + escapeHtml(ch) + "<rt" + (hasOverride ? " class=\"ph-overridden\"" : "") + ">" + escapeHtml(annotation || "") + "</rt></ruby>");
     }
     return html;
   }
@@ -9240,6 +9301,10 @@
             </div>
           </div>
           <div class="popover-field-row">
+            <div class="popover-field-row-label"><span title="編輯文字時，先用滑鼠或手指選取一段字，再改上面的字型色彩或字型大小，就只會改選取的那一段">局部格式 Partial format</span></div>
+            <div class="anim-row"><button type="button" class="text-span-reset" title="選取一段字再按：這段的顏色與大小恢復跟著方塊（沒選取＝整個方塊都恢復）">還原選取的顏色與大小</button></div>
+          </div>
+          <div class="popover-field-row">
             <div class="popover-field-row-label"><span title="這個文字方塊自己決定要不要加拼音／注音；也可以在編輯文字時先選取一段字，再只對那一段設定">注音／拼音 Phonetics</span></div>
             <div class="anim-row">
               <select class="text-ph-select" title="這個文字方塊的注音／拼音"><option value="">跟隨整份簡報設定</option><option value="off">這個方塊：不加</option><option value="pinyin">這個方塊：拼音</option><option value="zhuyin">這個方塊：注音</option></select>
@@ -10492,7 +10557,44 @@
 
     // ===== 文字就地編輯：像 PPT，直接在文字原本的位置、原本的樣式裡打字 =====
     // Enter＝換行；點一下別處／Esc／Ctrl+Enter＝確認。正在編輯時 renderTexts() 不會重建文字層（見上面的 guard）。
-    var inPlaceEdit = null;
+    var inPlaceEdit = null, editSel = null;
+    function spanMapOf(t){ var m = {}, arr = mmStyleArr(t); arr.forEach(function(st, i){ if(st) m[i] = st; }); return m; }
+    document.addEventListener("selectionchange", function(){
+      if(!document.body.contains(cWrap) || !inPlaceEdit) return;
+      var r = inPlaceEdit.getRange(); if(r) editSel = r; else { var sel = window.getSelection(); if(sel.rangeCount && sel.isCollapsed && inPlaceEdit.contains(sel.anchorNode)) editSel = null; }
+    });
+    function setSelByOffsets(content, s0, e0){
+      var walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT), n, pos = 0, rg = document.createRange(), gotS = false;
+      while((n = walker.nextNode())){
+        var len = n.nodeValue.length;
+        if(!gotS && s0 <= pos + len){ rg.setStart(n, s0 - pos); gotS = true; }
+        if(gotS && e0 <= pos + len){ rg.setEnd(n, e0 - pos); break; }
+        pos += len;
+      }
+      if(gotS){ var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg); }
+    }
+    // 局部格式：編輯文字時選取一段字，再改顏色或大小，只改選取的那一段（prop：c＝顏色、fs＝字級）。回傳 true＝已處理
+    function applySpanFromUi(prop, val){
+      if(!inPlaceEdit || !inPlaceEdit.textId) return false;
+      var rg = inPlaceEdit.getRange() || editSel; if(!rg || rg[1] <= rg[0]) return false;
+      var t = texts.find(function(x){ return x.id === inPlaceEdit.textId; }); if(!t) return false;
+      inPlaceEdit.syncText(); snapshotForUndo();
+      var arr = mmStyleArr(t);
+      for(var i = rg[0]; i < rg[1] && i < arr.length; i++){ var st = Object.assign({}, arr[i] || {}); if(val === null) delete st[prop]; else st[prop] = val; arr[i] = (st.c || st.fs) ? st : null; }
+      var sp = mmArrToSpans(arr); if(sp.length) t.spans = sp; else delete t.spans;
+      writeProgress(q.id, { texts: texts });
+      inPlaceEdit.setHtml(mmRunsHtml(t)); setSelByOffsets(inPlaceEdit.contentEl, rg[0], rg[1]); editSel = rg;
+      return true;
+    }
+    function clearSpansFromUi(){
+      var tid = (inPlaceEdit && inPlaceEdit.textId) || activeSelectedTextId; var t = tid ? texts.find(function(x){ return x.id === tid; }) : null; if(!t) return;
+      var rg = inPlaceEdit ? (inPlaceEdit.getRange() || editSel) : null;
+      if(inPlaceEdit) inPlaceEdit.syncText(); snapshotForUndo();
+      if(rg && rg[1] > rg[0]){ var arr = mmStyleArr(t); for(var i = rg[0]; i < rg[1] && i < arr.length; i++) arr[i] = null; var sp = mmArrToSpans(arr); if(sp.length) t.spans = sp; else delete t.spans; }
+      else delete t.spans;
+      writeProgress(q.id, { texts: texts });
+      if(inPlaceEdit){ inPlaceEdit.setHtml(mmRunsHtml(t)); if(rg) setSelByOffsets(inPlaceEdit.contentEl, rg[0], rg[1]); } else renderTexts();
+    }
     function applyEditDivStyle(div, src, scale){
       div.style.color = src.color || "var(--ink)";
       div.style.fontSize = Math.round((src.fontSize || 36) * scale) + "px";
@@ -10515,7 +10617,7 @@
       }
       var content = div.querySelector(".text-content");
       div.classList.remove("list-bullet", "list-number"); div.classList.add("editing", "active");
-      content.textContent = t0 ? t0.text : "";
+      if(t0 && t0.spans) content.innerHTML = mmRunsHtml(t0); else content.textContent = t0 ? t0.text : "";
       content.contentEditable = "plaintext-only";
       if(content.contentEditable !== "plaintext-only") content.contentEditable = "true";
       content.spellcheck = false;
@@ -10553,7 +10655,7 @@
             var target = texts.find(function(x){ return x.id === textId; });
             if(target){
               if(val === ""){ snapshotForUndo(); texts = texts.filter(function(x){ return x.id !== textId; }); writeProgress(q.id, { texts: texts }); }
-              else if(val !== target.text){ snapshotForUndo(); if(Array.from(val).length !== Array.from(target.text).length) delete target.phoneticOverride; target.text = val; writeProgress(q.id, { texts: texts }); }
+              else if(val !== target.text){ snapshotForUndo(); mmRemapText(target, val); writeProgress(q.id, { texts: texts }); }
             }
           } else if(val){
             snapshotForUndo();
@@ -10566,7 +10668,10 @@
         clearObjSelection();
         renderTexts();
       }
-      inPlaceEdit = { finish: finish, refreshStyle: refreshStyle, textId: textId, getRange: function(){
+      inPlaceEdit = { finish: finish, refreshStyle: refreshStyle, textId: textId, contentEl: content, contains: function(n){ return content.contains(n); },
+        setHtml: function(h){ content.innerHTML = h; try{ content.focus(); }catch(er){} },
+        syncText: function(){ var tg = texts.find(function(x){ return x.id === textId; }); var v = readValue(); if(tg && v !== tg.text){ mmRemapText(tg, v); writeProgress(q.id, { texts: texts }); } },
+        getRange: function(){
         var sel = window.getSelection(); if(!sel.rangeCount) return null; var r = sel.getRangeAt(0); if(!content.contains(r.startContainer)) return null;
         var pre = document.createRange(); pre.selectNodeContents(content); pre.setEnd(r.startContainer, r.startOffset);
         var s0 = Array.from(pre.toString()).length, len = Array.from(r.toString()).length; return len > 0 ? [s0, s0 + len] : null;
@@ -10692,6 +10797,7 @@
         if(!inPlaceEdit) renderTexts();
       };
     });
+    var spanResetBtn = vToolbar.querySelector(".text-span-reset"); if(spanResetBtn){ spanResetBtn.addEventListener("mousedown", function(e){ e.preventDefault(); }); spanResetBtn.onclick = function(e){ e.stopPropagation(); clearSpansFromUi(); }; }
     var textLinkBtn = vToolbar.querySelector(".text-link-btn"); if(textLinkBtn) textLinkBtn.onclick = function(e){ e.stopPropagation(); openLinkDialog(); };
     var animSel = vToolbar.querySelector(".text-anim-select"), animDel = vToolbar.querySelector(".text-anim-delay"), animPrev = vToolbar.querySelector(".text-anim-preview");
     function setAnimProps(){
@@ -11271,7 +11377,7 @@
 
         div.innerHTML = `
           ${(!isStudent && (t.step || 0) > 0) ? '<span class="text-step-badge" title="第 ' + t.step + ' 次點擊出現">' + t.step + '</span>' : ''}
-          <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride, t.ph)}</div>
+          <div class="text-content">${buildPhoneticHtml(t.text, t.phoneticOverride, t.ph, t.spans ? { map: spanMapOf(t), base: t.fontSize || 36 } : null)}</div>
           <div class="resize-handle" title="按住拖動縮放字體 Drag to resize"></div>
         `;
         // 行距（預設 100%）：有注音（ruby）的文字本來行高就是 2.15，行距是在預設行高上再乘倍數
@@ -12262,12 +12368,14 @@
     var fontSelect = vToolbar.querySelector(".board-font-select");
     if(fontSelect){
       bindSizeCombo(fontSelect.closest(".size-combo"), function(n){
+        if(applySpanFromUi("fs", n)) return;
         boardState.fontSize = n;
         if(activeSelectedTextId){
           var selObj = texts.find(function(item){ return item.id === activeSelectedTextId; });
           if(selObj){
             snapshotForUndo();
             selObj.fontSize = boardState.fontSize;
+            if(selObj.spans){ var ar2 = mmStyleArr(selObj); ar2.forEach(function(st, i){ if(st){ delete st.fs; if(!st.c) ar2[i] = null; } }); var sp2 = mmArrToSpans(ar2); if(sp2.length) selObj.spans = sp2; else delete selObj.spans; }
             writeProgress(q.id, { texts: texts });
             renderTexts();
           }
@@ -13757,7 +13865,12 @@
     // 選好顏色之後，要同步更新畫筆／文字兩份面板裡的所有 UI：色點的 active 狀態、原生色盤目前
     // 顯示的顏色——不管顏色是從色點、原生色盤、還是滴管挑出來的，統一都走這個函式。
     function applyBrushColor(newColor){
+      if(applySpanFromUi("c", newColor)){ vToolbar.querySelectorAll(".brush-color-native").forEach(function(x){ x.value = newColor; }); return; }
       boardState.color = newColor;
+      if(boardState.tool === "text" && !inPlaceEdit && activeSelectedTextId){ // 選取了整個文字方塊：整個方塊換色（局部顏色一併清掉）
+        var tc = texts.find(function(x){ return x.id === activeSelectedTextId; });
+        if(tc){ snapshotForUndo(); tc.color = newColor; if(tc.spans){ var ar = mmStyleArr(tc); ar.forEach(function(st, i){ if(st){ delete st.c; if(!st.fs) ar[i] = null; } }); var sp0 = mmArrToSpans(ar); if(sp0.length) tc.spans = sp0; else delete tc.spans; } writeProgress(q.id, { texts: texts }); renderTexts(); }
+      }
       var selShapeC = activeSelectedShapeId ? shapes.find(function(x){ return x.id === activeSelectedShapeId; }) : null;
       if(selShapeC && selShapeC.color !== newColor){ selShapeC.color = newColor; writeProgress(q.id, { shapes: shapes }); renderShapeSvg(); }
       vToolbar.querySelectorAll(".color-dot").forEach(function(x){
@@ -13768,6 +13881,7 @@
     }
 
     vToolbar.querySelectorAll(".color-dot").forEach(function(d){
+      d.addEventListener("mousedown", function(e){ if(inPlaceEdit) e.preventDefault(); });
       d.onclick = function(){ applyBrushColor(d.dataset.color); };
     });
 
