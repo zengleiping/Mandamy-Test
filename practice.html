@@ -897,6 +897,22 @@
   .mm-timer button{ border:none; background:rgba(255,255,255,.18); color:#fff; border-radius:8px; padding:4px 9px; cursor:pointer; font-size:14px; }
   .mm-timer.mt-end{ background:#B23B32; animation:mtBlink .7s infinite alternate; }
   @keyframes mtBlink{ to{ opacity:.55; } }
+  .table-obj{ position:absolute; pointer-events:none; }
+  .table-obj.step-hidden{ opacity:.35; }
+  .table-obj.editing{ pointer-events:auto; }
+  .table-obj td{ padding:.18em .35em; vertical-align:middle; white-space:pre-wrap; word-break:break-word; overflow:hidden; line-height:1.35; }
+  .table-obj td[contenteditable]{ outline:2px solid var(--seal); outline-offset:-2px; background:#fff !important; user-select:text; cursor:text; }
+  .tbl-sel{ position:absolute; background:rgba(30,136,229,.22); border:2px solid #1E88E5; pointer-events:none; box-sizing:border-box; }
+  .tbl-grip{ position:absolute; width:22px; height:22px; background:var(--seal); color:#fff; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:14px; cursor:move; pointer-events:auto; touch-action:none; z-index:46; }
+  .tbl-scale{ position:absolute; width:12px; height:12px; background:#fff; border:2px solid var(--seal); border-radius:3px; cursor:nwse-resize; pointer-events:auto; touch-action:none; z-index:46; }
+  .table-tools{ position:absolute; z-index:47; pointer-events:auto; display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; max-width:640px; padding:8px 10px; background:var(--surface); border:1.5px solid var(--seal); border-radius:10px; box-shadow:0 8px 22px rgba(0,0,0,.22); font-size:12px; }
+  .table-tools .tt-title{ color:var(--seal); width:100%; font-size:12.5px; }
+  .table-tools .tt-g{ display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+  .table-tools button{ font-size:12px; font-weight:700; padding:3px 8px; border-radius:7px; border:1.5px solid rgba(28,33,30,.18); background:var(--surface); color:var(--ink); cursor:pointer; }
+  .table-tools button:hover{ border-color:var(--seal); color:var(--seal); }
+  .table-tools input[type=color]{ width:26px; height:22px; padding:0; border:1.5px solid rgba(28,33,30,.2); border-radius:5px; vertical-align:middle; }
+  .table-tools input[type=number]{ width:42px; padding:2px 4px; }
+  .table-tools .tt-hint{ width:100%; color:var(--ink-soft); font-size:11px; }
   .shape-table-btn{ width:100%; margin:2px 0 6px; padding:5px 8px; border-radius:8px; border:1.5px solid var(--seal); background:var(--seal-soft); color:var(--seal); font-weight:700; font-size:12.5px; cursor:pointer; }
   .laser-layer{ position:absolute; inset:0; z-index:60; cursor:none; touch-action:none; }
   .laser-dot{ position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:radial-gradient(circle,#fff 0 12%,#ff1e1e 30%,rgba(255,30,30,.55) 60%,rgba(255,30,30,0) 75%); box-shadow:0 0 14px 4px rgba(255,30,30,.55); pointer-events:none; }
@@ -5762,7 +5778,7 @@
     var srcProg = currentProj.progress || {};
     Object.keys(srcProg).forEach(function(qid){
       var pp = srcProg[qid] || {}, one = {};
-      ["texts", "images", "shapes", "medias", "mediaData", "gridType", "canvasRatio", "bgColor", "bgOp"].forEach(function(k){ if(pp[k] !== undefined && pp[k] !== null && !(Array.isArray(pp[k]) && !pp[k].length)) one[k] = pp[k]; });
+      ["texts", "images", "shapes", "tables", "groups", "medias", "mediaData", "gridType", "canvasRatio", "bgColor", "bgOp"].forEach(function(k){ if(pp[k] !== undefined && pp[k] !== null && !(Array.isArray(pp[k]) && !pp[k].length)) one[k] = pp[k]; });
       if(pp.bgImage) one.bgImage = pp.bgImage;
       if(Object.keys(one).length) seededProgress[qid] = JSON.parse(JSON.stringify(one));
     });
@@ -8859,6 +8875,7 @@
     var medias = progress.medias || []; // 2026-09-30 嵌入媒體：{ id, kind:'youtube'|'audio', ytId, name, x, y, w }（x／y＝左上角百分比）；音檔本體存在 progress.mediaData[id]
     var mediaEls = {};
     var shapes = progress.shapes || []; // 2026-10-01 圖形：{ id, type:'rect'|'ellipse'|'triangle'|'line'|'arrow', x,y,w,h（左上角＋大小，百分比）, fx,fy（線／箭頭起點在右／下）, color, sw, fill, step }
+    var tables = progress.tables || []; // 2026-10-02 真正的表格物件
     var groups = progress.groups || []; // 2026-10-01 群組：[{ id, members:[{ k:'text'|'image'|'shape'|'stroke', id }] }]，用「選取」工具框選後組成
     var images = progress.images || []; // 2026-09-30 貼上的圖片物件：{ id, src, x, y, w, ar, step }（x／y＝中心點百分比、w＝寬度佔畫布寬百分比、ar＝高／寬）
     // 2026-09-29 修正：localSelfSeq 是「這台裝置這次打開這一題以來，自己寫入 strokes 的次數」，
@@ -10006,6 +10023,7 @@
       var pr = getProgress(qId);
       var mx = (pr.texts || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, 0);
       mx = (pr.images || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
+      mx = (pr.tables || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
       return (pr.shapes || []).reduce(function(m, t){ return Math.max(m, t.step || 0); }, mx);
     }
     function slideStepNext(){
@@ -11160,6 +11178,7 @@
       });
       renderImages();
       renderShapes();
+      renderTables();
       renderMedias();
       if(typeof renderLayersPanel === "function") renderLayersPanel();
       if(typeof renderSelection === "function" && selSet.length) renderSelection();
@@ -11407,11 +11426,12 @@
 
 
     /* ===== 上下層：文字／圖形／圖片共用一套 z 順序（物件的 z 欄位；沒有 z 的用預設：圖片 < 圖形 < 文字，依陣列順序）===== */
-    function objZ(kind, o, idx){ return (o.z !== undefined && o.z !== null) ? o.z : (kind === "image" ? idx : (kind === "shape" ? 1000 + idx : 2000 + idx)); }
+    function objZ(kind, o, idx){ return (o.z !== undefined && o.z !== null) ? o.z : (kind === "image" ? idx : (kind === "shape" ? 1000 + idx : (kind === "table" ? 1500 + idx : 2000 + idx))); }
     function buildZList(){
       var L = [];
       images.forEach(function(o, i){ L.push({ kind: "image", o: o, z: objZ("image", o, i), n: L.length }); });
       shapes.forEach(function(o, i){ L.push({ kind: "shape", o: o, z: objZ("shape", o, i), n: L.length }); });
+      tables.forEach(function(o, i){ L.push({ kind: "table", o: o, z: objZ("table", o, i), n: L.length }); });
       texts.forEach(function(o, i){ L.push({ kind: "text", o: o, z: objZ("text", o, i), n: L.length }); });
       L.sort(function(a, b){ return (a.z - b.z) || (a.n - b.n); });
       return L;
@@ -11423,7 +11443,7 @@
     }
     function hasExplicitZ(){
       function hz(o){ return o.z !== undefined && o.z !== null; }
-      return images.some(hz) || shapes.some(hz) || texts.some(hz);
+      return images.some(hz) || shapes.some(hz) || texts.some(hz) || tables.some(hz);
     }
     // 新物件：文字放最上面；圖片／圖形放在「最底下那個文字」的下面（維持原本「圖形在文字後面」的習慣）。
     // 只有在使用者調整過上下層（已經有 z）之後才需要明確指定，沒有調整過就靠預設順序。
@@ -12139,6 +12159,7 @@
     function itemBox(it){
       if(it.k === "text") return elBox(textLayer.querySelector('.movable-text[data-text-id="' + it.id + '"]'));
       if(it.k === "image") return elBox(cWrap.querySelector('.board-image[data-img-id="' + it.id + '"]'));
+      if(it.k === "table") return elBox(cWrap.querySelector('.table-obj[data-table-id="' + it.id + '"]'));
       if(it.k === "shape"){
         var sh = shapes.find(function(x){ return x.id === it.id; }); if(!sh) return null;
         var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, padX = 4 / W * 100, padY = 4 / H * 100;
@@ -12152,6 +12173,7 @@
       texts.forEach(function(o){ out.push({ k: "text", id: o.id }); });
       images.forEach(function(o){ out.push({ k: "image", id: o.id }); });
       shapes.forEach(function(o){ out.push({ k: "shape", id: o.id }); });
+      tables.forEach(function(o){ out.push({ k: "table", id: o.id }); });
       strokes.forEach(function(o){ if(o.id && !o.isEraser) out.push({ k: "stroke", id: o.id }); });
       return out;
     }
@@ -12206,12 +12228,13 @@
     function deleteSelection(){
       if(!selSet.length) return;
       snapshotForUndo();
-      var ids = { text: {}, image: {}, shape: {}, stroke: {} };
+      var ids = { text: {}, image: {}, shape: {}, table: {}, stroke: {} };
       selSet.forEach(function(it){ ids[it.k][it.id] = true; });
       var patch = { groups: null };
       if(Object.keys(ids.text).length){ texts = texts.filter(function(o){ return !ids.text[o.id]; }); patch.texts = texts; }
       if(Object.keys(ids.image).length){ images = images.filter(function(o){ return !ids.image[o.id]; }); patch.images = images; }
       if(Object.keys(ids.shape).length){ shapes = shapes.filter(function(o){ return !ids.shape[o.id]; }); patch.shapes = shapes; }
+      if(Object.keys(ids.table).length){ tables = tables.filter(function(o){ return !ids.table[o.id]; }); patch.tables = tables; tblSel = null; }
       if(Object.keys(ids.stroke).length){ strokes = strokes.filter(function(o){ return !ids.stroke[o.id]; }); localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; }
       groups = groups.map(function(g){ return { id: g.id, members: g.members.filter(function(m){ return !ids[m.k][m.id]; }) }; }).filter(function(g){ return g.members.length >= 2; });
       patch.groups = groups;
@@ -12222,7 +12245,7 @@
     }
     // ===== 物件格式：框線／陰影／圓角（文字方塊、圖片、圖案）、圖片裁剪／去背、圖案漸層填色 =====
     function openObjFormat(){
-      var items = expandGroups(selSet).filter(function(it){ return it.k !== "stroke"; });
+      var items = expandGroups(selSet).filter(function(it){ return it.k !== "stroke" && it.k !== "table"; });
       var objs = items.map(function(it){ return { k: it.k, o: selItemObj(it) }; }).filter(function(x){ return x.o; });
       if(!objs.length) return;
       snapshotForUndo();
@@ -12295,9 +12318,11 @@
       back.addEventListener("click", function(e){ if(e.target === back) back.remove(); });
       document.body.appendChild(back);
     }
+    function finishCellEditIfAny(){ if(tblEdit){ finishCellEdit(); return true; } return false; }
     function renderSelection(){
       selectLayer.innerHTML = "";
-      if(!selSet.length) return;
+      if(!selSet.length){ tblSel = null; return; }
+      if(!(selSet.length === 1 && selSet[0].k === "table")) tblSel = null;
       var any = false;
       selSet.forEach(function(it){
         var b = itemBox(it); if(!b) return; any = true;
@@ -12318,7 +12343,7 @@
         (inGroup ? '<button type="button" data-act="ungroup" title="解散群組（Ctrl/⌘+Shift+G）">解散群組</button>' : '') +
         '<button type="button" data-act="copy" title="複製（Ctrl/⌘+C）；貼上 Ctrl/⌘+V、重複製作 Ctrl/⌘+D">⧉ 複製</button>' +
         '<button type="button" data-act="dup" title="重複製作（Ctrl/⌘+D）">重複製作</button>' +
-        (items.some(function(x){ return x.k !== "stroke"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
+        (items.some(function(x){ return x.k !== "stroke" && x.k !== "table"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
         '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>' +
         (selUnits().length >= 2 ? '<span class="sb-sep"></span>' +
           [["l","⇤","靠左對齊"],["c","⇔","水平置中"],["r","⇥","靠右對齊"],["t","⤒","靠上對齊"],["m","⇕","垂直置中"],["b","⤓","靠下對齊"]].map(function(a){ return '<button type="button" class="sb-al" data-act="al-' + a[0] + '" title="' + a[2] + '">' + a[1] + '</button>'; }).join("") +
@@ -12336,10 +12361,17 @@
         else if(/^al-/.test(bt.dataset.act)) alignSelection(bt.dataset.act.slice(3));
       });
       selectLayer.appendChild(bar);
+      renderTableTools(u);
     }
     function startSelectInteraction(e, p){
       var additive = e.shiftKey || e.metaKey || e.ctrlKey;
       var hit = hitTestItem(p);
+      if(hit && hit.k === "table" && !additive && selSet.length === 1 && sameItem(selSet[0], hit)){
+        var th = tableHitCell(hit.id, p);
+        if(th && th.edge){ beginTableEdgeResize(hit.id, th.edge, p); return; }
+        if(th){ var nowT = Date.now(), dbl = lastCellTap && lastCellTap.id === hit.id && lastCellTap.r === th.r && lastCellTap.c === th.c && nowT - lastCellTap.t < 500; lastCellTap = { id: hit.id, r: th.r, c: th.c, t: nowT }; if(dbl){ lastCellTap = null; tblSel = { id: hit.id, r1: th.r, c1: th.c, r2: th.r, c2: th.c }; startCellEdit(hit.id, th.r, th.c); return; } beginCellSelect(e, hit.id, th.r, th.c); return; }
+      }
+      if(finishCellEditIfAny()) { /* 先結束輸入 */ }
       if(hit){
         var hitSet = expandGroups([hit]);
         if(additive){
@@ -12361,6 +12393,7 @@
         if(it.k === "text"){ var o = texts.find(function(x){ return x.id === it.id; }); return o ? { it: it, o: o, x: o.x, y: o.y } : null; }
         if(it.k === "image"){ var o2 = images.find(function(x){ return x.id === it.id; }); return o2 ? { it: it, o: o2, x: o2.x, y: o2.y } : null; }
         if(it.k === "shape"){ var o3 = shapes.find(function(x){ return x.id === it.id; }); return o3 ? { it: it, o: o3, x: o3.x, y: o3.y } : null; }
+        if(it.k === "table"){ var o4 = tables.find(function(x){ return x.id === it.id; }); return o4 ? { it: it, o: o4, x: o4.x, y: o4.y } : null; }
         var st = strokes.find(function(x){ return x.id === it.id; }); return st ? { it: it, o: st, pts: st.points.map(function(pt){ return { x: pt.x, y: pt.y, t: pt.t }; }) } : null;
       }).filter(Boolean);
       var moved = false, raf = 0, last = null;
@@ -12404,7 +12437,7 @@
         if(!moved) return;
         var patch = {}, kinds = {};
         orig.forEach(function(g){ kinds[g.it.k] = true; });
-        if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+        if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes; if(kinds.table) patch.tables = tables;
         if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; }
         writeProgress(q.id, patch);
       }
@@ -12437,37 +12470,237 @@
       }
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     }
-    // ===== 插入表格：R×C 個矩形格子＋每格一個文字方塊，自動群組（可以解散群組後個別調整）=====
-    function insertTable(rows, cols, header){
-      rows = Math.max(1, Math.min(12, rows | 0)); cols = Math.max(1, Math.min(10, cols | 0));
-      var W = cWrap.clientWidth || 640, H = cWrap.clientHeight || 400;
-      var tw = Math.min(90, cols * 18), cellW = tw / cols, cellHpx = Math.min(H * 0.6 / rows, 72), cellH = cellHpx / H * 100, th = cellH * rows;
-      var x0 = 50 - tw / 2, y0 = Math.max(4, 50 - th / 2);
-      var fs = Math.max(10, Math.min(28, Math.round(cellW / 100 * 640 / 5.2), Math.round(cellH / 100 * 640 * (H / W) * 0.45)));
+    // ===== 真正的表格物件：{ id, x, y（左上角％）, w（佔頁寬％）, cw（每欄寬度比例，總和 1）, rh（每列高度，佔頁高％）, cells[r][c]={ t, bg, c, b, a, fs }, bd, bw, hdr, step, z, anim } =====
+    var lastCellTap = null;
+    var tblSel = null, tblEdit = null; // tblSel：{ id, r1, c1, r2, c2 } 目前選取的儲存格範圍；tblEdit：{ id, r, c, el, layer } 正在輸入的儲存格
+    var TBL_HDR_BG = "#F4D9CC";
+    function tblById(id){ return tables.find(function(x){ return x.id === id; }); }
+    function renderTables(){
+      var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, scale = getScaleRatio();
+      Array.prototype.slice.call(cWrap.querySelectorAll(".table-obj")).forEach(function(e){ if(!(tblEdit && e === tblEdit.el)) e.remove(); });
+      var zr = zRanks(), revealNow = getProgress(q.id).revealStep || 0;
+      tables.forEach(function(t){
+        var hid = (t.step || 0) > revealNow; if(hid && isStudent) return;
+        var rank = zr.map[t.id] || 0, inText = rank > zr.minText, layer = inText ? textLayer : imageLayer;
+        var div;
+        if(tblEdit && tblEdit.id === t.id){ div = tblEdit.el; layer.appendChild(div); tblEdit.layer = layer; div.style.zIndex = String(inText ? rank + 1 : rank); return; }
+        div = document.createElement("div"); div.className = "table-obj" + (hid ? " step-hidden" : ""); div.dataset.tableId = t.id;
+        div.style.left = t.x + "%"; div.style.top = t.y + "%"; div.style.width = t.w + "%"; div.style.zIndex = String(inText ? rank + 1 : rank);
+        applyAnim(div, t);
+        var bw = Math.max(0, t.bw == null ? 2 : t.bw), bc = t.bd || "#555555", fs0 = t.fs || 24;
+        var html = '<table style="table-layout:fixed;width:100%;border-collapse:collapse;"><colgroup>' + t.cw.map(function(f){ return '<col style="width:' + (f * 100) + '%">'; }).join("") + '</colgroup><tbody>';
+        t.cells.forEach(function(row, r){
+          html += '<tr style="height:' + ((t.rh[r] || 8) / 100 * H) + 'px;">';
+          row.forEach(function(cell, c){
+            var bg = cell.bg || ((t.hdr && r === 0) ? TBL_HDR_BG : ""), bold = cell.b != null ? cell.b : (t.hdr && r === 0);
+            html += '<td data-r="' + r + '" data-c="' + c + '" style="border:' + (bw ? bw * scale + "px solid " + bc : "none") + ";" + (bg ? "background:" + bg + ";" : "") + "color:" + (cell.c || "#2B2320") + ";font-weight:" + (bold ? 700 : 400) + ";text-align:" + (cell.a || "center") + ";font-size:" + Math.max(6, (cell.fs || fs0) * scale) + 'px;">' + buildPhoneticHtml(cell.t || "", cell.po) + '</td>';
+          });
+          html += '</tr>';
+        });
+        div.innerHTML = html + '</tbody></table>';
+        layer.appendChild(div);
+      });
+    }
+    function tdBox(id, r, c){ return elBox(cWrap.querySelector('.table-obj[data-table-id="' + id + '"] td[data-r="' + r + '"][data-c="' + c + '"]')); }
+    function tableGeom(id){ // 每個儲存格在頁面上的框（%），用來判斷點到哪一格、哪條格線
+      var t = tblById(id); if(!t) return null; var rows = [];
+      for(var r = 0; r < t.rh.length; r++){ var rowB = []; for(var c = 0; c < t.cw.length; c++) rowB.push(tdBox(id, r, c)); rows.push(rowB); }
+      return rows;
+    }
+    function tableHitCell(id, p){
+      var g = tableGeom(id); if(!g) return null;
+      var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, tx = 7 / W * 100, ty = 7 / H * 100, best = null;
+      for(var r = 0; r < g.length; r++) for(var c = 0; c < g[r].length; c++){
+        var b = g[r][c]; if(!b) continue;
+        if(p.x >= b.l - tx && p.x <= b.r + tx && p.y >= b.t - ty && p.y <= b.b + ty){
+          var edge = null;
+          if(Math.abs(p.x - b.r) <= tx && c < g[r].length - 1) edge = { type: "col", i: c };
+          else if(Math.abs(p.y - b.b) <= ty && r < g.length - 1) edge = { type: "row", i: r };
+          if(edge || (p.x >= b.l && p.x <= b.r && p.y >= b.t && p.y <= b.b)) best = { r: r, c: c, edge: edge };
+          if(best && best.edge) return best;
+        }
+      }
+      return best;
+    }
+    function tblRange(){ // 目前選取範圍（沒選就是整張表）
+      var t = tblSel && tblById(tblSel.id); if(!t) return null;
+      return { t: t, r1: Math.min(tblSel.r1, tblSel.r2), r2: Math.max(tblSel.r1, tblSel.r2), c1: Math.min(tblSel.c1, tblSel.c2), c2: Math.max(tblSel.c1, tblSel.c2) };
+    }
+    function tblCommit(rerender){ writeProgress(q.id, { tables: tables }); if(rerender !== false){ renderTexts(); } renderSelection(); }
+    function startCellEdit(id, r, c){
+      var t = tblById(id), td = cWrap.querySelector('.table-obj[data-table-id="' + id + '"] td[data-r="' + r + '"][data-c="' + c + '"]'); if(!t || !td) return;
+      if(tblEdit) finishCellEdit();
       snapshotForUndo();
-      var members = [];
-      for(var r = 0; r < rows; r++){
-        for(var c = 0; c < cols; c++){
-          var isH = header && r === 0;
-          var sh = { id: uid("sh"), type: "rect", x: Math.round((x0 + c * cellW) * 100) / 100, y: Math.round((y0 + r * cellH) * 100) / 100, w: Math.round(cellW * 100) / 100, h: Math.round(cellH * 100) / 100, fx: false, fy: false, color: isH ? "#E8825A" : "#555555", sw: 2, fill: isH, op: isH ? 0.35 : 1, step: 0 };
-          assignNewZ("shape", sh); shapes.push(sh); members.push({ k: "shape", id: sh.id });
+      var div = td.closest(".table-obj"); div.classList.add("editing");
+      td.textContent = t.cells[r][c].t || "";
+      td.contentEditable = "plaintext-only"; if(td.contentEditable !== "plaintext-only") td.contentEditable = "true";
+      tblEdit = { id: id, r: r, c: c, el: div, td: td };
+      tblSel = { id: id, r1: r, c1: c, r2: r, c2: c };
+      td.focus(); var rg = document.createRange(); rg.selectNodeContents(td); var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg);
+      td.onkeydown = function(e){
+        if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); finishCellEdit(); return; }
+        if(e.key === "Tab"){
+          e.preventDefault(); e.stopPropagation(); var rr = r, cc = c + (e.shiftKey ? -1 : 1);
+          if(cc >= t.cw.length){ cc = 0; rr++; } if(cc < 0){ cc = t.cw.length - 1; rr--; }
+          if(rr >= t.rh.length){ finishCellEdit(); tblAddRow(t.rh.length - 1, true); rr = t.rh.length - 1; }
+          if(rr < 0) return; finishCellEdit(); startCellEdit(id, rr, cc);
+        }
+      };
+      td.onblur = function(){ setTimeout(function(){ if(tblEdit && tblEdit.td === td) finishCellEdit(); }, 0); };
+    }
+    function finishCellEdit(){
+      if(!tblEdit) return; var e = tblEdit; tblEdit = null;
+      var t = tblById(e.id); e.td.onblur = null; e.td.onkeydown = null;
+      if(t && t.cells[e.r] && t.cells[e.r][e.c]){ var v = e.td.innerText.replace(/\n$/, ""); if(v !== (t.cells[e.r][e.c].t || "")){ t.cells[e.r][e.c].t = v; delete t.cells[e.r][e.c].po; } }
+      e.el.classList.remove("editing"); e.td.contentEditable = "false";
+      writeProgress(q.id, { tables: tables }); renderTexts();
+    }
+    function tblAddRow(refR, after){
+      var t = tblSel ? tblById(tblSel.id) : null; if(!t && selSet.length === 1 && selSet[0].k === "table") t = tblById(selSet[0].id); if(!t) return;
+      snapshotForUndo();
+      var at = after ? refR + 1 : refR, h = t.rh[Math.min(refR, t.rh.length - 1)] || 8;
+      t.cells.splice(at, 0, t.cw.map(function(){ return { t: "" }; })); t.rh.splice(at, 0, h);
+      tblCommit();
+    }
+    function tblAddCol(refC, after){
+      var t = tblSel ? tblById(tblSel.id) : null; if(!t && selSet.length === 1 && selSet[0].k === "table") t = tblById(selSet[0].id); if(!t) return;
+      snapshotForUndo();
+      var at = after ? refC + 1 : refC, n = t.cw.length, f = 1 / (n + 1);
+      t.cw = t.cw.map(function(x){ return x * n / (n + 1); }); t.cw.splice(at, 0, f);
+      t.cells.forEach(function(row){ row.splice(at, 0, { t: "" }); });
+      t.w = Math.min(96, t.w * (n + 1) / n); tblCommit();
+    }
+    function tblDelRow(){ var rg = tblRange(); if(!rg || rg.t.rh.length <= 1){ return; } snapshotForUndo(); rg.t.cells.splice(rg.r1, rg.r2 - rg.r1 + 1); rg.t.rh.splice(rg.r1, rg.r2 - rg.r1 + 1); if(!rg.t.cells.length){ return; } tblSel = { id: rg.t.id, r1: 0, c1: rg.c1, r2: 0, c2: rg.c2 }; tblCommit(); }
+    function tblDelCol(){
+      var rg = tblRange(); if(!rg || rg.t.cw.length <= 1) return; snapshotForUndo();
+      var n = rg.c2 - rg.c1 + 1; if(n >= rg.t.cw.length) return;
+      var removed = rg.t.cw.splice(rg.c1, n).reduce(function(a, b){ return a + b; }, 0);
+      rg.t.cells.forEach(function(row){ row.splice(rg.c1, n); });
+      var rest = 1 - removed; rg.t.cw = rg.t.cw.map(function(x){ return x / rest; }); rg.t.w = Math.max(10, rg.t.w * rest);
+      tblSel = { id: rg.t.id, r1: rg.r1, c1: 0, r2: rg.r2, c2: 0 }; tblCommit();
+    }
+    function tblSetCells(prop, val){
+      var rg = tblRange(); var t = rg ? rg.t : (selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null); if(!t) return;
+      var r1 = rg ? rg.r1 : 0, r2 = rg ? rg.r2 : t.rh.length - 1, c1 = rg ? rg.c1 : 0, c2 = rg ? rg.c2 : t.cw.length - 1;
+      snapshotForUndo();
+      for(var r = r1; r <= r2; r++) for(var c = c1; c <= c2; c++){ var cell = t.cells[r][c]; if(val === null || val === "") delete cell[prop]; else cell[prop] = val; }
+      tblCommit();
+    }
+    function tblCellFs(delta){
+      var rg = tblRange(); var t = rg ? rg.t : (selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null); if(!t) return;
+      var r1 = rg ? rg.r1 : 0, r2 = rg ? rg.r2 : t.rh.length - 1, c1 = rg ? rg.c1 : 0, c2 = rg ? rg.c2 : t.cw.length - 1;
+      snapshotForUndo();
+      for(var r = r1; r <= r2; r++) for(var c = c1; c <= c2; c++){ var cell = t.cells[r][c]; cell.fs = Math.max(8, Math.min(120, (cell.fs || t.fs || 24) + delta)); }
+      tblCommit();
+    }
+    function tblToggleBold(){
+      var rg = tblRange(); var t = rg ? rg.t : (selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null); if(!t) return;
+      var r1 = rg ? rg.r1 : 0, c1 = rg ? rg.c1 : 0, cur = t.cells[r1][c1], was = cur.b != null ? cur.b : (t.hdr && r1 === 0);
+      tblSetCells("b", !was);
+    }
+    function tblProp(prop, val){ var t = selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null; if(!t) return; snapshotForUndo(); t[prop] = val; tblCommit(); }
+    function tblEqualize(){
+      var t = selSet.length === 1 && selSet[0].k === "table" ? tblById(selSet[0].id) : null; if(!t) return; snapshotForUndo();
+      t.cw = t.cw.map(function(){ return 1 / t.cw.length; }); var tot = t.rh.reduce(function(a, b){ return a + b; }, 0); t.rh = t.rh.map(function(){ return tot / t.rh.length; }); tblCommit();
+    }
+    function beginCellSelect(e, id, r0, c0){
+      tblSel = { id: id, r1: r0, c1: c0, r2: r0, c2: c0 };
+      renderSelection();
+      function mv(ev){ var h = tableHitCell(id, getPos(ev)); if(h && (h.r !== tblSel.r2 || h.c !== tblSel.c2)){ tblSel.r2 = h.r; tblSel.c2 = h.c; renderSelection(); } }
+      function up(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); }
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    }
+    function beginTableEdgeResize(id, edge, p0){
+      var t = tblById(id); if(!t) return; var W = cWrap.clientWidth || 600, H = cWrap.clientHeight || 400, snap = false;
+      var cw0 = t.cw.slice(), rh0 = t.rh.slice(), w0 = t.w;
+      function mv(ev){
+        var p = getPos(ev), dx = p.x - p0.x, dy = p.y - p0.y; if(!snap){ snapshotForUndo(); snap = true; }
+        if(edge.type === "col"){
+          var d = dx / t.w, a = cw0[edge.i] + d, b = cw0[edge.i + 1] - d, mn = 0.04;
+          if(a < mn){ b -= (mn - a); a = mn; } if(b < mn){ a -= (mn - b); b = mn; }
+          t.cw[edge.i] = a; t.cw[edge.i + 1] = b;
+        } else { t.rh[edge.i] = Math.max(3, rh0[edge.i] + dy); }
+        renderTexts();
+      }
+      function up(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); if(snap) writeProgress(q.id, { tables: tables }); }
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    }
+    function beginTableScale(id, p0){ // 拖右下角方塊：整張表等比例調整寬度（高度跟著一起放大縮小）
+      var t = tblById(id); if(!t) return; var w0 = t.w, rh0 = t.rh.slice(), snap = false;
+      function mv(ev){ var p = getPos(ev); if(!snap){ snapshotForUndo(); snap = true; } var nw = Math.max(10, Math.min(98, w0 + (p.x - p0.x))), k = nw / w0; t.w = nw; t.rh = rh0.map(function(h){ return h * k; }); renderTexts(); }
+      function up(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); if(snap) writeProgress(q.id, { tables: tables }); }
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    }
+    function renderTableTools(u){
+      var old = selectLayer.querySelectorAll(".tbl-sel,.table-tools,.tbl-grip,.tbl-scale"); old.forEach(function(n){ n.remove(); });
+      var single = selSet.length === 1 && selSet[0].k === "table"; if(!single) { return; }
+      var t = tblById(selSet[0].id); if(!t) return;
+      if(tblSel && tblSel.id === t.id){
+        var rg = tblRange();
+        for(var r = rg.r1; r <= rg.r2; r++) for(var c = rg.c1; c <= rg.c2; c++){
+          var b = tdBox(t.id, r, c); if(!b) continue; var d = document.createElement("div"); d.className = "tbl-sel";
+          d.style.cssText = "left:" + b.l + "%;top:" + b.t + "%;width:" + (b.r - b.l) + "%;height:" + (b.b - b.t) + "%;"; selectLayer.appendChild(d);
         }
       }
-      for(var r2 = 0; r2 < rows; r2++){
-        for(var c2 = 0; c2 < cols; c2++){
-          var isH2 = header && r2 === 0;
-          var tx = { id: uid("t"), text: isH2 ? "標題" : "文字", x: Math.round((x0 + (c2 + 0.5) * cellW) * 100) / 100, y: Math.round((y0 + (r2 + 0.5) * cellH) * 100) / 100, color: isH2 ? "#2B2320" : "#8A8A8A", fontSize: fs, bold: isH2, step: 0, align: "center", list: "none" };
-          assignNewZ("text", tx); texts.push(tx); members.push({ k: "text", id: tx.id });
-        }
+      var grip = document.createElement("div"); grip.className = "tbl-grip"; grip.title = "拖曳整張表格移動"; grip.textContent = "✥";
+      grip.style.cssText = "left:calc(" + u.l + "% - 26px);top:calc(" + u.t + "% - 4px);";
+      grip.addEventListener("pointerdown", function(e){ e.stopPropagation(); e.preventDefault(); beginMoveSelection(getPos(e)); });
+      selectLayer.appendChild(grip);
+      var sc = document.createElement("div"); sc.className = "tbl-scale"; sc.title = "拖曳調整整張表格大小"; sc.style.cssText = "left:calc(" + u.r + "% - 6px);top:calc(" + u.b + "% - 6px);";
+      sc.addEventListener("pointerdown", function(e){ e.stopPropagation(); e.preventDefault(); beginTableScale(t.id, getPos(e)); });
+      selectLayer.appendChild(sc);
+      var bar = document.createElement("div"); bar.className = "table-tools";
+      var cur = tblRange(), cell0 = cur ? t.cells[cur.r1][cur.c1] : t.cells[0][0];
+      function btn(act, label, title){ return '<button type="button" data-ta="' + act + '" title="' + title + '">' + label + '</button>'; }
+      bar.innerHTML = '<b class="tt-title">表格工具 Table Tools</b>' +
+        '<span class="tt-g">' + btn("rowup", "↑列", "在上方插入一列") + btn("rowdn", "↓列", "在下方插入一列") + btn("colL", "←欄", "在左邊插入一欄") + btn("colR", "→欄", "在右邊插入一欄") + btn("delrow", "刪列", "刪除選取的列") + btn("delcol", "刪欄", "刪除選取的欄") + '</span>' +
+        '<span class="tt-g"><label title="儲存格填色">填色 <input type="color" class="tt-bg" value="' + (cell0.bg || "#FFFFFF") + '"></label>' + btn("nobg", "無色", "清除填色") +
+        '<label title="文字顏色">字色 <input type="color" class="tt-fc" value="' + (cell0.c || "#2B2320") + '"></label>' + btn("bold", "<b>B</b>", "粗體") + btn("fs-", "A−", "字小一點") + btn("fs+", "A＋", "字大一點") + btn("al-l", "⇤", "靠左") + btn("al-c", "↔", "置中") + btn("al-r", "⇥", "靠右") + '</span>' +
+        '<span class="tt-g"><label title="框線顏色">框線 <input type="color" class="tt-bd" value="' + (t.bd || "#555555") + '"></label><input type="number" class="tt-bw" min="0" max="8" step="1" value="' + (t.bw == null ? 2 : t.bw) + '" title="框線粗細（0＝無框線）">' +
+        '<label title="第一列當標題列"><input type="checkbox" class="tt-hdr" ' + (t.hdr ? "checked" : "") + '> 標題列</label>' + btn("eq", "平均", "平均分配欄寬與列高") + btn("del", "🗑 刪除表格", "刪除整張表格") + '</span>' +
+        '<span class="tt-hint">點一下格子選取（拖曳可選多格）；點兩下輸入文字；Tab 跳下一格；拖曳格線調整欄寬列高</span>';
+      bar.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+      bar.addEventListener("click", function(e){
+        var bt = e.target.closest("button"); if(!bt) return; e.stopPropagation();
+        var a = bt.dataset.ta, rg2 = tblRange(), rr = rg2 ? rg2.r2 : t.rh.length - 1, rr1 = rg2 ? rg2.r1 : 0, cc2 = rg2 ? rg2.c2 : t.cw.length - 1, cc1 = rg2 ? rg2.c1 : 0;
+        if(a === "rowup") tblAddRow(rr1, false); else if(a === "rowdn") tblAddRow(rr, true); else if(a === "colL") tblAddCol(cc1, false); else if(a === "colR") tblAddCol(cc2, true);
+        else if(a === "delrow") tblDelRow(); else if(a === "delcol") tblDelCol(); else if(a === "nobg") tblSetCells("bg", null);
+        else if(a === "bold") tblToggleBold(); else if(a === "fs-") tblCellFs(-2); else if(a === "fs+") tblCellFs(2);
+        else if(a === "al-l") tblSetCells("a", "left"); else if(a === "al-c") tblSetCells("a", "center"); else if(a === "al-r") tblSetCells("a", "right");
+        else if(a === "eq") tblEqualize(); else if(a === "del") deleteSelection();
+      });
+      bar.querySelector(".tt-bg").oninput = function(e){ tblSetCellsLive("bg", e.target.value); };
+      bar.querySelector(".tt-fc").oninput = function(e){ tblSetCellsLive("c", e.target.value); };
+      bar.querySelector(".tt-bd").oninput = function(e){ t.bd = e.target.value; writeProgress(q.id, { tables: tables }); renderTexts(); };
+      bar.querySelector(".tt-bw").onchange = function(e){ tblProp("bw", Math.max(0, Math.min(8, Number(e.target.value) || 0))); };
+      bar.querySelector(".tt-hdr").onchange = function(e){ tblProp("hdr", e.target.checked); };
+      // 顏色選擇器拖動時連續更新，只在第一次存復原點
+      var liveSnap = false;
+      function tblSetCellsLive(prop, val){
+        var rg3 = tblRange(); var r1 = rg3 ? rg3.r1 : 0, r2 = rg3 ? rg3.r2 : t.rh.length - 1, c1 = rg3 ? rg3.c1 : 0, c2 = rg3 ? rg3.c2 : t.cw.length - 1;
+        if(!liveSnap){ snapshotForUndo(); liveSnap = true; setTimeout(function(){ liveSnap = false; }, 1500); }
+        for(var r = r1; r <= r2; r++) for(var c = c1; c <= c2; c++) t.cells[r][c][prop] = val;
+        writeProgress(q.id, { tables: tables }); renderTexts();
       }
-      groups.push({ id: uid("g"), members: members });
-      writeProgress(q.id, { shapes: shapes, texts: texts, groups: groups });
-      switchToSelectTool(); selSet = members.slice(); renderTexts(); renderSelection();
+      bar.style.left = "min(" + u.l + "%, calc(100% - 640px))"; if(u.t > 38) bar.style.bottom = "calc(" + (100 - u.t) + "% + 46px)"; else bar.style.top = "calc(" + u.b + "% + 10px)";
+      selectLayer.appendChild(bar);
+    }
+    function insertTable(rows, cols, header){
+      rows = Math.max(1, Math.min(20, rows | 0)); cols = Math.max(1, Math.min(12, cols | 0));
+      var W = cWrap.clientWidth || 640, H = cWrap.clientHeight || 400;
+      var w = Math.min(92, Math.max(30, cols * 17)), cellHpx = Math.min(H * 0.7 / rows, 64), rowH = cellHpx / H * 100;
+      var fs = Math.max(10, Math.min(28, Math.round((w / cols) / 100 * 640 / 5.5), Math.round(cellHpx / H * 640 * (H / W) * 0.5)));
+      var t = { id: uid("tb"), x: Math.round((50 - w / 2) * 10) / 10, y: Math.max(3, Math.round((50 - rowH * rows / 2) * 10) / 10), w: w, cw: [], rh: [], cells: [], bd: "#555555", bw: 2, fs: fs, hdr: !!header, step: 0 };
+      for(var c = 0; c < cols; c++) t.cw.push(1 / cols);
+      for(var r = 0; r < rows; r++){ t.rh.push(rowH); t.cells.push(t.cw.map(function(){ return { t: "" }; })); }
+      snapshotForUndo(); assignNewZ("table", t); tables.push(t);
+      writeProgress(q.id, { tables: tables });
+      switchToSelectTool(); selSet = [{ k: "table", id: t.id }]; tblSel = { id: t.id, r1: 0, c1: 0, r2: 0, c2: 0 }; renderTexts(); renderSelection();
     }
     function openTableDialog(){
       var back = document.createElement("div"); back.className = "tb-modal-back";
       var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(380px,94vw)"; back.appendChild(modal);
-      modal.innerHTML = '<h3>▦ 插入表格 Insert table</h3><div style="display:flex;gap:10px;align-items:center;font-size:14px;flex-wrap:wrap;">列數 <input type="number" class="tb-r" min="1" max="12" value="3" style="width:64px;padding:4px 6px;"> × 欄數 <input type="number" class="tb-c" min="1" max="10" value="3" style="width:64px;padding:4px 6px;"></div><label style="display:flex;gap:6px;margin:10px 0;font-size:13px;"><input type="checkbox" class="tb-h" checked> 第一列當標題列（橘色底）</label><div class="tb-hint">表格會放在這一頁中間，格子和文字已經自動群組；點兩下格子裡的字就能改，想個別調整請先「解散群組」。</div><div class="tb-foot"><button type="button" class="primary tb-ok">插入</button><button type="button" class="tb-cancel">取消</button></div>';
+      modal.innerHTML = '<h3>▦ 插入表格 Insert table</h3><div style="display:flex;gap:10px;align-items:center;font-size:14px;flex-wrap:wrap;">列數 <input type="number" class="tb-r" min="1" max="20" value="3" style="width:64px;padding:4px 6px;"> × 欄數 <input type="number" class="tb-c" min="1" max="12" value="3" style="width:64px;padding:4px 6px;"></div><label style="display:flex;gap:6px;margin:10px 0;font-size:13px;"><input type="checkbox" class="tb-h" checked> 第一列當標題列</label><div class="tb-hint">插入後會自動跳出「表格工具」：可以增減列欄、每一格設不同顏色／字色、對齊、框線。點兩下格子輸入文字。</div><div class="tb-foot"><button type="button" class="primary tb-ok">插入</button><button type="button" class="tb-cancel">取消</button></div>';
       modal.querySelector(".tb-ok").onclick = function(){ insertTable(Number(modal.querySelector(".tb-r").value), Number(modal.querySelector(".tb-c").value), modal.querySelector(".tb-h").checked); back.remove(); };
       modal.querySelector(".tb-cancel").onclick = function(){ back.remove(); };
       back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
@@ -12480,6 +12713,7 @@
       if(it.k === "text") return texts.find(function(x){ return x.id === it.id; });
       if(it.k === "image") return images.find(function(x){ return x.id === it.id; });
       if(it.k === "shape") return shapes.find(function(x){ return x.id === it.id; });
+      if(it.k === "table") return tables.find(function(x){ return x.id === it.id; });
       return strokes.find(function(x){ return x.id === it.id; });
     }
     function shiftItems(items, dx, dy){
@@ -12493,7 +12727,7 @@
     }
     function commitKinds(kinds){
       var patch = {};
-      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes; if(kinds.table) patch.tables = tables;
       if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; redrawStrokes(); }
       writeProgress(q.id, patch); renderTexts(); renderSelection();
     }
@@ -12511,21 +12745,21 @@
       snapshotForUndo();
       var idMap = {}, made = [], kinds = {};
       clip.items.forEach(function(ci){
-        var d = JSON.parse(JSON.stringify(ci.data)), nid = uid(ci.k === "image" ? "im" : ci.k === "shape" ? "sh" : ci.k === "stroke" ? "s" : "t");
+        var d = JSON.parse(JSON.stringify(ci.data)), nid = uid(ci.k === "image" ? "im" : ci.k === "shape" ? "sh" : ci.k === "table" ? "tb" : ci.k === "stroke" ? "s" : "t");
         idMap[ci.oldId] = nid; d.id = nid;
         if(ci.k === "stroke"){ d.points.forEach(function(pt){ pt.x += off; pt.y += off; }); strokes.push(d); }
         else {
           d.x = Math.round((d.x + off) * 100) / 100; d.y = Math.round((d.y + off) * 100) / 100;
           d.z = undefined; delete d.z;
           assignNewZ(ci.k, d);
-          (ci.k === "image" ? images : ci.k === "shape" ? shapes : texts).push(d);
+          (ci.k === "image" ? images : ci.k === "shape" ? shapes : ci.k === "table" ? tables : texts).push(d);
         }
         kinds[ci.k] = true; made.push({ k: ci.k, id: nid });
       });
       clip.groups.forEach(function(ids){ groups.push({ id: uid("g"), members: ids.filter(function(i){ return idMap[i]; }).map(function(i){ var k = clip.items.find(function(c){ return c.oldId === i; }).k; return { k: k, id: idMap[i] }; }) }); });
       groups = groups.filter(function(g){ return g.members.length >= 2; });
       var patch = { groups: groups };
-      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes;
+      if(kinds.text) patch.texts = texts; if(kinds.image) patch.images = images; if(kinds.shape) patch.shapes = shapes; if(kinds.table) patch.tables = tables;
       if(kinds.stroke){ localSelfSeq++; patch.strokes = strokes; patch.strokesRevSeq = localSelfSeq; patch.strokesRevBy = deviceInstanceId; redrawStrokes(); }
       writeProgress(q.id, patch);
       if(boardState.tool !== "select") switchToSelectTool();
@@ -12593,7 +12827,7 @@
     function applyZOrder(list){ // list：由下到上
       snapshotForUndo();
       list.forEach(function(it, i){ it.o.z = i + 1; });
-      writeProgress(q.id, { texts: texts, images: images, shapes: shapes });
+      writeProgress(q.id, { texts: texts, images: images, shapes: shapes, tables: tables });
       renderTexts();
     }
     function moveLayer(idx, mode){ // idx：在「由下到上」清單裡的位置
@@ -12606,6 +12840,7 @@
     function layerLabel(it){
       if(it.k === "text") return '<span class="lp-ic">T</span><span class="lp-tx">' + escapeHtml(String(it.o.text || "").replace(/\s+/g, " ").slice(0, 16) || "（空白文字）") + '</span>';
       if(it.k === "image") return '<img class="lp-th" src="' + it.o.src + '" alt=""><span class="lp-tx">圖片</span>';
+      if(it.k === "table") return '<span class="lp-ic">▦</span><span class="lp-tx">表格 ' + it.o.rh.length + "×" + it.o.cw.length + '</span>';
       var nm = { rect: "矩形", ellipse: "橢圓", triangle: "三角形", line: "直線", arrow: "箭頭" }[it.o.type] || "圖形";
       return '<span class="lp-dot" style="background:' + escapeHtml(it.o.color || "#B23B32") + '"></span><span class="lp-tx">' + nm + '</span>';
     }
@@ -12988,28 +13223,28 @@
       if(btnRedo){ btnRedo.disabled = !redoStack.length; btnRedo.style.opacity = redoStack.length ? "1" : "0.4"; }
     }
     function snapshotForUndo(){
-      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups }));
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups }));
       if(undoStack.length > 60) undoStack.shift();
       redoStack.length = 0; // 有新的操作，「下一步」的歷史就作廢了，跟一般軟體的 undo/redo 行為一致
       updateUndoRedoBtns();
     }
     function applyUndoRedoSnapshot(snapText){
       var obj = JSON.parse(snapText);
-      strokes = obj.strokes; texts = obj.texts; images = obj.images || []; shapes = obj.shapes || []; groups = obj.groups || [];
+      strokes = obj.strokes; texts = obj.texts; images = obj.images || []; shapes = obj.shapes || []; tables = obj.tables || []; groups = obj.groups || [];
       clearObjSelection(); selSet = [];
       redrawStrokes(); renderTexts(); renderSelection();
       localSelfSeq++;
-      writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+      writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
       updateUndoRedoBtns();
     }
     if(btnUndo) btnUndo.onclick = function(){
       if(!undoStack.length) return;
-      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups }));
+      redoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups }));
       applyUndoRedoSnapshot(undoStack.pop());
     };
     if(btnRedo) btnRedo.onclick = function(){
       if(!redoStack.length) return;
-      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups }));
+      undoStack.push(JSON.stringify({ strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups }));
       applyUndoRedoSnapshot(redoStack.pop());
     };
     updateUndoRedoBtns();
@@ -13019,7 +13254,7 @@
       clearBtn.onclick = function(){
         if(confirm("確定要清空畫布上的所有內容嗎？（可以按「上一步」復原）")){
           snapshotForUndo();
-          strokes = []; texts = []; images = []; shapes = []; groups = []; selSet = []; clearObjSelection();
+          strokes = []; texts = []; images = []; shapes = []; tables = []; groups = []; selSet = []; clearObjSelection();
           // 2026-09-29 修正：清空只是把陣列設空、寫回雲端，並沒有真的把畫布這張點陣圖擦乾淨——
           // 以前是靠 refreshFromProgress() 收到雲端回音時「整個重畫」順便清空畫面，但那個函式現在
           // 已經改成「內容看起來沒變就跳過重畫」（見上面 strokesRev／同步節流的說明）：清空之後本機
@@ -13030,7 +13265,7 @@
           // 自己這邊就地重畫，不要依賴、也不要等雲端回音才更新畫面。
           redrawStrokes(); renderTexts();
           localSelfSeq++;
-          writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
+          writeProgress(q.id, { strokes: strokes, texts: texts, images: images, shapes: shapes, tables: tables, groups: groups, strokesRevSeq: localSelfSeq, strokesRevBy: deviceInstanceId });
         }
       };
     }
@@ -13138,6 +13373,7 @@
       texts = freshProgress.texts || [];
       images = freshProgress.images || [];
       shapes = freshProgress.shapes || [];
+      tables = freshProgress.tables || [];
       groups = freshProgress.groups || [];
       medias = freshProgress.medias || [];
       var freshGrid = freshProgress.gridType || q.gridType || "none";
