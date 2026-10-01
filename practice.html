@@ -440,6 +440,9 @@
   .stage.stage-canvas-type,
   .layout.sidebar-collapsed .stage.stage-canvas-type, .layout.sidebar-narrow .stage.stage-canvas-type{ max-width:none; }
 
+  .stage-wrap.stage-wrap-compact{ padding:6px 8px; }
+  .stage.stage-edit-compact{ padding:6px; min-height:0; border-radius:12px; max-width:none; }
+
   /* 句子重組專屬樣式 */
   .reorder-container{display:flex;flex-direction:column;gap:24px;max-width:840px;margin:0 auto;}
   .reorder-slot-zone{
@@ -8658,6 +8661,10 @@
     // 小白板／生字練習這兩種畫布類題型，舞台區不要被一般題型的固定寬度上限卡住（見 CSS .stage-canvas-type）
     stageEl.classList.toggle("stage-canvas-type", isCanvasSec(sec) || sec.type === "hanzi");
 
+    // 老師編輯投影片：只留功能區＋畫布，畫布盡量放大（上一張／下一張在功能區右側）
+    var compactEdit = !isStudent && sec.type === "board";
+    stageEl.classList.toggle("stage-edit-compact", compactEdit);
+    if(stageEl.parentNode) stageEl.parentNode.classList.toggle("stage-wrap-compact", compactEdit);
     var navBar = document.createElement("div"); navBar.className = "stage-header-nav";
     navBar.innerHTML = `
       <div style="font-size:13.5px; font-weight:700; color:var(--seal); display:flex; align-items:center; gap:6px;">
@@ -8672,7 +8679,7 @@
     `;
     navBar.querySelector(".btn-prev-q").onclick = function(){ if(currentIndex > 0) setCurrentQ(allList[currentIndex - 1].question.id); };
     navBar.querySelector(".btn-next-q").onclick = function(){ if(currentIndex < allList.length - 1) setCurrentQ(allList[currentIndex + 1].question.id); };
-    stageEl.appendChild(navBar);
+    if(!compactEdit) stageEl.appendChild(navBar);
 
     var head = document.createElement("div"); head.className = "stage-head";
     head.innerHTML = `<div><h2 class="stage-title zh">${q.title}</h2><p class="stage-sub">${q.desc || sec.desc || "即時互動練習"}</p></div>`;
@@ -8689,7 +8696,7 @@
       actWrap.appendChild(resetBtn);
     }
     head.appendChild(actWrap);
-    stageEl.appendChild(head);
+    if(!compactEdit) stageEl.appendChild(head);
 
     if(!isStudent && !isCanvasSec(sec) && q.teacherNote && q.teacherNote.trim()){
       var noteBlock = document.createElement("div"); noteBlock.className = "teacher-note-block";
@@ -9259,9 +9266,9 @@
     var deckStudent = !!(isStudent && slideSecInfo && slideSecInfo.sec.type === "board");
     // 小白板：只留筆、文字、橡皮擦、清空、圖案（多媒體放在題目上方，由題目設定，不是浮在畫布上）
     var simpleBoard = !!(slideSecInfo && slideSecInfo.sec.type === "whiteboard");
-    // 跟 PowerPoint 一樣：老師預設是「選取」（指標）；學生和小白板預設是筆
+    // 老師預設是「文字」：點空白處新增文字方塊；點到任何框框（文字／圖片／圖案／表格）就自動變成「選取」，Ctrl／Shift 可以加選；學生和小白板預設是筆
     if(isStudent || simpleBoard){ if(boardState.tool === "select") boardState.tool = "pen"; }
-    else if(!window.__mmToolInit){ window.__mmToolInit = true; boardState.tool = "select"; }
+    else if(!window.__mmToolInit){ window.__mmToolInit = true; boardState.tool = "text"; }
     // 小白板：舊的「懸浮」媒體（YouTube／音檔）搬到題目媒體（顯示在題目上方）。只在老師單機模式做一次。
     if(simpleBoard && !isStudent && !inRoom() && Array.isArray(progress.medias) && progress.medias.length){
       var secsM = getSections(), qM = slideSecInfo && secsM[slideSecInfo.secId] && secsM[slideSecInfo.secId].questions[q.id];
@@ -10523,6 +10530,7 @@
       b.onclick = function(){
         if(NON_TOOL_BTN_IDS.indexOf(b.id) !== -1) return;
         function activate(){
+          selectFromText = false;
           if((deckStudent && ["pen"].indexOf(b.dataset.tool) === -1) || (simpleBoard && b.dataset.tool === "select")) return;
           vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
             if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
@@ -10658,7 +10666,7 @@
       textLayer.querySelectorAll(".movable-text.active, .image-proxy.active, .shape-proxy.active").forEach(function(d){ d.classList.remove("active"); });
     }
     function syncObjInteractive(){
-      textLayer.classList.toggle("objs-interactive", !deckStudent && (boardState.tool === "text" || boardState.tool === "stroke-eraser" || boardState.tool === "shape"));
+      textLayer.classList.toggle("objs-interactive", !deckStudent && (boardState.tool === "stroke-eraser" || boardState.tool === "shape" || (boardState.tool === "text" && (isStudent || simpleBoard))));
     }
     syncObjInteractive();
     function activateTextToolQuietly(){
@@ -10956,10 +10964,6 @@
         }
         clearObjSelection();
         renderTexts();
-        if(commit && !t0 && val && !isStudent && !simpleBoard && lastCreatedTextId){ // 文字方塊工具用一次就回到「選取」，新文字方塊維持選取狀態（跟 PowerPoint 一樣）
-          var nid2 = lastCreatedTextId; lastCreatedTextId = null;
-          setTimeout(function(){ switchToSelectTool(); selSet = [{ k: "text", id: nid2 }]; renderSelection(); }, 0);
-        }
       }
       inPlaceEdit = { finish: finish, refreshStyle: refreshStyle, textId: textId, contentEl: content, contains: function(n){ return content.contains(n); },
         setHtml: function(h){ content.innerHTML = h; try{ content.focus(); }catch(er){} },
@@ -12441,6 +12445,14 @@
     // 不再只認滑鼠事件。按下時用 setPointerCapture 鎖定畫筆事件在 canvas 上，移動再快、再貼近邊緣，
     // 都不會被系統手勢（例如捲動／縮放）打斷這一筆的繪製。
     // 按住滑鼠「右鍵」拖曳＝框選（跟 PowerPoint 一樣，不管目前是哪個工具）：自動切到「選取」工具並開始框選
+    var selectFromText = false; // 這次的「選取」是因為在文字工具下點到框框而自動切換的（點空白處就回到文字工具、新增文字方塊）
+    function switchToTextTool(){
+      if(boardState.tool === "text") return;
+      boardState.tool = "text";
+      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){ if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active"); });
+      var tb0 = vToolbar.querySelector('button[data-tool="text"]'); if(tb0) tb0.classList.add("active");
+      canvas.style.cursor = toolCursor(); selSet = []; clearObjSelection(); syncObjInteractive(); renderSelection();
+    }
     function switchToSelectTool(){
       if(boardState.tool === "select") return;
       boardState.tool = "select";
@@ -12491,6 +12503,10 @@
         return;
       }
 
+      if(boardState.tool === "text" && !isStudent && !simpleBoard){ // 文字工具下點到框框：馬上變成選取（可拖曳、調整、Ctrl／Shift 加選）
+        var hitT = hitTestItem(p);
+        if(hitT && hitT.k !== "stroke"){ selectFromText = true; switchToSelectTool(); startSelectInteraction(e, p); return; }
+      }
       clearObjSelection(); // 點畫布空白處＝取消選取，文字／圖片的框框消失
       if(boardState.tool === "select"){ startSelectInteraction(e, p); return; }
 
@@ -13132,7 +13148,11 @@
       function up(){
         window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
         box.remove();
-        if(!dragged){ renderSelection(); return; }
+        if(!dragged){
+          renderSelection();
+          if(selectFromText && !additive){ selectFromText = false; var pn = { x: Math.max(1, Math.min(97, p0.x)), y: Math.max(1, Math.min(95, p0.y)) }; switchToTextTool(); editTextInPlace(null, pn); }
+          return;
+        }
         var l = Math.min(p0.x, cur.x), t = Math.min(p0.y, cur.y), r = Math.max(p0.x, cur.x), b = Math.max(p0.y, cur.y);
         function inside(bb){ return bb && bb.l >= l && bb.r <= r && bb.t >= t && bb.b <= b; }
         var picked = [], seenGroup = {};
@@ -13556,7 +13576,7 @@
       else if(selSet.length && /^Arrow(Left|Right|Up|Down)$/.test(e.key)){ e.preventDefault(); var st1 = e.shiftKey ? 2 : 0.3; snapshotForUndo(); commitKinds(shiftItems(expandGroups(selSet), e.key === "ArrowLeft" ? -st1 : e.key === "ArrowRight" ? st1 : 0, e.key === "ArrowUp" ? -st1 : e.key === "ArrowDown" ? st1 : 0)); }
       else if(mod && (e.key === "a" || e.key === "A")){ e.preventDefault(); selSet = expandGroups(allItems().filter(function(it){ return !!itemBox(it); })); renderSelection(); }
       else if((e.key === "Delete" || e.key === "Backspace") && selSet.length){ e.preventDefault(); deleteSelection(); }
-      else if(e.key === "Escape" && selSet.length){ selSet = []; renderSelection(); }
+      else if(e.key === "Escape"){ if(selSet.length){ selSet = []; renderSelection(); } if(selectFromText){ selectFromText = false; switchToTextTool(); } }
     });
 
     // ===== 層級面板：列出所有文字／圖片／圖形（上＝最上層），可以點選、用按鈕或拖曳調整上下層 =====
