@@ -689,7 +689,7 @@
   .tool-btn-v.active{border-color:var(--seal); background:var(--seal-soft); color:var(--seal); box-shadow:0 0 0 2px var(--seal-ring) inset;}
   .tool-btn-v-icon{ font-size:16.5px; line-height:1; }
   .tool-btn-v-icon-img{ width:19px; height:19px; object-fit:contain; display:block; }
-  .tool-btn-v-label{ font-size:10.5px; font-weight:700; }
+  .tool-btn-v-label{ font-size:10.5px; font-weight:700; text-align:center; white-space:nowrap; line-height:1.25; }
   .tool-v-sep{width:100%; height:1px; background:rgba(28,33,30,0.14); margin:1px 0; flex-shrink:0;}
   :root:not([data-theme="light"]) .tool-v-sep{ background:rgba(255,255,255,0.14); }
 
@@ -8976,7 +8976,7 @@
       // 板類（.tool-btn-v）跟生字練習學生端（普通 .btn）用的按鈕視覺不一樣，各自用對應的內容格式
       if(toggleBtn.classList.contains("tool-btn-v")){
         toggleBtn.innerHTML = canvasFullscreen
-          ? '<span class="tool-btn-v-icon">⤡</span><span class="tool-btn-v-label">結束放映</span>'
+          ? '<span class="tool-btn-v-icon">⤡</span><span class="tool-btn-v-label">結束<br>放映</span>'
           : '<span class="tool-btn-v-icon">⛶</span><span class="tool-btn-v-label">放映</span>';
       } else {
         toggleBtn.textContent = canvasFullscreen ? "⤡ 退出" : "⛶ 全螢幕";
@@ -9123,10 +9123,10 @@
           <input type="file" class="ins-img-file" accept="image/*" multiple style="display:none;">
         </div>
       </div>` : ''}
-      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-anim-pane" title="動畫窗格：集中檢視與編輯這一頁所有物件的動畫 Animation pane"><span class="tool-btn-v-icon">🎞</span><span class="tool-btn-v-label">動畫窗格</span></button>` : ''}
+      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-anim-pane" title="動畫窗格：集中檢視與編輯這一頁所有物件的動畫 Animation pane"><span class="tool-btn-v-icon">🎞</span><span class="tool-btn-v-label">動畫<br>窗格</span></button>` : ''}
       ${!isStudent ? `
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v" id="btn-present" title="放映工具：雷射筆、螢光筆、簡報者檢視 Slide show tools"><span class="tool-btn-v-icon">🔴</span><span class="tool-btn-v-label">放映工具</span></button>
+        <button type="button" class="tool-btn-v" id="btn-present" title="放映工具：雷射筆、螢光筆、簡報者檢視 Slide show tools"><span class="tool-btn-v-icon">🔴</span><span class="tool-btn-v-label">放映<br>工具</span></button>
         <div class="color-popover">
           <div class="color-popover-title">放映工具 Show tools</div>
           <button type="button" class="trans-opt pt-laser" title="雷射筆（快速鍵 L）：紅色游標跟著滑鼠／手指，不會留下痕跡；再按一次或 Esc 關閉">🔴 雷射筆 Laser pointer</button>
@@ -9166,7 +9166,7 @@
         <button type="button" class="tool-btn-v ${boardState.tool==='select'?'active':''}" data-tool="select" title="選取 Select：按住拖曳＝框選範圍內的東西（筆跡、文字、圖片、圖形都可以）；點一下選單一個；Shift 加選。選好之後可以拖曳搬動、組成群組（Ctrl/⌘+G）、刪除"><span class="tool-btn-v-icon">⬚</span><span class="tool-btn-v-label">選取</span></button>
       </div>
       <div class="tool-btn-v-wrap">
-        <button type="button" class="tool-btn-v ${boardState.tool==='text'?'active':''}" data-tool="text" title="文字 Text（滑鼠移入可選顏色／字級 hover for color &amp; size）"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_TEXT}" alt=""><span class="tool-btn-v-label">文字方塊</span></button>
+        <button type="button" class="tool-btn-v ${boardState.tool==='text'?'active':''}" data-tool="text" title="文字 Text（滑鼠移入可選顏色／字級 hover for color &amp; size）"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_TEXT}" alt=""><span class="tool-btn-v-label">文字<br>方塊</span></button>
         <div class="color-popover text-popover">
           <div class="color-popover-title">字型色彩 Font color</div>
           <div class="color-dot-grid">${colorDotsHtml}</div>
@@ -9260,7 +9260,7 @@
         </div>
       </div>
       ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-notes" title="備忘稿：這一頁只有你看得到的備忘稿（老師備註，可以隨時開關）Speaker notes"><span class="tool-btn-v-icon">📝</span><span class="tool-btn-v-label">備忘稿</span></button>` : ''}
-      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-canvas-size" title="投影片設定：大小、背景顏色、範本（學生端會跟著變）Slide setup"><span class="tool-btn-v-icon">📐</span><span class="tool-btn-v-label">投影片設定</span></button>` : ''}
+      ${!isStudent ? `<button type="button" class="tool-btn-v" id="btn-canvas-size" title="投影片設定：大小、背景顏色、範本（學生端會跟著變）Slide setup"><span class="tool-btn-v-icon">📐</span><span class="tool-btn-v-label">投影片<br>設定</span></button>` : ''}
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v ${(boardState.tool==='stroke-eraser'||boardState.tool==='pixel-eraser')?'active':''}" id="btn-eraser" title="橡皮擦：預設整條擦掉，滑鼠移入可切換成局部擦 Eraser — hover to switch modes"><img class="tool-btn-v-icon tool-btn-v-icon-img" id="btn-eraser-icon" src="${TOOL_ICON_ERASER}" alt=""><span class="tool-btn-v-label">橡皮擦</span></button>
         <div class="color-popover">
@@ -9271,8 +9271,8 @@
       </div>
       <div class="tool-v-sep"></div>
       <button type="button" class="tool-btn-v" id="btn-undo" title="復原 Undo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_UNDO}" alt=""><span class="tool-btn-v-label">復原</span></button>
-      <button type="button" class="tool-btn-v" id="btn-redo" title="取消復原 Redo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_REDO}" alt=""><span class="tool-btn-v-label">取消復原</span></button>
-      <button type="button" class="tool-btn-v" id="btn-clear-draw" style="color:var(--seal);" title="清除全部（可以按「復原」）Clear all"><span class="tool-btn-v-icon">🗑️</span><span class="tool-btn-v-label">清除全部</span></button>
+      <button type="button" class="tool-btn-v" id="btn-redo" title="取消復原 Redo"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_REDO}" alt=""><span class="tool-btn-v-label">取消<br>復原</span></button>
+      <button type="button" class="tool-btn-v" id="btn-clear-draw" style="color:var(--seal);" title="清除全部（可以按「復原」）Clear all"><span class="tool-btn-v-icon">🗑️</span><span class="tool-btn-v-label">清除<br>全部</span></button>
       <div class="tool-v-sep"></div>
       <div class="tool-btn-v-wrap">
         <button type="button" class="tool-btn-v" id="btn-more-tools" title="更多工具：滑鼠移入可以加入格線／底圖／移動畫面等工具 More tools"><span class="tool-btn-v-icon">➕</span><span class="tool-btn-v-label">更多</span></button>
@@ -9346,8 +9346,8 @@
       bgGroupEl = document.createElement("div"); bgGroupEl.className = "extra-tool-group";
       bgGroupEl.innerHTML = `
         <div class="tool-v-sep"></div>
-        <button type="button" class="tool-btn-v" id="btn-upload-bg" title="背景圖片：上傳圖片當這一頁的背景 Background picture"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_IMAGE}" alt=""><span class="tool-btn-v-label">背景圖片</span></button>
-        <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除背景圖片 Remove background picture"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清除背景圖片</span></button>
+        <button type="button" class="tool-btn-v" id="btn-upload-bg" title="背景圖片：上傳圖片當這一頁的背景 Background picture"><img class="tool-btn-v-icon tool-btn-v-icon-img" src="${TOOL_ICON_IMAGE}" alt=""><span class="tool-btn-v-label">背景<br>圖片</span></button>
+        <button type="button" class="tool-btn-v" id="btn-remove-bg" style="display:${currentBg ? 'flex' : 'none'}; color:#E63946;" title="清除背景圖片 Remove background picture"><span class="tool-btn-v-icon">✕</span><span class="tool-btn-v-label">清除<br>背景</span></button>
         <input type="file" id="board-bg-file" accept="image/*" style="display:none;">`;
       extraToolsPool.bg = { label: "背景圖片", icon: TOOL_ICON_IMAGE, el: bgGroupEl };
     }
@@ -13469,7 +13469,7 @@
       var back = document.createElement("div"); back.className = "tb-modal-back";
       var modal = document.createElement("div"); modal.className = "tb-modal"; modal.style.width = "min(480px,94vw)"; back.appendChild(modal);
       var slideOpts = slideSiblingIds.map(function(id, i){ var qq = slideSecInfo && slideSecInfo.sec.questions[id]; return '<option value="' + id + '">' + (i + 1) + '. ' + escapeHtml((qq && qq.title) || "") + '</option>'; }).join("");
-      modal.innerHTML = '<h3>🔗 超連結 Link</h3><div class="tb-hint">套用到選取的 ' + objs.length + ' 個物件。放映時輕點物件就會啟動（編輯時按住 Ctrl/⌘ 點）。</div>' +
+      modal.innerHTML = '<h3>🔗 超連結 Link</h3><div class="tb-hint">套用到選取的 ' + objs.length + ' 個物件。放映時輕點物件就會啟動；編輯時按住 Ctrl/⌘ 再點一下物件。</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin:10px 0;font-size:13px;"><label><input type="radio" name="lk" value="" class="lk-none"> 無連結</label>' +
         '<label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="lk" value="slide" class="lk-slide"> 跳到投影片 <select class="lk-ls" style="flex:1;min-width:0;">' + slideOpts + '</select></label>' +
         '<label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="lk" value="url" class="lk-url"> 開啟網址 <input type="text" class="lk-lu" placeholder="https://…" style="flex:1;min-width:0;padding:4px 6px;"></label></div>' +
@@ -13553,7 +13553,7 @@
     if(ptTm) ptTm.onclick = function(e){ e.stopPropagation(); startCountdownTimer(); };
     if(ptAu) ptAu.onclick = function(e){ e.stopPropagation(); toggleAutoAdvance(ptAu); };
     // 超連結／動作按鈕：放映中（或按住 Ctrl/⌘）輕點有設連結的物件，就跳到指定投影片或開啟網址
-    var linkDown = null, lastLinkDown = null, hoverLink = false, hoverRaf = 0;
+    var linkDown = null, hoverLink = false, hoverRaf = 0;
     function linkAt(e){ var hit = hitTestItem(getPos(e)); if(!hit || hit.k === "stroke") return null; var o = selItemObj(hit); return (o && o.link) ? o : null; }
     function fireLink(o){
       if(o.link.t === "slide" && o.link.id){ setCurrentQ(o.link.id); }
@@ -13563,13 +13563,6 @@
     cWrap.addEventListener("pointerdown", function(e){
       linkDown = { x: e.clientX, y: e.clientY, t: Date.now() };
       if(isStudent || (e.target.closest && e.target.closest(LINK_UI))) return;
-      var now = Date.now();
-      // 編輯時：在有連結的物件上「連點兩下」就跳轉（不用再按 Ctrl）
-      if(lastLinkDown && now - lastLinkDown.t < 450 && Math.hypot(e.clientX - lastLinkDown.x, e.clientY - lastLinkDown.y) < 16){
-        lastLinkDown = null; var o = linkAt(e);
-        if(o){ e.stopPropagation(); e.preventDefault(); linkDown = null; fireLink(o); return; }
-      }
-      lastLinkDown = { x: e.clientX, y: e.clientY, t: now };
     }, true);
     cWrap.addEventListener("pointerup", function(e){ // 放映中（或按住 Ctrl/⌘）：輕點一下就跳轉
       if(isStudent || !linkDown) return;
@@ -13581,6 +13574,7 @@
     }, true);
     cWrap.addEventListener("pointermove", function(e){ // 滑鼠移到有連結的物件上：游標變成手指
       if(isStudent || e.buttons || hoverRaf || e.pointerType === "touch") return;
+      if(!(canvasFullscreen || e.ctrlKey || e.metaKey)){ if(hoverLink){ hoverLink = false; canvas.style.cursor = toolCursor(); } return; }
       hoverRaf = requestAnimationFrame(function(){ hoverRaf = 0; var o = linkAt(e); if(!!o !== hoverLink){ hoverLink = !!o; canvas.style.cursor = o ? "pointer" : toolCursor(); } });
     });
     vToolbar.addEventListener("click", function(e){ var tb = e.target.closest && e.target.closest("button[data-tool]"); if(tb && laserOn) setLaser(false); });
