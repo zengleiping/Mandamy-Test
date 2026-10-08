@@ -1072,6 +1072,7 @@
   /* 文字就地編輯（像 PPT：直接在原本的文字位置、原本的樣式裡打字） */
   .movable-text.editing{ user-select:text !important; -webkit-user-select:text !important; cursor:text !important; border-color:var(--seal) !important; }
   .movable-text.editing .text-content{ outline:none; white-space:pre-wrap; min-width:1em; min-height:1em; caret-color:currentColor; user-select:text; -webkit-user-select:text; }
+  .text-layer .movable-text.editing, .text-layer .movable-text.editing .text-content{ pointer-events:auto !important; }
   .movable-text.editing .resize-handle, .movable-text.editing .tb-edge, .movable-text.editing .text-step-badge{ display:none !important; }
   .tb-modal-back{ position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:20000; display:flex; align-items:center; justify-content:center; }
   .tb-modal{ background:var(--surface); color:var(--ink); border-radius:16px; padding:18px 20px; width:min(460px,92vw); max-height:86vh; overflow:auto; box-shadow:0 20px 50px rgba(0,0,0,.35); }
@@ -1402,6 +1403,7 @@
   .ribbon .tool-btn-v-wrap .color-popover{ left:0; top:100%; margin:4px 0 0; transform:none; }
   .ribbon .tool-btn-v-wrap:hover .color-popover, .ribbon .tool-btn-v-wrap:focus-within .color-popover{ transform:none; }
   .rb-slot{ display:none; }
+  .board-area.present-lock .text-layer .movable-text:not(.editing), .board-area.present-lock .text-layer .image-proxy, .board-area.present-lock .text-layer .shape-proxy, .board-area.present-lock .table-obj{ pointer-events:none !important; }
   .tool-btn-v-wrap.open .color-popover{ opacity:1; visibility:visible; pointer-events:auto; transform:translateY(-50%) translateX(0); }
   .ribbon .tool-btn-v-wrap.open .color-popover{ transform:none; }
   .tool-btn-v-wrap.force-closed .color-popover{ opacity:0 !important; visibility:hidden !important; pointer-events:none !important; }
@@ -9298,6 +9300,8 @@
     var slideSecInfo = findSectionForQuestion(q.id);
     // 學生在看「投影片」時只能用畫筆、橡皮擦、清空畫布（只清筆跡）；不能動老師放的文字／圖片／圖案／表格，也不能改底圖或背景
     var deckStudent = !!(isStudent && slideSecInfo && slideSecInfo.sec.type === "board");
+    // 老師按「放映」＝正式上課：放映前已經做好的文字／圖片／圖案／表格不能被選取、搬動、改字；只能用筆寫字、打字補充筆記、橡皮擦擦筆跡
+    function presentLock(){ return !isStudent && !!(slideSecInfo && slideSecInfo.sec.type === "board") && container.classList.contains("canvas-fs-active") && !container.classList.contains("fs-edit"); }
     // 小白板：只留筆、文字、橡皮擦、清空、圖案（多媒體放在題目上方，由題目設定，不是浮在畫布上）
     var simpleBoard = !!(slideSecInfo && slideSecInfo.sec.type === "whiteboard");
     // 老師預設是「文字」：點空白處新增文字方塊；點到任何框框（文字／圖片／圖案／表格）就自動變成「選取」，Ctrl／Shift 可以加選；學生和小白板預設是筆
@@ -9330,6 +9334,11 @@
 
     var layout = document.createElement("div"); layout.className = "draw-board-layout";
 
+    // 功能區（topBar）會把部分工具按鈕從 vToolbar 搬出去，查詢要同時找兩邊（vToolbar → 功能區 → 整個 container）
+    var tbq = {
+      one: function(sel){ return vToolbar.querySelector(sel) || (typeof topBar !== "undefined" && topBar ? topBar.querySelector(sel) : null); },
+      all: function(sel){ var out = Array.prototype.slice.call(vToolbar.querySelectorAll(sel)); if(typeof topBar !== "undefined" && topBar){ topBar.querySelectorAll(sel).forEach(function(n){ if(out.indexOf(n) === -1) out.push(n); }); } return out; }
+    };
     var vToolbar = document.createElement("div"); vToolbar.className = "draw-toolbar-vertical" + (studentLocked ? " student-locked" : "");
     // 顏色選項共用內容：畫筆／打字兩個工具各自 hover 才浮現一份，選色會同步套用到 boardState.color
     var colorDotsHtml = `
@@ -9609,7 +9618,7 @@
         }
       }
     }
-    vToolbar.querySelectorAll(".tool-btn-v-wrap").forEach(function(wrap){
+    tbq.all(".tool-btn-v-wrap").forEach(function(wrap){
       wrap.addEventListener("mouseenter", function(){ positionWrapPopover(wrap); });
       wrap.addEventListener("focusin", function(){ positionWrapPopover(wrap); });
     });
@@ -9644,7 +9653,7 @@
     // pinnedExtraTools 記在模組層級（跟 boardState 一樣），使用者這次工作階段加過的工具，換題目後
     // 會自動接著顯示，不用每題都重新點一次「➕更多」。
     var extraToolsPool = {};
-    var moreToolsPopover = vToolbar.querySelector("#more-tools-popover");
+    var moreToolsPopover = tbq.one("#more-tools-popover");
 
     var gridGroupEl = document.createElement("div"); gridGroupEl.className = "extra-tool-group";
     gridGroupEl.innerHTML = `
@@ -9706,7 +9715,7 @@
 
     // 把「➕更多」清單填好：每個選項點一下，就把對應的工具群組從 pool 搬進工具列（插在「➕更多」
     // 按鈕自己這個 wrap 之前），並記到 pinnedExtraTools，同時把這個選項從清單移除（已經加過了）。
-    var moreToolsWrap = vToolbar.querySelector("#btn-more-tools").closest(".tool-btn-v-wrap");
+    var moreToolsWrap = tbq.one("#btn-more-tools").closest(".tool-btn-v-wrap");
     function refreshMoreToolsPopover(){
       moreToolsPopover.querySelectorAll(".more-tool-opt").forEach(function(o){ o.remove(); });
       Object.keys(extraToolsPool).forEach(function(key){
@@ -9908,38 +9917,38 @@
 
     if(simpleBoard){
       var hideEl = function(el){ if(!el) return; var w = el.closest && el.closest(".tool-btn-v-wrap"); (w || el).style.display = "none"; };
-      ['button[data-tool="select"]', "#btn-more-tools", "#btn-undo", "#btn-redo", "#btn-arrange", "#btn-transition", "#btn-present", "#btn-insert", "#btn-format-painter", "#btn-anim-pane", "#btn-notes", "#btn-canvas-size", "#btn-media", ".slide-nav-row", ".slide-nav-counter", "#btn-slide-prev", "#btn-slide-next"].forEach(function(sel){ hideEl(vToolbar.querySelector(sel)); });
-      var hs = vToolbar.querySelector("#btn-slide-prev"); if(hs && hs.parentNode) hs.parentNode.style.display = "none";
+      ['button[data-tool="select"]', "#btn-more-tools", "#btn-undo", "#btn-redo", "#btn-arrange", "#btn-transition", "#btn-present", "#btn-insert", "#btn-format-painter", "#btn-anim-pane", "#btn-notes", "#btn-canvas-size", "#btn-media", ".slide-nav-row", ".slide-nav-counter", "#btn-slide-prev", "#btn-slide-next"].forEach(function(sel){ hideEl(tbq.one(sel)); });
+      var hs = tbq.one("#btn-slide-prev"); if(hs && hs.parentNode) hs.parentNode.style.display = "none";
     }
     if(slideSecInfo && slideSecInfo.sec.type === "board"){ // 投影片的清空只清筆跡，名稱也跟著改
-      var clrB = vToolbar.querySelector("#btn-clear-draw");
+      var clrB = tbq.one("#btn-clear-draw");
       if(clrB){ var clrL = clrB.querySelector(".tool-btn-v-label"); if(clrL) clrL.innerHTML = "清除<br>筆跡"; clrB.title = "清除筆跡：只清掉畫筆寫的字，投影片上的文字、圖片和背景不會動"; }
     }
     if(deckStudent){ // 學生看投影片：只留筆、橡皮擦、清空（＋放映、翻頁）
-      ["select", "text", "shape"].forEach(function(tn){ var tb = vToolbar.querySelector('button[data-tool="' + tn + '"]'); var w = tb && (tb.closest(".tool-btn-v-wrap") || tb); if(w) w.style.display = "none"; });
-      ["#btn-more-tools", "#btn-undo", "#btn-redo", "#btn-arrange", "#btn-open-layers"].forEach(function(sel){ var el = vToolbar.querySelector(sel); if(el) el.style.display = "none"; });
+      ["select", "text", "shape"].forEach(function(tn){ var tb = tbq.one('button[data-tool="' + tn + '"]'); var w = tb && (tb.closest(".tool-btn-v-wrap") || tb); if(w) w.style.display = "none"; });
+      ["#btn-more-tools", "#btn-undo", "#btn-redo", "#btn-arrange", "#btn-open-layers"].forEach(function(sel){ var el = tbq.one(sel); if(el) el.style.display = "none"; });
     }
     // ===== 工具列自訂：分配到左側／上方／隱藏，並支援收合 =====
     var TB_ITEM_DEFS = [
-      { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-fs")]; } },
-      { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [vToolbar.querySelector(".slide-nav-row"), vToolbar.querySelector(".slide-nav-counter")]; } },
-      { key: "insert", label: "插入（圖片／圖案／表格／多媒體／連結）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-insert"); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "painter", label: "複製格式（格式刷）", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-format-painter")]; } },
-      { key: "anim", label: "動畫窗格", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-anim-pane")]; } },
-      { key: "present", label: "放映工具（雷射筆／螢光筆／簡報者檢視）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-present"); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "transition", label: "轉場", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "media", label: "媒體（YouTube／音檔）", cat: "a", find: function(){ var b = vToolbar.querySelector("#btn-media"); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "select", label: "選取（框選／群組）", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="select"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "pen", label: "筆", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="pen"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "text", label: "文字方塊", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="text"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "shape", label: "圖案", cat: "b", find: function(){ var b = vToolbar.querySelector('button[data-tool="shape"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "arrange", label: "排列（上移／下移）", cat: "b", find: function(){ var b = vToolbar.querySelector("#btn-arrange"); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "canvassize", label: "投影片設定", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-canvas-size")]; } },
-      { key: "notes", label: "備忘稿", cat: "a", find: function(){ return [vToolbar.querySelector("#btn-notes")]; } },
-      { key: "eraser", label: "橡皮擦", cat: "b", find: function(){ var b = vToolbar.querySelector("#btn-eraser"); return [b && b.closest(".tool-btn-v-wrap")]; } },
-      { key: "undo", label: "復原", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-undo")]; } },
-      { key: "redo", label: "取消復原", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-redo")]; } },
-      { key: "clear", label: "清除全部", cat: "c", find: function(){ return [vToolbar.querySelector("#btn-clear-draw")]; } }
+      { key: "fs", label: "投影片放映（全螢幕）", cat: "a", find: function(){ return [tbq.one("#btn-canvas-fs")]; } },
+      { key: "nav", label: "上一頁／下一頁", cat: "a", find: function(){ return [tbq.one(".slide-nav-row"), tbq.one(".slide-nav-counter")]; } },
+      { key: "insert", label: "插入（圖片／圖案／表格／多媒體／連結）", cat: "a", find: function(){ var b = tbq.one("#btn-insert"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "painter", label: "複製格式（格式刷）", cat: "a", find: function(){ return [tbq.one("#btn-format-painter")]; } },
+      { key: "anim", label: "動畫窗格", cat: "a", find: function(){ return [tbq.one("#btn-anim-pane")]; } },
+      { key: "present", label: "放映工具（雷射筆／螢光筆／簡報者檢視）", cat: "a", find: function(){ var b = tbq.one("#btn-present"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "transition", label: "轉場", cat: "a", find: function(){ var b = tbq.one("#btn-transition"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "media", label: "媒體（YouTube／音檔）", cat: "a", find: function(){ var b = tbq.one("#btn-media"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "select", label: "選取（框選／群組）", cat: "b", find: function(){ var b = tbq.one('button[data-tool="select"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "pen", label: "筆", cat: "b", find: function(){ var b = tbq.one('button[data-tool="pen"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "text", label: "文字方塊", cat: "b", find: function(){ var b = tbq.one('button[data-tool="text"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "shape", label: "圖案", cat: "b", find: function(){ var b = tbq.one('button[data-tool="shape"]'); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "arrange", label: "排列（上移／下移）", cat: "b", find: function(){ var b = tbq.one("#btn-arrange"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "canvassize", label: "投影片設定", cat: "a", find: function(){ return [tbq.one("#btn-canvas-size")]; } },
+      { key: "notes", label: "備忘稿", cat: "a", find: function(){ return [tbq.one("#btn-notes")]; } },
+      { key: "eraser", label: "橡皮擦", cat: "b", find: function(){ var b = tbq.one("#btn-eraser"); return [b && b.closest(".tool-btn-v-wrap")]; } },
+      { key: "undo", label: "復原", cat: "c", find: function(){ return [tbq.one("#btn-undo")]; } },
+      { key: "redo", label: "取消復原", cat: "c", find: function(){ return [tbq.one("#btn-redo")]; } },
+      { key: "clear", label: "清除全部", cat: "c", find: function(){ return [tbq.one("#btn-clear-draw")]; } }
     ];
     var tbItems = {};
     TB_ITEM_DEFS.forEach(function(d){
@@ -10101,7 +10110,7 @@
         rbPanels[panelId].appendChild(g); return g;
       }
       function inl(label, node){ if(!node) return null; var w = document.createElement("label"); w.className = "rb-inl"; if(label){ var sp = document.createElement("span"); sp.textContent = label; w.appendChild(sp); } w.appendChild(node); return w; }
-      function qsx(sel){ return vToolbar.querySelector(sel); }
+      function qsx(sel){ return tbq.one(sel); }
       function itemNode(k){ return tbItems[k] ? tbItems[k].nodes[0] : null; }
       function clickOf(sel){ return function(){ var el = qsx(sel); if(el) el.click(); }; }
       function selFromActive(){
@@ -10129,7 +10138,7 @@
       rbGroup("home", "編輯", [itemNode("select"), rbBtn("🔎", "尋找<br>取代", function(){ openFindReplace(); }, "尋找與取代（Ctrl/⌘+H）")]);
       // ---- 插入 ----
       rbGroup("insert", "投影片", [rbBtn("➕", "新增<br>投影片", function(){ if(secId()) addBlankSlideToSection(secId()); }), rbBtn("▦", "表格", function(){ openTableDialog(); }, "插入表格")]);
-      var shapeBtns = Array.prototype.slice.call(vToolbar.querySelectorAll(".ins-shape")); var shapeBox = document.createElement("div"); shapeBox.className = "rb-shapes"; shapeBtns.forEach(function(b){ shapeBox.appendChild(b); });
+      var shapeBtns = Array.prototype.slice.call(tbq.all(".ins-shape")); var shapeBox = document.createElement("div"); shapeBox.className = "rb-shapes"; shapeBtns.forEach(function(b){ shapeBox.appendChild(b); });
       rbGroup("insert", "圖例", [rbBtn("🖼", "圖片", function(){ var f = qsx(".ins-img-file"); if(f) f.click(); }), shapeBox]);
       rbGroup("insert", "文字", [rbBtn("📝", "文字<br>方塊", clickOf('button[data-tool="text"]'), "文字方塊：點一下畫面就能打字"), rbBtn("🔗", "超連結", function(){ openLinkDialog(); }, "超連結（Ctrl/⌘+K）")]);
       var mediaBox = document.createElement("div"); mediaBox.className = "rb-stack"; [".ins-yt", ".ins-audio"].forEach(function(sel){ var el = qsx(sel); if(el){ var r = document.createElement("div"); r.className = "rb-row"; r.appendChild(el); mediaBox.appendChild(r); } });
@@ -10141,7 +10150,7 @@
       // ---- 設計 ----
       rbGroup("design", "自訂", [itemNode("canvassize"), rbBtn("🎛", "母片", function(){ openMasterDialog(); }, "母片"), rbBtn("🗂", "範本", function(){ openSlideSetupDialog(); }, "投影片範本")]);
       // ---- 轉場 ----
-      var tr = Array.prototype.slice.call(vToolbar.querySelectorAll(".trans-opt")).filter(function(b){ return b.dataset && b.dataset.trans; }); var trBox = document.createElement("div"); trBox.className = "rb-trans"; tr.forEach(function(b){ trBox.appendChild(b); });
+      var tr = Array.prototype.slice.call(tbq.all(".trans-opt")).filter(function(b){ return b.dataset && b.dataset.trans; }); var trBox = document.createElement("div"); trBox.className = "rb-trans"; tr.forEach(function(b){ trBox.appendChild(b); });
       rbGroup("trans", "切換到此投影片（套用到整份簡報）", [trBox]);
       // ---- 動畫 ----
       var aSel = qsx(".text-anim-select"), aDel = qsx(".text-anim-delay"), aPrev = qsx(".text-anim-preview"), stepC = qsx(".text-step-input"), stepWrap = stepC && stepC.closest(".size-combo");
@@ -10169,10 +10178,11 @@
         if(inFs && !fsSlots.length){
           ["fs", "nav", "pen", "eraser", "clear", "present", "select", "text"].forEach(function(k){
             var it = tbItems[k]; if(!it) return;
+            if(k === "select" && slideSecInfo && slideSecInfo.sec.type === "board") return; // 放映時不給「選取」：不能動放映前的內容
             it.nodes.forEach(function(n){ var ph = document.createElement("span"); ph.className = "rb-slot"; n.parentNode.insertBefore(ph, n); fsSlots.push({ ph: ph, n: n }); vToolbar.appendChild(n); });
           });
           // 放映時功能區收起，文字格式（字型／注音、大小、顏色、粗體、對齊、行距）改收進「文字」按鈕的選單
-          var txtPop = vToolbar.querySelector(".text-popover");
+          var txtPop = tbq.one(".text-popover");
           if(txtPop){
             [rbTxt, rbPar].forEach(function(n){ if(!n) return; var ph = document.createElement("span"); ph.className = "rb-slot"; n.parentNode.insertBefore(ph, n); fsSlots.push({ ph: ph, n: n }); txtPop.appendChild(n); });
           }
@@ -10190,7 +10200,7 @@
     (function(){
       if(isStudent) return;
       var NOTES_KEY = "mandamy-notes-open", NOTES_POS_KEY = "mandamy-notes-pos";
-      var btn = vToolbar.querySelector("#btn-notes"); if(!btn) return;
+      var btn = tbq.one("#btn-notes"); if(!btn) return;
       var panel = null;
       function hasNote(){ return !!(q.teacherNote && q.teacherNote.trim()); }
       function isOpenPref(){ var v = null; try{ v = localStorage.getItem(NOTES_KEY); }catch(e){} return v === null ? hasNote() : v === "1"; }
@@ -10598,7 +10608,7 @@
         function activate(){
           selectFromText = false;
           if((deckStudent && ["pen"].indexOf(b.dataset.tool) === -1) || (simpleBoard && b.dataset.tool === "select")) return;
-          vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
+          tbq.all(".tool-btn-v").forEach(function(x){
             if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
           });
           b.classList.add("active");
@@ -10614,14 +10624,14 @@
         else { activate(); }
       };
     }
-    vToolbar.querySelectorAll(".tool-btn-v").forEach(bindGenericToolBtn);
+    tbq.all(".tool-btn-v[data-tool]").forEach(bindGenericToolBtn);
 
     // 橡皮擦合併成一顆按鈕：點主按鈕＝直接套用目前選的模式（預設筆畫擦），
     // hover 開的小面板可以切換筆畫擦／局部擦，切換的同時也順便套用，不用切完再點一次主按鈕。
-    var btnEraser = vToolbar.querySelector("#btn-eraser");
+    var btnEraser = tbq.one("#btn-eraser");
     function selectEraserTool(){
       boardState.tool = boardState.eraserMode === "pixel" ? "pixel-eraser" : "stroke-eraser";
-      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
+      tbq.all(".tool-btn-v").forEach(function(x){
         if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
       });
       if(btnEraser) btnEraser.classList.add("active");
@@ -10630,23 +10640,23 @@
       syncObjInteractive();
     }
     if(btnEraser) btnEraser.onclick = function(){ selectEraserTool(); };
-    vToolbar.querySelectorAll(".eraser-mode-opt").forEach(function(opt){
+    tbq.all(".eraser-mode-opt").forEach(function(opt){
       opt.onclick = function(e){
         e.stopPropagation();
         boardState.eraserMode = opt.dataset.eraserMode;
-        vToolbar.querySelectorAll(".eraser-mode-opt").forEach(function(x){ x.classList.remove("active"); });
+        tbq.all(".eraser-mode-opt").forEach(function(x){ x.classList.remove("active"); });
         opt.classList.add("active");
         // 橡皮擦按鈕圖示現在固定用使用者提供的同一張 icon，不管哪個模式都不用再換圖示了
         selectEraserTool();
       };
     });
 
-    setupCanvasFullscreen(container, vToolbar.querySelector("#btn-canvas-fs"), fitCanvasToViewport);
+    setupCanvasFullscreen(container, tbq.one("#btn-canvas-fs"), fitCanvasToViewport);
 
     // 簡報上一頁／下一頁：只在同一個大題（同一份簡報）內移動，不會跳到別的大題，全螢幕、非全螢幕
     // 都能用——這樣老師全螢幕播簡報＋畫記的時候，翻頁不用先退出全螢幕。
-    var btnSlidePrev = vToolbar.querySelector("#btn-slide-prev");
-    var btnSlideNext = vToolbar.querySelector("#btn-slide-next");
+    var btnSlidePrev = tbq.one("#btn-slide-prev");
+    var btnSlideNext = tbq.one("#btn-slide-next");
 
     // 2026-09-30 逐步出現：老師端的 ▶／◀ 先處理「這一頁還沒出現的步驟」，這一頁的步驟都出現完了才翻到下一頁
     // （跟 PPT 一樣）；◀ 反過來，步驟退到 0 之後才回上一頁，而且回到上一頁時是「全部都出現」的狀態。
@@ -10686,24 +10696,24 @@
       var last = slideSiblingIds.length - 1;
       if(btnSlidePrev) btnSlidePrev.disabled = isStudent ? slideIndex <= 0 : !(cur > 0 || slideIndex > 0);
       if(btnSlideNext) btnSlideNext.disabled = isStudent ? slideIndex >= last : !(cur < mx || slideIndex < last);
-      var counterEl = vToolbar.querySelector(".slide-nav-counter");
+      var counterEl = tbq.one(".slide-nav-counter");
       if(counterEl){
         var txt = isMultiSlideDeck ? (slideIndex + 1) + " / " + slideSiblingIds.length : "";
         if(!isStudent && mx > 0) txt += (txt ? " · " : "") + "步驟 " + Math.min(cur, mx) + "/" + mx;
         counterEl.textContent = txt;
       }
     }
-    vToolbar.querySelectorAll(".trans-opt").forEach(function(b){
+    tbq.all(".trans-opt").forEach(function(b){
       b.onclick = function(e){
         e.stopPropagation();
         var secsT = getSections(); var st = slideSecInfo && secsT[slideSecInfo.secId];
         if(!st) return;
         st.transition = b.dataset.trans;
-        vToolbar.querySelectorAll(".trans-opt").forEach(function(x){ x.classList.toggle("active", x === b); });
+        tbq.all(".trans-opt").forEach(function(x){ x.classList.toggle("active", x === b); });
         writeSections(secsT);
       };
     });
-    var btnAddYt = vToolbar.querySelector("#btn-add-youtube"), btnAddAudio = vToolbar.querySelector("#btn-add-audio");
+    var btnAddYt = tbq.one("#btn-add-youtube"), btnAddAudio = tbq.one("#btn-add-audio");
     if(btnAddYt) btnAddYt.onclick = function(e){ e.stopPropagation(); promptYouTube(); };
     if(btnAddAudio) btnAddAudio.onclick = function(e){ e.stopPropagation(); pickAudioFile(); };
     if(btnSlidePrev) btnSlidePrev.onclick = slideStepPrev;
@@ -10732,17 +10742,17 @@
       textLayer.querySelectorAll(".movable-text.active, .image-proxy.active, .shape-proxy.active").forEach(function(d){ d.classList.remove("active"); });
     }
     function syncObjInteractive(){
-      textLayer.classList.toggle("objs-interactive", !deckStudent && (boardState.tool === "stroke-eraser" || boardState.tool === "shape" || (boardState.tool === "text" && (isStudent || simpleBoard))));
+      textLayer.classList.toggle("objs-interactive", !deckStudent && !presentLock() && (boardState.tool === "stroke-eraser" || boardState.tool === "shape" || (boardState.tool === "text" && (isStudent || simpleBoard))));
     }
     syncObjInteractive();
     function activateTextToolQuietly(){
       // 貼上物件後自動切到「文字」工具，這樣馬上就能拖、縮放、選取（不走 maybeAskPhoneticModeThenRun，不要跳詢問視窗）
       if(boardState.tool === "text"){ syncObjInteractive(); return; }
       boardState.tool = "text";
-      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){
+      tbq.all(".tool-btn-v").forEach(function(x){
         if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active");
       });
-      var tb = vToolbar.querySelector('button[data-tool="text"]'); if(tb) tb.classList.add("active");
+      var tb = tbq.one('button[data-tool="text"]'); if(tb) tb.classList.add("active");
       canvas.style.cursor = toolCursor();
       syncObjInteractive();
     }
@@ -10821,7 +10831,7 @@
       selectImageObj(obj.id);
     }
     function pasteImageFiles(files){
-      if(deckStudent) return;
+      if(deckStudent || presentLock()) return;
       files.forEach(function(f){
         downscaleImageFile(f, function(res){
           if(!res){ alert("這張圖片讀不進來（格式不支援或檔案壞掉）。\nCouldn't read this image."); return; }
@@ -10831,7 +10841,7 @@
       });
     }
     function pasteInternalObj(){
-      if(deckStudent) return;
+      if(deckStudent || presentLock()) return;
       if(!objClipboard) return;
       var off = (pasteOffsetN++ % 6 + 1) * 3;
       var copy = JSON.parse(JSON.stringify(objClipboard.data));
@@ -10851,7 +10861,7 @@
       }
     }
     function pasteTextBox(txt){
-      if(deckStudent) return;
+      if(deckStudent || presentLock()) return;
       var t = {
         id: uid("t"), ph: newTextPh(), text: txt.replace(/\r\n?/g, "\n").trim(), x: 50, y: 50,
         color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: 0,
@@ -10991,7 +11001,7 @@
       function outside(ev){
         var tg = ev.target;
         if(div.contains(tg)) return;
-        if(tg.closest && tg.closest(".draw-toolbar-vertical, .draw-toolbar-top, .color-popover")) return; // 按工具列（字級／顏色／對齊…）不結束編輯
+        if(tg.closest && tg.closest(".draw-toolbar-vertical, .draw-toolbar-top, .color-popover, .select-bar")) return; // 按工具列（字級／顏色／對齊…）不結束編輯
         finish(true);
       }
       function onKey(ev){
@@ -11050,6 +11060,38 @@
           var cr = null;
           if(document.caretRangeFromPoint) cr = document.caretRangeFromPoint(pt.x, pt.y);
           else if(document.caretPositionFromPoint){ var cp = document.caretPositionFromPoint(pt.x, pt.y); if(cp){ cr = document.createRange(); cr.setStart(cp.offsetNode, cp.offset); cr.collapse(true); } }
+          function caretAt(x, y){
+            var c2 = null;
+            if(document.caretRangeFromPoint) c2 = document.caretRangeFromPoint(x, y);
+            else if(document.caretPositionFromPoint){ var cp2 = document.caretPositionFromPoint(x, y); if(cp2){ c2 = document.createRange(); c2.setStart(cp2.offsetNode, cp2.offset); c2.collapse(true); } }
+            return (c2 && content.contains(c2.startContainer)) ? c2 : null;
+          }
+          // 文字層在「文字」工具下 pointer-events:none，caretRangeFromPoint 點不到字——改成逐字量位置，找最近的那一個字縫
+          function caretByGeometry(x, y){
+            var best = null, bestD = Infinity;
+            var walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, { acceptNode: function(n){ return (n.parentNode && n.parentNode.closest && n.parentNode.closest("rt")) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; } });
+            var n;
+            while((n = walker.nextNode())){
+              for(var i = 0; i < n.length; i++){
+                var r1 = document.createRange(); r1.setStart(n, i); r1.setEnd(n, i + 1);
+                var rc = r1.getBoundingClientRect(); if(!rc.width && !rc.height) continue;
+                var dy = (y < rc.top) ? rc.top - y : (y > rc.bottom ? y - rc.bottom : 0);
+                var after = x > rc.left + rc.width / 2;
+                var dx = (x >= rc.left && x <= rc.right) ? 0 : Math.min(Math.abs(x - rc.left), Math.abs(x - rc.right));
+                var d = dy * 1000 + dx; // 先比行（垂直），再比水平距離
+                if(d < bestD){ bestD = d; best = { n: n, off: after ? i + 1 : i }; }
+              }
+            }
+            if(!best) return null;
+            var c3 = document.createRange(); c3.setStart(best.n, best.off); c3.collapse(true); return c3;
+          }
+          var cg = caretByGeometry(pt.x, pt.y);
+          if(cg) cr = cg;
+          if(!(cr && content.contains(cr.startContainer))){
+            // 點到的位置剛好落在文字框的空白邊緣（不在字上）：把座標夾進文字範圍內再找一次，游標就會停在最靠近的字旁邊
+            var cb = content.getBoundingClientRect();
+            cr = caretAt(Math.max(cb.left + 1, Math.min(cb.right - 1, pt.x)), Math.max(cb.top + 1, Math.min(cb.bottom - 1, pt.y)));
+          }
           if(cr && content.contains(cr.startContainer)) rg = cr;
         }
         sl.removeAllRanges(); sl.addRange(rg);
@@ -11074,12 +11116,12 @@
     // 對齊（靠左／置中／靠右，作用在多行文字每一行之間）與清單（項目符號／編號，每一行一個）。
     // 有選取的文字方塊就改那一個，同時記成之後新打的字的預設；再按一次已啟用的清單按鈕＝取消清單。
     function syncTextFmtUi(a, l){
-      vToolbar.querySelectorAll(".text-fmt-btn").forEach(function(b){
+      tbq.all(".text-fmt-btn").forEach(function(b){
         if(b.dataset.align) b.classList.toggle("active", b.dataset.align === a);
         if(b.dataset.list) b.classList.toggle("active", b.dataset.list === l);
       });
     }
-    vToolbar.querySelectorAll(".text-fmt-btn").forEach(function(b){
+    tbq.all(".text-fmt-btn").forEach(function(b){
       b.onclick = function(){
         var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
         var curAlign = selObj ? (selObj.align || "left") : boardState.align;
@@ -11098,7 +11140,7 @@
     });
 
     // 出現時機（第幾次點擊出現）：可以自己輸入也可以下拉選。有選取的文字方塊就改那一個，否則改成之後新打的字的預設值。
-    var stepInputEl = vToolbar.querySelector(".text-step-input");
+    var stepInputEl = tbq.one(".text-step-input");
     if(stepInputEl){
       bindSizeCombo(stepInputEl.closest(".size-combo"), function(n){
         boardState.step = n;
@@ -11137,13 +11179,13 @@
       return o ? { o: o, key: "images" } : null;
     }
     function syncAnimUi(){
-      var tg = selectedAnimTarget(), se = vToolbar.querySelector(".text-anim-select"), de = vToolbar.querySelector(".text-anim-delay");
+      var tg = selectedAnimTarget(), se = tbq.one(".text-anim-select"), de = tbq.one(".text-anim-delay");
       if(se) se.value = (tg && tg.o.anim) || "none"; if(de) de.value = String((tg && tg.o.animDelay) || 0);
     }
     // 字型（加不加注音）：有選取文字＝只改選取的那一段；否則改整個文字方塊；都沒選＝之後新打的字的預設
     function phTextObj(){ var id = (inPlaceEdit && inPlaceEdit.textId) || activeSelectedTextId; return id ? texts.find(function(x){ return x.id === id; }) : null; }
     function newTextPh(){ return boardState.phFont || ((currentPhoneticMode === "pinyin" || currentPhoneticMode === "zhuyin") ? currentPhoneticMode : "off"); }
-    var fontSel = vToolbar.querySelector(".text-font-select");
+    var fontSel = tbq.one(".text-font-select");
     function curFontVal(){
       var t = phTextObj(); if(!t) return newTextPh();
       var rg = inPlaceEdit ? (inPlaceEdit.getRange() || editSel) : null;
@@ -11160,11 +11202,11 @@
       };
       vToolbar.addEventListener("pointerover", function(){ fontSel.value = curFontVal(); });
     }
-    var boxAutoBtn = vToolbar.querySelector(".text-box-auto");
+    var boxAutoBtn = tbq.one(".text-box-auto");
     if(boxAutoBtn) boxAutoBtn.onclick = function(e){ e.stopPropagation(); var t = phTextObj(); if(!t){ alert("請先選取一個文字方塊。\nSelect a text box first."); return; } snapshotForUndo(); delete t.w; delete t.h; writeProgress(q.id, { texts: texts }); renderTexts(); };
-    var spanResetBtn = vToolbar.querySelector(".text-span-reset"); if(spanResetBtn){ spanResetBtn.addEventListener("mousedown", function(e){ e.preventDefault(); }); spanResetBtn.onclick = function(e){ e.stopPropagation(); clearSpansFromUi(); }; }
-    var textLinkBtn = vToolbar.querySelector(".text-link-btn"); if(textLinkBtn) textLinkBtn.onclick = function(e){ e.stopPropagation(); openLinkDialog(); };
-    var animSel = vToolbar.querySelector(".text-anim-select"), animDel = vToolbar.querySelector(".text-anim-delay"), animPrev = vToolbar.querySelector(".text-anim-preview");
+    var spanResetBtn = tbq.one(".text-span-reset"); if(spanResetBtn){ spanResetBtn.addEventListener("mousedown", function(e){ e.preventDefault(); }); spanResetBtn.onclick = function(e){ e.stopPropagation(); clearSpansFromUi(); }; }
+    var textLinkBtn = tbq.one(".text-link-btn"); if(textLinkBtn) textLinkBtn.onclick = function(e){ e.stopPropagation(); openLinkDialog(); };
+    var animSel = tbq.one(".text-anim-select"), animDel = tbq.one(".text-anim-delay"), animPrev = tbq.one(".text-anim-preview");
     function setAnimProps(){
       var tg = selectedAnimTarget(); if(!tg){ alert("請先點選一個文字方塊、圖片或圖案，再設定動畫。\nSelect an object first."); syncAnimUi(); return; }
       snapshotForUndo();
@@ -11587,7 +11629,7 @@
     }
 
     // 畫筆／打字兩個顏色面板各有一份「黑/白」色點，兩邊都要一起依主題更新，不能只更新第一個
-    var darkColorDots = vToolbar.querySelectorAll(".dark-color-dot");
+    var darkColorDots = tbq.all(".dark-color-dot");
     if(darkColorDots.length){
       if(currentBgMode === "dark"){
         if(boardState.color === "#2A333C") boardState.color = "#FFFFFF";
@@ -11842,9 +11884,9 @@
           textLayer.querySelectorAll(".image-proxy.active").forEach(function(d){ d.classList.remove("active"); });
           div.classList.add("active");
           if(fontSelect) fontSelect.value = String(t.fontSize || 36);
-          var boldBtnSync = vToolbar.querySelector(".text-bold-btn");
+          var boldBtnSync = tbq.one(".text-bold-btn");
           if(boldBtnSync) boldBtnSync.classList.toggle("active", isTextBold(t)); // 選到哪個文字方塊，B 就顯示那個的狀態
-          var stepInputSync = vToolbar.querySelector(".text-step-input");
+          var stepInputSync = tbq.one(".text-step-input");
           if(stepInputSync) stepInputSync.value = String(t.step || 0);
           syncTextFmtUi(t.align || "left", t.list || "none");
           if(typeof syncTextBgUi === "function") syncTextBgUi(t);
@@ -11896,7 +11938,7 @@
       textLayer.querySelectorAll(".movable-text.active").forEach(function(d){ d.classList.remove("active"); });
       textLayer.querySelectorAll(".image-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.imgId === id); });
       var im = images.find(function(x){ return x.id === id; });
-      var stepInputSync2 = vToolbar.querySelector(".text-step-input");
+      var stepInputSync2 = tbq.one(".text-step-input");
       if(stepInputSync2 && im) stepInputSync2.value = String(im.step || 0);
     }
 
@@ -12249,13 +12291,13 @@
       textLayer.querySelectorAll(".movable-text.active, .image-proxy.active").forEach(function(d){ d.classList.remove("active"); });
       textLayer.querySelectorAll(".shape-proxy").forEach(function(d){ d.classList.toggle("active", d.dataset.shapeId === id); });
       var sh = shapes.find(function(x){ return x.id === id; });
-      var st = vToolbar.querySelector(".text-step-input");
+      var st = tbq.one(".text-step-input");
       if(st && sh) st.value = String(sh.step || 0);
       if(sh){
-        var osl = vToolbar.querySelector("#shape-opacity-slider"), ovl = vToolbar.querySelector("#shape-opacity-value");
+        var osl = tbq.one("#shape-opacity-slider"), ovl = tbq.one("#shape-opacity-value");
         var opPct = Math.round(((sh.op === undefined || sh.op === null) ? 1 : sh.op) * 100);
         if(osl) osl.value = String(opPct); if(ovl) ovl.textContent = opPct + "%";
-        var fb = vToolbar.querySelector(".shape-fill-btn"); if(fb) fb.classList.toggle("active", !!sh.fill);
+        var fb = tbq.one(".shape-fill-btn"); if(fb) fb.classList.toggle("active", !!sh.fill);
       }
     }
     // PPT 式 8 個控制點：四邊只拉那一邊（壓扁／拉長），四角同時拉兩邊（圖片四角維持比例；圖形四角自由，按住 Shift 維持比例）
@@ -12515,21 +12557,33 @@
     function switchToTextTool(){
       if(boardState.tool === "text") return;
       boardState.tool = "text";
-      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){ if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active"); });
-      var tb0 = vToolbar.querySelector('button[data-tool="text"]'); if(tb0) tb0.classList.add("active");
+      tbq.all(".tool-btn-v").forEach(function(x){ if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active"); });
+      var tb0 = tbq.one('button[data-tool="text"]'); if(tb0) tb0.classList.add("active");
       canvas.style.cursor = toolCursor(); selSet = []; clearObjSelection(); syncObjInteractive(); renderSelection();
     }
+    // 放映開始／結束：切換鎖定狀態（清掉選取、離開「選取」工具）
+    function applyPresentLockState(){
+      var on = presentLock();
+      container.classList.toggle("present-lock", on);
+      if(on){
+        if(inPlaceEdit) inPlaceEdit.finish(true);
+        selSet = []; tblSel = null; clearObjSelection(); selectLayer.innerHTML = "";
+        if(boardState.tool === "select" || boardState.tool === "shape"){ var pb0 = tbq.one('button[data-tool="pen"]'); if(pb0) pb0.click(); }
+      }
+      syncObjInteractive();
+    }
+    new MutationObserver(applyPresentLockState).observe(container, { attributes: true, attributeFilter: ["class"] });
     function switchToSelectTool(){
       if(boardState.tool === "select") return;
       boardState.tool = "select";
-      vToolbar.querySelectorAll(".tool-btn-v").forEach(function(x){ if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active"); });
-      var sb = vToolbar.querySelector('button[data-tool="select"]'); if(sb) sb.classList.add("active");
+      tbq.all(".tool-btn-v").forEach(function(x){ if(NON_TOOL_BTN_IDS.indexOf(x.id) === -1) x.classList.remove("active"); });
+      var sb = tbq.one('button[data-tool="select"]'); if(sb) sb.classList.add("active");
       canvas.style.cursor = toolCursor(); clearObjSelection(); syncObjInteractive();
     }
     canvas.onpointerdown = function(e){
       if(!canInteract()) return;
       if(e.pointerType === "mouse" && e.button === 2){
-        if(deckStudent || simpleBoard) return;
+        if(deckStudent || simpleBoard || presentLock()) return;
         e.preventDefault(); try{ canvas.setPointerCapture(e.pointerId); }catch(er){}
         switchToSelectTool(); startSelectInteraction(e, getPos(e));
         return;
@@ -12569,7 +12623,8 @@
         return;
       }
 
-      if(boardState.tool === "text" && !isStudent && !simpleBoard){ // 文字工具下點到框框：馬上變成選取（可拖曳、調整、Ctrl／Shift 加選）
+      if(presentLock() && boardState.tool === "select"){ return; }
+      if(boardState.tool === "text" && !isStudent && !simpleBoard && !presentLock()){ // 文字工具下點到框框：馬上變成選取（可拖曳、調整、Ctrl／Shift 加選）
         var hitT = hitTestItem(p);
         if(hitT && hitT.k !== "stroke"){ selectFromText = true; switchToSelectTool(); startSelectInteraction(e, p); return; }
       }
@@ -12745,7 +12800,7 @@
 
     // 字級：可以直接輸入數字，也可以從 ▾ 清單選（bindSizeCombo 會先夾在 8~200 再呼叫這裡）。
     // fontSelect 仍然是那個輸入框本身，下面拖曳縮放／選取文字方塊時用 fontSelect.value 同步顯示的舊程式碼不用改。
-    var fontSelect = vToolbar.querySelector(".board-font-select");
+    var fontSelect = tbq.one(".board-font-select");
     if(fontSelect){
       bindSizeCombo(fontSelect.closest(".size-combo"), function(n){
         if(applySpanFromUi("fs", n)) return;
@@ -12764,7 +12819,7 @@
     }
 
     // 行距：有選取的文字方塊就改那一個，同時記成之後新打的字的預設
-    var lhInputEl = vToolbar.querySelector(".text-lh-input");
+    var lhInputEl = tbq.one(".text-lh-input");
     if(lhInputEl){
       bindSizeCombo(lhInputEl.closest(".size-combo"), function(n){
         boardState.lineH = n / 100;
@@ -12778,7 +12833,7 @@
       });
     }
     // 文字框底色（預設不加）：勾選＝加底色，顏色與透明度可調。選取文字方塊時改那一個，同時記成之後新打的字的預設。
-    var bgOnEl = vToolbar.querySelector(".text-bg-on"), bgColorEl = vToolbar.querySelector(".text-bg-color"), bgOpEl = vToolbar.querySelector(".text-bg-op"), bgOpvEl = vToolbar.querySelector(".text-bg-opv");
+    var bgOnEl = tbq.one(".text-bg-on"), bgColorEl = tbq.one(".text-bg-color"), bgOpEl = tbq.one(".text-bg-op"), bgOpvEl = tbq.one(".text-bg-opv");
     function selectedTextObj(){ return activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null; }
     function syncTextBgUi(t){
       var on = t ? !!t.bgOn : boardState.textBgOn, col = t ? (t.bgColor || boardState.textBgColor) : boardState.textBgColor, op = t ? (t.bgOp == null ? 1 : t.bgOp) : boardState.textBgOp;
@@ -12804,7 +12859,7 @@
     if(bgOpEl){ bgOpEl.oninput = function(){ if(bgOnEl && !bgOnEl.checked){ bgOnEl.checked = true; } applyTextBgChange(false); }; }
 
     // 加粗：按下切換 boardState.bold（之後新打的字套用）；如果目前有選取的文字方塊，也同步改那一個。
-    var boldBtn = vToolbar.querySelector(".text-bold-btn");
+    var boldBtn = tbq.one(".text-bold-btn");
     if(boldBtn){
       boldBtn.onclick = function(){
         var selObj = activeSelectedTextId ? texts.find(function(item){ return item.id === activeSelectedTextId; }) : null;
@@ -12827,11 +12882,11 @@
     // 用橫向拉桿即時調整（不用再點固定的細/中/粗選項），拖動當下就直接更新 boardState，
     // 下一筆畫下去馬上套用，跟橡皮擦共用同一個 boardState.size（維持原本的行為）。
     // 2026-09-30：粗細改成「可以自己輸入、也可以從 ▾ 清單選」（1~60），預設 2。
-    var penSizeInput = vToolbar.querySelector(".pen-size-input");
+    var penSizeInput = tbq.one(".pen-size-input");
     if(penSizeInput){
       bindSizeCombo(penSizeInput.closest(".size-combo"), function(n){ boardState.size = n; });
     }
-    var shapeSizeInput = vToolbar.querySelector(".shape-size-input");
+    var shapeSizeInput = tbq.one(".shape-size-input");
     function selectedShapeObj(){ return activeSelectedShapeId ? shapes.find(function(x){ return x.id === activeSelectedShapeId; }) : null; }
     if(shapeSizeInput){
       bindSizeCombo(shapeSizeInput.closest(".size-combo"), function(n){
@@ -12839,15 +12894,15 @@
         var so = selectedShapeObj(); if(so){ so.sw = n; writeProgress(q.id, { shapes: shapes }); renderShapeSvg(); }
       });
     }
-    vToolbar.querySelectorAll(".shape-type-btn").forEach(function(b){
+    tbq.all(".shape-type-btn").forEach(function(b){
       b.onclick = function(e){
         e.stopPropagation();
         boardState.shapeType = b.dataset.shape;
-        vToolbar.querySelectorAll(".shape-type-btn").forEach(function(x){ x.classList.toggle("active", x === b); });
-        var tb = vToolbar.querySelector('button[data-tool="shape"]'); if(tb && boardState.tool !== "shape") tb.click();
+        tbq.all(".shape-type-btn").forEach(function(x){ x.classList.toggle("active", x === b); });
+        var tb = tbq.one('button[data-tool="shape"]'); if(tb && boardState.tool !== "shape") tb.click();
       };
     });
-    var shapeOpSlider = vToolbar.querySelector("#shape-opacity-slider"), shapeOpVal = vToolbar.querySelector("#shape-opacity-value");
+    var shapeOpSlider = tbq.one("#shape-opacity-slider"), shapeOpVal = tbq.one("#shape-opacity-value");
     if(shapeOpSlider){
       shapeOpSlider.oninput = function(){
         var v = Number(shapeOpSlider.value) / 100;
@@ -13045,9 +13100,9 @@
     var activeFromSel = false;
     function syncTextUiFromObj(t){ // 選到哪個文字方塊，工具列上的字級、粗體、對齊、行距、底色、動畫…就顯示那個的設定
       if(fontSelect && document.activeElement !== fontSelect) fontSelect.value = String(t.fontSize || 36);
-      var bb = vToolbar.querySelector(".text-bold-btn"); if(bb) bb.classList.toggle("active", isTextBold(t));
-      var sti = vToolbar.querySelector(".text-step-input"); if(sti) sti.value = String(t.step || 0);
-      var fsx = vToolbar.querySelector(".text-font-select"); if(fsx && typeof curFontVal === "function") fsx.value = curFontVal();
+      var bb = tbq.one(".text-bold-btn"); if(bb) bb.classList.toggle("active", isTextBold(t));
+      var sti = tbq.one(".text-step-input"); if(sti) sti.value = String(t.step || 0);
+      var fsx = tbq.one(".text-font-select"); if(fsx && typeof curFontVal === "function") fsx.value = curFontVal();
       if(typeof syncTextFmtUi === "function") syncTextFmtUi(t.align || "left", t.list || "none");
       if(typeof syncTextBgUi === "function") syncTextBgUi(t);
       if(lhInputEl) lhInputEl.value = String(Math.round((t.lh || 1) * 100));
@@ -13067,6 +13122,7 @@
     }
     function renderSelection(){
       selectLayer.innerHTML = "";
+      if(presentLock()){ selSet = []; tblSel = null; return; }
       syncActiveFromSelection();
       if(!selSet.length){ tblSel = null; return; }
       if(!(selSet.length === 1 && selSet[0].k === "table")) tblSel = null;
@@ -13089,15 +13145,66 @@
       bar.innerHTML = '<span class="sb-count">已選 ' + items.length + ' 個</span>' +
         (items.length >= 2 && !oneWholeGroup ? '<button type="button" data-act="group" title="組成群組（Ctrl/⌘+G）：之後點一下就整組一起選取、搬動">🔗 組成群組</button>' : '') +
         (inGroup ? '<button type="button" data-act="ungroup" title="解散群組（Ctrl/⌘+Shift+G）">解散群組</button>' : '') +
-        '<button type="button" data-act="copy" title="複製（Ctrl/⌘+C）；貼上 Ctrl/⌘+V、重複製作 Ctrl/⌘+D">⧉ 複製</button>' +
-        '<button type="button" data-act="dup" title="重複製作（Ctrl/⌘+D）">重複製作</button>' +
         (items.length === 1 && items[0].k !== "stroke" ? '<button type="button" data-act="brush" title="複製格式：複製這個物件的外觀，再點別的物件套用（連按兩下上方「複製格式」鈕＝連續套用）">🖌 複製格式</button>' : '') +
         (items.some(function(x){ return x.k !== "stroke"; }) ? '<button type="button" data-act="link" title="超連結（Ctrl/⌘+K）：跳到投影片或開啟網址">🔗 連結</button>' : '') +
         (items.some(function(x){ return x.k !== "stroke" && x.k !== "table"; }) ? '<button type="button" data-act="fmt" title="物件格式：框線、陰影、圓角、圖片裁剪／去背、圖案漸層">🎨 格式</button>' : '') +
-        '<button type="button" data-act="delete" title="刪除選取的東西（Delete）">🗑 刪除</button>' +
         (selUnits().length >= 2 ? '<span class="sb-sep"></span>' +
           [["l","⇤","靠左對齊"],["c","⇔","水平置中"],["r","⇥","靠右對齊"],["t","⤒","靠上對齊"],["m","⇕","垂直置中"],["b","⤓","靠下對齊"]].map(function(a){ return '<button type="button" class="sb-al" data-act="al-' + a[0] + '" title="' + a[2] + '">' + a[1] + '</button>'; }).join("") +
           (selUnits().length >= 3 ? '<button type="button" class="sb-al" data-act="al-dh" title="水平均分">⋯↔</button><button type="button" class="sb-al" data-act="al-dv" title="垂直均分">⋯↕</button>' : '') : '');
+      // 單選一個文字方塊：把字型大小／粗體／注音／段落／顏色直接放在這條浮動列上（實際動作交給功能區裡同一組控制項）
+      if(items.length === 1 && items[0].k === "text"){
+        var tObj = texts.find(function(x){ return x.id === items[0].id; });
+        var eFont = tbq.one(".text-font-select"), eSize = tbq.one(".board-font-select"), eBold = tbq.one(".text-bold-btn");
+        if(tObj){
+          var tc = document.createElement("span"); tc.className = "sb-text";
+          tc.style.cssText = "display:inline-flex;align-items:center;gap:5px;";
+          var sep0 = document.createElement("span"); sep0.className = "sb-sep"; tc.appendChild(sep0);
+          if(eFont){
+            var fsb = document.createElement("select"); fsb.title = "字型：一般／拼音／注音";
+            fsb.style.cssText = "font-size:12px;padding:3px 4px;border-radius:7px;border:1.5px solid rgba(28,33,30,.2);max-width:120px;";
+            Array.prototype.forEach.call(eFont.options, function(o){ var op = document.createElement("option"); op.value = o.value; op.textContent = o.textContent.replace(/（.*）/, ""); fsb.appendChild(op); });
+            fsb.value = curFontVal();
+            fsb.onchange = function(){ eFont.value = fsb.value; eFont.dispatchEvent(new Event("change", { bubbles: true })); if(eFont.onchange) { /* onchange 屬性已由 dispatchEvent 觸發 */ } };
+            fsb.addEventListener("keydown", function(ev){ ev.stopPropagation(); });
+            tc.appendChild(fsb);
+          }
+          if(eSize){
+            var szb = document.createElement("input"); szb.type = "number"; szb.min = "8"; szb.max = "200"; szb.value = String(tObj.fontSize || boardState.fontSize || 36); szb.title = "字型大小";
+            szb.style.cssText = "width:54px;font-size:12px;padding:3px 4px;border-radius:7px;border:1.5px solid rgba(28,33,30,.2);";
+            szb.onchange = function(){ eSize.value = szb.value; eSize.dispatchEvent(new Event("change", { bubbles: true })); };
+            szb.addEventListener("keydown", function(ev){ ev.stopPropagation(); if(ev.key === "Enter"){ ev.preventDefault(); szb.blur(); } });
+            tc.appendChild(szb);
+          }
+          if(eBold){
+            var bb2 = document.createElement("button"); bb2.type = "button"; bb2.innerHTML = "<b>B</b>"; bb2.title = "粗體";
+            if(isTextBold(tObj)) bb2.style.cssText = "background:var(--seal);color:#fff;border-color:var(--seal);";
+            bb2.onclick = function(ev){ ev.stopPropagation(); eBold.click(); };
+            tc.appendChild(bb2);
+          }
+          [["left","⇤","靠左"],["center","⇔","置中"],["right","⇥","靠右"]].forEach(function(a){
+            var eb = tbq.one('.text-fmt-btn[data-align="' + a[0] + '"]'); if(!eb) return;
+            var ab = document.createElement("button"); ab.type = "button"; ab.className = "sb-al"; ab.textContent = a[1]; ab.title = "段落" + a[2];
+            if((tObj.align || "left") === a[0]) ab.style.cssText = "background:var(--seal);color:#fff;border-color:var(--seal);";
+            ab.onclick = function(ev){ ev.stopPropagation(); eb.click(); };
+            tc.appendChild(ab);
+          });
+          var sep1 = document.createElement("span"); sep1.className = "sb-sep"; tc.appendChild(sep1);
+          ["#B23B32", "#2A333C", "#1E88E5", "#4C7A5E", "#FB8C00"].forEach(function(col){
+            var d = document.createElement("span"); d.title = "顏色";
+            d.style.cssText = "width:18px;height:18px;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1.5px rgba(28,33,30,.3);background:" + col + ";";
+            d.onclick = function(ev){ ev.stopPropagation(); var ed = tbq.one('.color-dot[data-color="' + col + '"]') || tbq.one(".color-dot.dark-color-dot"); if(ed) ed.click(); };
+            tc.appendChild(d);
+          });
+          var nat = tbq.one(".brush-color-native");
+          if(nat){
+            var ci = document.createElement("input"); ci.type = "color"; ci.title = "自訂顏色"; ci.value = /^#[0-9a-fA-F]{6}$/.test(tObj.color || "") ? tObj.color : "#B23B32";
+            ci.style.cssText = "width:26px;height:22px;padding:0;border:none;background:none;cursor:pointer;";
+            ci.oninput = function(){ nat.value = ci.value; nat.dispatchEvent(new Event("input", { bubbles: true })); };
+            tc.appendChild(ci);
+          }
+          bar.appendChild(tc);
+        }
+      }
       var nearTop = u.t < 9;
       bar.style.left = u.l + "%";
       if(nearTop) bar.style.top = "calc(" + u.b + "% + 6px)"; else bar.style.top = "calc(" + u.t + "% - 38px)";
@@ -13527,7 +13634,7 @@
       back.addEventListener("pointerdown", function(e){ if(e.target === back) back.remove(); });
       document.body.appendChild(back);
     }
-    var tableBtn = vToolbar.querySelector(".shape-table-btn"); if(tableBtn) tableBtn.onclick = function(e){ e.stopPropagation(); openTableDialog(); };
+    var tableBtn = tbq.one(".shape-table-btn"); if(tableBtn) tableBtn.onclick = function(e){ e.stopPropagation(); openTableDialog(); };
 
     // ===== 複製／貼上／重複製作、對齊與均分、智慧參考線 =====
     function selItemObj(it){
@@ -13630,7 +13737,7 @@
         e.preventDefault(); editTextInPlace(selSet[0].id, null, null); return;
       }
       if(mod && (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y")){
-        var ub = vToolbar.querySelector((e.shiftKey || e.key === "y" || e.key === "Y") ? "#btn-redo" : "#btn-undo");
+        var ub = tbq.one((e.shiftKey || e.key === "y" || e.key === "Y") ? "#btn-redo" : "#btn-undo");
         if(ub){ e.preventDefault(); ub.click(); } return;
       }
       if(boardState.tool !== "select") return;
@@ -13738,13 +13845,13 @@
       }
       var show = on === undefined ? layersPanel.style.display === "none" : on;
       layersPanel.style.display = show ? "flex" : "none";
-      var ab = vToolbar.querySelector("#btn-arrange"); if(ab) ab.classList.toggle("active", show);
+      var ab = tbq.one("#btn-arrange"); if(ab) ab.classList.toggle("active", show);
       if(show) renderLayersPanel();
     }
     (function(){
-      var ab = vToolbar.querySelector("#btn-arrange");
+      var ab = tbq.one("#btn-arrange");
       if(ab) ab.addEventListener("click", function(e){ e.stopPropagation(); toggleLayersPanel(); });
-      var ob = vToolbar.querySelector("#btn-open-layers");
+      var ob = tbq.one("#btn-open-layers");
       if(ob) ob.addEventListener("click", function(e){ e.stopPropagation(); toggleLayersPanel(true); });
     })();
 
@@ -13841,13 +13948,13 @@
       }
       var show = on === undefined ? animPanel.style.display === "none" : on;
       animPanel.style.display = show ? "flex" : "none";
-      var ab = vToolbar.querySelector("#btn-anim-pane"); if(ab) ab.classList.toggle("active", show);
+      var ab = tbq.one("#btn-anim-pane"); if(ab) ab.classList.toggle("active", show);
       if(show) renderAnimPanel();
     }
-    (function(){ var ab = vToolbar.querySelector("#btn-anim-pane"); if(ab) ab.addEventListener("click", function(e){ e.stopPropagation(); toggleAnimPanel(); }); })();
+    (function(){ var ab = tbq.one("#btn-anim-pane"); if(ab) ab.addEventListener("click", function(e){ e.stopPropagation(); toggleAnimPanel(); }); })();
 
     // ===== 📐 畫布大小（老師）=====
-    var canvasSizeBtn = vToolbar.querySelector("#btn-canvas-size");
+    var canvasSizeBtn = tbq.one("#btn-canvas-size");
     function setCanvasRatio(r){
       fixedRatio = r > 0 ? clampRatio(r) : 0;
       var nat = cWrap.querySelector(".bg-img-layer");
@@ -13868,7 +13975,7 @@
       gridOverlay.className = "grid-overlay" + (g === 'tian' ? ' grid-tian' : (g === 'jiu' ? ' grid-jiu' : ''));
       gridOverlay.style.display = g === 'none' ? 'none' : 'block';
       positionGridOverlay();
-      vToolbar.querySelectorAll(".grid-btn-v").forEach(function(gb){ gb.classList.toggle("active", gb.dataset.grid === g); });
+      tbq.all(".grid-btn-v").forEach(function(gb){ gb.classList.toggle("active", gb.dataset.grid === g); });
       writeProgress(q.id, { gridType: g });
     }
     // 範本：套用時「新增」文字方塊／圖案到這一頁（不刪掉你已經寫的東西，可以按「復原」），座標是佔頁面的百分比、字級是 640 寬單位
@@ -14017,16 +14124,16 @@
     }
     if(canvasSizeBtn) canvasSizeBtn.addEventListener("click", function(e){ e.stopPropagation(); openSlideSetupDialog(); });
 
-    vToolbar.querySelectorAll(".arrange-opt").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); arrangeSelected(b.dataset.arrange); }; });
-    var shapeFillBtn = vToolbar.querySelector(".shape-fill-btn");
+    tbq.all(".arrange-opt").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); arrangeSelected(b.dataset.arrange); }; });
+    var shapeFillBtn = tbq.one(".shape-fill-btn");
     if(shapeFillBtn) shapeFillBtn.onclick = function(e){
       e.stopPropagation();
       boardState.shapeFill = !boardState.shapeFill;
       shapeFillBtn.classList.toggle("active", boardState.shapeFill);
       var so = selectedShapeObj(); if(so){ so.fill = boardState.shapeFill; writeProgress(q.id, { shapes: shapes }); renderShapeSvg(); }
     };
-    var penOpacitySlider = vToolbar.querySelector("#pen-opacity-slider");
-    var penOpacityValueEl = vToolbar.querySelector("#pen-opacity-value");
+    var penOpacitySlider = tbq.one("#pen-opacity-slider");
+    var penOpacityValueEl = tbq.one("#pen-opacity-value");
     if(penOpacitySlider){
       penOpacitySlider.oninput = function(){
         boardState.opacity = Number(penOpacitySlider.value) / 100;
@@ -14074,14 +14181,14 @@
     function brushCommit(){ writeProgress(q.id, { texts: texts, images: images, shapes: shapes, tables: tables }); renderTexts(); }
     function brushEnd(){
       brush = null; if(brushHint){ brushHint.remove(); brushHint = null; }
-      var bb = vToolbar.querySelector("#btn-format-painter"); if(bb) bb.classList.remove("active");
+      var bb = tbq.one("#btn-format-painter"); if(bb) bb.classList.remove("active");
       canvas.style.cursor = toolCursor(); cWrap.classList.remove("brush-mode");
     }
     function brushStart(sticky){
       var src = brushSource();
       if(!src){ alert("請先選取要複製格式的物件（文字方塊、圖片、圖案，或表格裡的一格），再按「複製格式」。\nSelect an object (or a table cell) first."); return; }
       brush = { fmt: brushCopyFmt(src), sticky: !!sticky };
-      var bb = vToolbar.querySelector("#btn-format-painter"); if(bb) bb.classList.add("active");
+      var bb = tbq.one("#btn-format-painter"); if(bb) bb.classList.add("active");
       cWrap.classList.add("brush-mode");
       if(!brushHint){ brushHint = document.createElement("div"); brushHint.className = "brush-hint"; cWrap.appendChild(brushHint); }
       brushHint.textContent = "🖌 已複製格式：點要套用的物件（可拖曳框選多個；表格可拖曳選多格）。" + (sticky ? "連續套用中，" : "") + "按 Esc 結束";
@@ -14129,7 +14236,7 @@
       if(e.key === "Escape" && brush) brushEnd();
     });
     (function(){
-      var bb = vToolbar.querySelector("#btn-format-painter"); if(!bb) return;
+      var bb = tbq.one("#btn-format-painter"); if(!bb) return;
       bb.addEventListener("click", function(e){
         e.stopPropagation(); var now = Date.now(), dbl = now - brushLastClick < 450; brushLastClick = now;
         if(brush && !dbl){ brushEnd(); return; }
@@ -14139,15 +14246,15 @@
     })();
 
     // ===== 插入功能表 =====
-    var insImgFile = vToolbar.querySelector(".ins-img-file");
-    function insBind(sel, fn){ var el = vToolbar.querySelector(sel); if(el) el.onclick = function(e){ e.stopPropagation(); fn(e); }; }
+    var insImgFile = tbq.one(".ins-img-file");
+    function insBind(sel, fn){ var el = tbq.one(sel); if(el) el.onclick = function(e){ e.stopPropagation(); fn(e); }; }
     insBind(".ins-img", function(){ insImgFile.click(); });
     if(insImgFile) insImgFile.onchange = function(){ var fl = Array.prototype.slice.call(insImgFile.files || []); insImgFile.value = ""; if(fl.length) pasteImageFiles(fl); };
-    insBind(".ins-text", function(){ var tb = vToolbar.querySelector('button[data-tool="text"]'); if(tb) tb.click(); });
-    vToolbar.querySelectorAll(".ins-shape").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); boardState.shapeType = b.dataset.shape; var tb = vToolbar.querySelector('button[data-tool="shape"]'); if(tb) tb.click(); vToolbar.querySelectorAll(".shape-type-btn").forEach(function(x){ if(x.dataset.shape) x.classList.toggle("active", x.dataset.shape === b.dataset.shape); }); }; });
+    insBind(".ins-text", function(){ var tb = tbq.one('button[data-tool="text"]'); if(tb) tb.click(); });
+    tbq.all(".ins-shape").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); boardState.shapeType = b.dataset.shape; var tb = tbq.one('button[data-tool="shape"]'); if(tb) tb.click(); tbq.all(".shape-type-btn").forEach(function(x){ if(x.dataset.shape) x.classList.toggle("active", x.dataset.shape === b.dataset.shape); }); }; });
     insBind(".ins-table", function(){ openTableDialog(); });
-    insBind(".ins-yt", function(){ var b = vToolbar.querySelector("#btn-add-youtube"); if(b) b.click(); });
-    insBind(".ins-audio", function(){ var b = vToolbar.querySelector("#btn-add-audio"); if(b) b.click(); });
+    insBind(".ins-yt", function(){ var b = tbq.one("#btn-add-youtube"); if(b) b.click(); });
+    insBind(".ins-audio", function(){ var b = tbq.one("#btn-add-audio"); if(b) b.click(); });
     insBind(".ins-link", function(){ openLinkDialog(); });
     // ===== 超連結：文字方塊／圖片／圖案／表格 被選取時都能設定「跳到某張投影片」或「開啟網址」 =====
     function linkTargets(){
@@ -14216,7 +14323,7 @@
     var laserOn = false, laserLayer = null;
     function setLaser(on){
       laserOn = on;
-      var lb = vToolbar.querySelector(".pt-laser"); if(lb) lb.classList.toggle("active", on);
+      var lb = tbq.one(".pt-laser"); if(lb) lb.classList.toggle("active", on);
       if(laserLayer){ laserLayer.remove(); laserLayer = null; }
       if(!on) return;
       laserLayer = document.createElement("div"); laserLayer.className = "laser-layer";
@@ -14236,17 +14343,17 @@
     }
     function useHighlighter(){
       setLaser(false);
-      var pb = vToolbar.querySelector('button[data-tool="pen"]'); if(pb) pb.click();
+      var pb = tbq.one('button[data-tool="pen"]'); if(pb) pb.click();
       if(typeof applyBrushColor === "function") applyBrushColor("#FFE23B");
       boardState.size = 16; boardState.opacity = 0.4;
-      var si = vToolbar.querySelector(".pen-size-input"); if(si) si.value = "16";
-      var os = vToolbar.querySelector("#pen-opacity-slider"); if(os){ os.value = "40"; var ov = vToolbar.querySelector("#pen-opacity-value"); if(ov) ov.textContent = "40%"; }
+      var si = tbq.one(".pen-size-input"); if(si) si.value = "16";
+      var os = tbq.one("#pen-opacity-slider"); if(os){ os.value = "40"; var ov = tbq.one("#pen-opacity-value"); if(ov) ov.textContent = "40%"; }
     }
-    var ptLaser = vToolbar.querySelector(".pt-laser"), ptHl = vToolbar.querySelector(".pt-hl"), ptPv = vToolbar.querySelector(".pt-presenter");
+    var ptLaser = tbq.one(".pt-laser"), ptHl = tbq.one(".pt-hl"), ptPv = tbq.one(".pt-presenter");
     if(ptLaser) ptLaser.onclick = function(e){ e.stopPropagation(); setLaser(!laserOn); };
     if(ptHl) ptHl.onclick = function(e){ e.stopPropagation(); useHighlighter(); };
     if(ptPv) ptPv.onclick = function(e){ e.stopPropagation(); openPresenterView(); };
-    var ptTm = vToolbar.querySelector(".pt-timer"), ptAu = vToolbar.querySelector(".pt-auto");
+    var ptTm = tbq.one(".pt-timer"), ptAu = tbq.one(".pt-auto");
     if(ptTm) ptTm.onclick = function(e){ e.stopPropagation(); startCountdownTimer(); };
     if(ptAu) ptAu.onclick = function(e){ e.stopPropagation(); toggleAutoAdvance(ptAu); };
     // 超連結／動作按鈕：放映中（或按住 Ctrl/⌘）輕點有設連結的物件，就跳到指定投影片或開啟網址
@@ -14285,7 +14392,7 @@
     // 選好顏色之後，要同步更新畫筆／文字兩份面板裡的所有 UI：色點的 active 狀態、原生色盤目前
     // 顯示的顏色——不管顏色是從色點、原生色盤、還是滴管挑出來的，統一都走這個函式。
     function applyBrushColor(newColor){
-      if(applySpanFromUi("c", newColor)){ vToolbar.querySelectorAll(".brush-color-native").forEach(function(x){ x.value = newColor; }); return; }
+      if(applySpanFromUi("c", newColor)){ tbq.all(".brush-color-native").forEach(function(x){ x.value = newColor; }); return; }
       boardState.color = newColor;
       if((boardState.tool === "text" || boardState.tool === "select") && !inPlaceEdit && activeSelectedTextId){ // 選取了整個文字方塊：整個方塊換色（局部顏色一併清掉）
         var tc = texts.find(function(x){ return x.id === activeSelectedTextId; });
@@ -14293,27 +14400,27 @@
       }
       var selShapeC = activeSelectedShapeId ? shapes.find(function(x){ return x.id === activeSelectedShapeId; }) : null;
       if(selShapeC && selShapeC.color !== newColor){ selShapeC.color = newColor; writeProgress(q.id, { shapes: shapes }); renderShapeSvg(); }
-      vToolbar.querySelectorAll(".color-dot").forEach(function(x){
+      tbq.all(".color-dot").forEach(function(x){
         x.classList.toggle("active", x.dataset.color === newColor);
       });
-      vToolbar.querySelectorAll(".brush-color-native").forEach(function(x){ x.value = newColor; });
-      vToolbar.querySelectorAll(".native-color-swatch-dot").forEach(function(x){ x.style.background = newColor; });
+      tbq.all(".brush-color-native").forEach(function(x){ x.value = newColor; });
+      tbq.all(".native-color-swatch-dot").forEach(function(x){ x.style.background = newColor; });
     }
 
-    vToolbar.querySelectorAll(".color-dot").forEach(function(d){
+    tbq.all(".color-dot").forEach(function(d){
       d.addEventListener("mousedown", function(e){ if(inPlaceEdit) e.preventDefault(); });
       d.onclick = function(){ applyBrushColor(d.dataset.color); };
     });
 
     // 原生色盤：瀏覽器自己的顏色選擇器（圓盤/滑塊都有），可以選色點之外的任何顏色。
-    vToolbar.querySelectorAll(".brush-color-native").forEach(function(inp){
+    tbq.all(".brush-color-native").forEach(function(inp){
       inp.oninput = function(){ applyBrushColor(inp.value.toUpperCase()); };
     });
 
     // 滴管：用瀏覽器原生 EyeDropper API 從螢幕上任何地方（包括畫面上的其他圖片、甚至瀏覽器
     // 視窗外的其他畫面，依瀏覽器實作而定）吸取顏色——目前只有 Chrome／Edge 這類 Chromium
     // 系瀏覽器支援，iPad／iPhone Safari 還不支援，所以先偵測，不支援就友善提示，不會整個報錯。
-    vToolbar.querySelectorAll(".eyedropper-btn").forEach(function(btn){
+    tbq.all(".eyedropper-btn").forEach(function(btn){
       btn.onclick = function(){
         if(!("EyeDropper" in window)){
           alert("這個瀏覽器不支援滴管吸色功能，請改用電腦版 Chrome 或 Edge 瀏覽器。\nEyedropper isn't supported in this browser yet — please try Chrome or Edge on a computer.");
@@ -14334,8 +14441,8 @@
     // undoStack，修改完再呼叫 refit；上一步／下一步只操作 strokes/texts，不動格線／底圖等版面設定
     // （那些是「畫布設定」不是「內容」，誤刪的痛點主要是內容，範圍刻意縮小、行為才好預期）。
     var undoStack = [], redoStack = [];
-    var btnUndo = vToolbar.querySelector("#btn-undo");
-    var btnRedo = vToolbar.querySelector("#btn-redo");
+    var btnUndo = tbq.one("#btn-undo");
+    var btnRedo = tbq.one("#btn-redo");
     function updateUndoRedoBtns(){
       if(btnUndo){ btnUndo.disabled = !undoStack.length; btnUndo.style.opacity = undoStack.length ? "1" : "0.4"; }
       if(btnRedo){ btnRedo.disabled = !redoStack.length; btnRedo.style.opacity = redoStack.length ? "1" : "0.4"; }
@@ -14367,7 +14474,7 @@
     };
     updateUndoRedoBtns();
 
-    var clearBtn = vToolbar.querySelector("#btn-clear-draw");
+    var clearBtn = tbq.one("#btn-clear-draw");
     if(clearBtn){
       clearBtn.onclick = function(){
         if(deckStudent || (slideSecInfo && slideSecInfo.sec.type === "board")){ // 投影片：只清掉筆跡，文字／圖片／圖案／表格和底圖背景都不會動
@@ -14519,7 +14626,7 @@
       gridOverlay.className = "grid-overlay" + (freshGrid === 'tian' ? ' grid-tian' : (freshGrid === 'jiu' ? ' grid-jiu' : ''));
       gridOverlay.style.display = freshGrid === 'none' ? 'none' : 'block';
       positionGridOverlay();
-      vToolbar.querySelectorAll(".grid-btn-v").forEach(function(gb){
+      tbq.all(".grid-btn-v").forEach(function(gb){
         gb.classList.toggle("active", gb.dataset.grid === freshGrid);
       });
 
@@ -14544,7 +14651,7 @@
           fitCanvasToViewport();
         }
       }
-      var liveBtnRemoveBg = vToolbar.querySelector("#btn-remove-bg");
+      var liveBtnRemoveBg = tbq.one("#btn-remove-bg");
       if(liveBtnRemoveBg) liveBtnRemoveBg.style.display = freshBg ? "flex" : "none";
 
       // 老師示範疊圖：如果錄好的示範被更新或清除了（自己存的，或是同一個房間裡其他裝置回寫的），
