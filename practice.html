@@ -1404,7 +1404,7 @@
   .ribbon .tool-btn-v-wrap .color-popover{ left:0; top:100%; margin:4px 0 0; transform:none; }
   .ribbon .tool-btn-v-wrap:hover .color-popover, .ribbon .tool-btn-v-wrap:focus-within .color-popover{ transform:none; }
   .rb-slot{ display:none; }
-  .board-area.present-lock .text-layer .movable-text:not(.editing), .board-area.present-lock .text-layer .image-proxy, .board-area.present-lock .text-layer .shape-proxy, .board-area.present-lock .table-obj{ pointer-events:none !important; }
+  .board-area.present-lock .text-layer .movable-text:not(.editing):not([data-live]), .board-area.present-lock .text-layer .image-proxy, .board-area.present-lock .text-layer .shape-proxy, .board-area.present-lock .table-obj{ pointer-events:none !important; }
   .tool-btn-v-wrap.open .color-popover{ opacity:1; visibility:visible; pointer-events:auto; transform:translateY(-50%) translateX(0); }
   .ribbon .tool-btn-v-wrap.open .color-popover{ transform:none; }
   .tool-btn-v-wrap.force-closed .color-popover{ opacity:0 !important; visibility:hidden !important; pointer-events:none !important; }
@@ -9302,6 +9302,7 @@
     // 學生在看「投影片」時只能用畫筆、橡皮擦、清空畫布（只清筆跡）；不能動老師放的文字／圖片／圖案／表格，也不能改底圖或背景
     var deckStudent = !!(isStudent && slideSecInfo && slideSecInfo.sec.type === "board");
     // 老師按「放映」＝正式上課：放映前已經做好的文字／圖片／圖案／表格不能被選取、搬動、改字；只能用筆寫字、打字補充筆記、橡皮擦擦筆跡
+    function isLiveItem(it){ if(!it || it.k !== "text") return false; var tt = texts.find(function(x){ return x.id === it.id; }); return !!(tt && tt.live); }
     function presentLock(){ return !isStudent && !!(slideSecInfo && slideSecInfo.sec.type === "board") && container.classList.contains("canvas-fs-active") && !container.classList.contains("fs-edit"); }
     // 小白板：只留筆、文字、橡皮擦、清空、圖案（多媒體放在題目上方，由題目設定，不是浮在畫布上）
     var simpleBoard = !!(slideSecInfo && slideSecInfo.sec.type === "whiteboard");
@@ -11039,6 +11040,7 @@
           } else if(val){
             snapshotForUndo();
             var nt = { id: uid("t"), text: val, ph: newTextPh(), x: newPos.x, y: newPos.y, color: boardState.color, fontSize: boardState.fontSize || 36, bold: !!boardState.bold, step: boardState.step || 0, align: boardState.align || "left", list: boardState.list || "none" };
+            if(presentLock()) nt.live = true; // 放映中新打的筆記字：不在鎖定範圍，可以搬動、改字
             applyTextBgDefaults(nt);
             assignNewZ("text", nt);
             texts.push(nt); writeProgress(q.id, { texts: texts }); lastCreatedTextId = nt.id;
@@ -11047,7 +11049,7 @@
         clearObjSelection();
         renderTexts();
         // Esc／Ctrl+Enter 結束編輯後，這個文字方塊維持「選取」狀態：可以直接按 Delete 刪掉、方向鍵微調、Ctrl+C 複製
-        if(keepSel && t0 && texts.some(function(x){ return x.id === textId; }) && !presentLock()){ selSet = [{ k: "text", id: textId }]; renderSelection(); }
+        if(keepSel && t0 && texts.some(function(x){ return x.id === textId; }) && (!presentLock() || isLiveItem({ k: "text", id: textId }))){ selSet = [{ k: "text", id: textId }]; renderSelection(); }
       }
       inPlaceEdit = { finish: finish, refreshStyle: refreshStyle, textId: textId, contentEl: content, contains: function(n){ return content.contains(n); },
         setHtml: function(h){ content.innerHTML = h; try{ content.focus(); }catch(er){} },
@@ -11792,6 +11794,7 @@
         if(stepHidden && isStudent) return;          // 學生端完全不渲染（DOM 裡也找不到）
         var div = document.createElement("div");
         div.className = "movable-text" + (t.id === activeSelectedTextId ? " active" : "") + (stepHidden ? " step-hidden" : "");
+        if(t.live) div.dataset.live = "1";
         div.style.left = t.x + "%";
         div.style.top = t.y + "%";
         if(t.w){ div.classList.add("boxed"); div.style.width = t.w + "%"; div.style.maxWidth = t.w + "%"; div.style.wordBreak = "break-word"; if(t.h) div.style.minHeight = t.h + "%"; }
@@ -12595,7 +12598,7 @@
       container.classList.toggle("present-lock", on);
       if(on){
         if(inPlaceEdit) inPlaceEdit.finish(true);
-        selSet = []; tblSel = null; clearObjSelection(); selectLayer.innerHTML = "";
+        selSet = selSet.filter(isLiveItem); tblSel = null; clearObjSelection(); selectLayer.innerHTML = ""; renderSelection();
         if(boardState.tool === "select" || boardState.tool === "shape"){ var pb0 = tbq.one('button[data-tool="pen"]'); if(pb0) pb0.click(); }
       }
       syncObjInteractive();
@@ -12652,9 +12655,9 @@
       }
 
       if(presentLock() && boardState.tool === "select"){ return; }
-      if(boardState.tool === "text" && !isStudent && !simpleBoard && !presentLock()){ // 文字工具下點到框框：馬上變成選取（可拖曳、調整、Ctrl／Shift 加選）
+      if(boardState.tool === "text" && !isStudent && !simpleBoard){ // 文字工具下點到框框：馬上變成選取（可拖曳、調整、Ctrl／Shift 加選）
         var hitT = hitTestItem(p);
-        if(hitT && hitT.k !== "stroke"){ selectFromText = true; switchToSelectTool(); startSelectInteraction(e, p); return; }
+        if(hitT && hitT.k !== "stroke" && (!presentLock() || isLiveItem(hitT))){ selectFromText = true; switchToSelectTool(); startSelectInteraction(e, p); return; }
       }
       clearObjSelection(); // 點畫布空白處＝取消選取，文字／圖片的框框消失
       if(boardState.tool === "select"){ startSelectInteraction(e, p); return; }
@@ -13150,7 +13153,7 @@
     }
     function renderSelection(){
       selectLayer.innerHTML = "";
-      if(presentLock()){ selSet = []; tblSel = null; return; }
+      if(presentLock()){ selSet = selSet.filter(isLiveItem); tblSel = null; if(!selSet.length) return; }
       syncActiveFromSelection();
       if(!selSet.length){ tblSel = null; return; }
       if(!(selSet.length === 1 && selSet[0].k === "table")) tblSel = null;
@@ -13253,6 +13256,7 @@
     function startSelectInteraction(e, p){
       var additive = e.shiftKey || e.metaKey || e.ctrlKey;
       var hit = hitTestItem(p);
+      if(presentLock() && !isLiveItem(hit)) return; // 放映中只有新打的筆記字可以選取／搬動
       // 連點兩下文字方塊＝編輯文字（跟 PowerPoint 一樣）
       if(hit && hit.k === "text" && !additive){
         var nowTap = Date.now();
@@ -13277,7 +13281,7 @@
         if(!inSel(hit)) selSet = hitSet;
         renderSelection();
         // 單擊文字方塊（沒有拖動）＝直接進入編輯、游標停在點到的位置；按住拖動＝搬動方塊；Ctrl／Shift 點＝加選
-        if(hit.k === "text" && selSet.length === 1 && selSet[0].k === "text" && !presentLock()){
+        if(hit.k === "text" && selSet.length === 1 && selSet[0].k === "text"){
           var cx1 = e.clientX, cy1 = e.clientY;
           beginMoveSelection(p, function(){ editTextInPlace(hit.id, null, { x: cx1, y: cy1 }); });
         } else beginMoveSelection(p);
