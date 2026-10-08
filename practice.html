@@ -1993,6 +1993,12 @@
       <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;"><input type="checkbox" class="chk-lock-notice-lang" data-lang="en"> English</label>
       <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;"><input type="checkbox" class="chk-lock-notice-lang" data-lang="th"> ภาษาไทย</label>
     </div>
+
+    <hr style="border:none;border-top:1px solid var(--grid-line);margin:20px 0;">
+    <label>💾 備份並盤點全部資料 Backup &amp; Inventory</label>
+    <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 8px;">把你帳號下的測驗庫（資料夾、測驗、簡報）和雲端生詞庫整份下載成一個 JSON 檔，並列出數量。合併成新平台之前先備份一份，以後可以還原。</p>
+    <button type="button" class="btn btn-sm" id="btn-backup-all" style="width:100%; justify-content:center;">💾 下載備份並顯示盤點 Download backup</button>
+    <pre id="backup-summary" style="display:none; white-space:pre-wrap; font-size:12px; background:var(--surface-2); border-radius:10px; padding:10px; margin-top:8px; max-height:220px; overflow:auto; user-select:text;"></pre>
   </div>
   <div class="dialog-foot">
     <button type="button" class="btn btn-primary" id="btn-close-settings">完成 Done</button>
@@ -4780,6 +4786,37 @@
 
   /* ================== 設定彈窗按鈕 ================== */
   var settingsDialog = document.getElementById("settings-dialog");
+  // 備份並盤點：整份測驗庫＋雲端生詞庫下載成 JSON，並在畫面上列出數量（合併新平台前的安全網）
+  var btnBackupAll = document.getElementById("btn-backup-all");
+  if(btnBackupAll) btnBackupAll.onclick = async function(){
+    var sumEl = document.getElementById("backup-summary");
+    btnBackupAll.disabled = true; btnBackupAll.textContent = "⏳ 備份中…";
+    try{
+      var bank = null;
+      if(currentTeacher && window.db){ try{ var snap = await get(ref(db, "teacherVocabBanks/" + currentTeacher.id)); bank = snap.exists() ? snap.val() : null; }catch(e){} }
+      var lib = fsData || { folders: {}, projects: {} };
+      var payload = { app: "mandamy", kind: "full-backup", exportedAt: new Date().toISOString(), teacher: currentTeacher ? currentTeacher.id : "offline", library: lib, vocabBank: bank };
+      var lines = [];
+      var folders = Object.keys(lib.folders || {}), projects = Object.keys(lib.projects || {});
+      lines.push("資料夾 " + folders.length + " 個、測驗 " + projects.length + " 份");
+      projects.forEach(function(pid){
+        var pr = lib.projects[pid], secs = pr.sections || {}, nSlides = 0, nQ = 0, kinds = {};
+        Object.keys(secs).forEach(function(sid){ var sc = secs[sid], n = Object.keys(sc.questions || {}).length; kinds[sc.type] = (kinds[sc.type] || 0) + n; if(sc.type === "board") nSlides += n; else nQ += n; });
+        var fo = pr.folderId && lib.folders[pr.folderId] ? lib.folders[pr.folderId].title + " ／ " : "";
+        lines.push("・" + fo + pr.title + "：大題 " + Object.keys(secs).length + "、投影片 " + nSlides + " 張、題目 " + nQ + " 題");
+      });
+      if(bank && Array.isArray(bank.courseData)){
+        lines.push("雲端生詞庫：" + bank.courseData.length + " 課");
+        bank.courseData.forEach(function(l){ lines.push("・第 " + l.lesson + " 課 " + (l.title || "") + "：生詞 " + (l.vocab || []).length + "、語法 " + (l.grammar || []).length + "、課文 " + (l.texts || []).length); });
+      } else lines.push("雲端生詞庫：沒有資料（或離線模式）");
+      var blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+      a.download = "mandamy-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+      document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      sumEl.textContent = lines.join("\n"); sumEl.style.display = "block";
+    }catch(err){ alert("備份失敗：" + (err && err.message ? err.message : err)); }
+    btnBackupAll.disabled = false; btnBackupAll.textContent = "💾 下載備份並顯示盤點 Download backup";
+  };
   var btnCloseSettings = document.getElementById("btn-close-settings");
   if(btnCloseSettings) btnCloseSettings.onclick = function(){ closeModalDialog(settingsDialog); };
 
