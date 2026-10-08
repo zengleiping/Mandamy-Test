@@ -1376,7 +1376,8 @@
   .rb-tab{ border:none; background:none; padding:7px 13px 6px; font-size:13.5px; font-weight:700; color:var(--ink-soft); cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap; }
   .rb-tab:hover{ color:var(--ink); } .rb-tab.on{ color:var(--seal); border-bottom-color:var(--seal); }
   .rb-panels{ min-height:82px; }
-  .rb-panel{ display:none; padding:6px 8px 4px; align-items:stretch; overflow-x:auto; overflow-y:visible; }
+  .rb-panel{ display:none; padding:6px 8px 4px; align-items:stretch; flex-wrap:wrap; row-gap:6px; overflow:visible; }
+  .draw-toolbar-top.ribbon .color-popover{ position:fixed; z-index:9003; margin:0; }
   .rb-panel.on{ display:flex; }
   .rb-group{ display:flex; flex-direction:column; padding:0 10px; border-right:1px solid rgba(28,33,30,.13); flex:0 0 auto; }
   .rb-group:last-child{ border-right:none; }
@@ -9592,11 +9593,14 @@
     function positionWrapPopover(wrap){
       var pop = wrap.querySelector(".color-popover");
       if(!pop) return;
-      if(container.classList.contains("canvas-fs-active")){
+      if(container.classList.contains("canvas-fs-active") || topBar.contains(wrap)){
         var r = wrap.getBoundingClientRect();
         if(topBar.contains(wrap)){
-          pop.style.left = Math.round(r.left) + "px";
-          pop.style.top = Math.round(r.bottom + 8) + "px";
+          // 功能區的選單一律用「懸浮」（fixed）：不會被功能區的捲動／裁切吃掉，也不會撐出捲軸
+          var pw = pop.offsetWidth || 220;
+          pop.style.left = Math.round(Math.max(8, Math.min(window.innerWidth - pw - 8, r.left))) + "px";
+          pop.style.top = Math.round(r.bottom + 6) + "px";
+          pop.style.maxHeight = Math.max(160, window.innerHeight - r.bottom - 16) + "px";
         } else {
           pop.style.left = Math.round(r.right + 10) + "px";
           pop.style.top = Math.round(r.top + r.height / 2) + "px";
@@ -10994,7 +10998,8 @@
       content.contentEditable = "plaintext-only";
       if(content.contentEditable !== "plaintext-only") content.contentEditable = "true";
       content.spellcheck = false;
-      var done = false;
+      var done = false, outsideOnItem = false, keepSel = false;
+      if(t0) activeSelectedTextId = textId;
       function readValue(){ return String(content.innerText || "").replace(/ /g, " ").replace(/\r\n?/g, "\n").replace(/\n+$/, "").trim(); }
       function refreshStyle(){ try{ content.focus(); }catch(er){} applyEditDivStyle(div, t0 ? (texts.find(function(x){ return x.id === textId; }) || t0) : boardState, getScaleRatio()); }
       applyEditDivStyle(div, t0 || boardState, scale);
@@ -11002,13 +11007,14 @@
         var tg = ev.target;
         if(div.contains(tg)) return;
         if(tg.closest && tg.closest(".draw-toolbar-vertical, .draw-toolbar-top, .color-popover, .select-bar")) return; // 按工具列（字級／顏色／對齊…）不結束編輯
+        try{ var hp = hitTestItem(getPos(ev)); outsideOnItem = !!(hp && hp.k !== "stroke"); }catch(er2){ outsideOnItem = false; }
         finish(true);
       }
       function onKey(ev){
         if(ev.isComposing || ev.keyCode === 229) return;
         var inContent = ev.target === content || content.contains(ev.target);
-        if(ev.key === "Escape"){ ev.preventDefault(); ev.stopPropagation(); finish(true); }
-        else if(ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); ev.stopPropagation(); finish(true); }
+        if(ev.key === "Escape"){ ev.preventDefault(); ev.stopPropagation(); keepSel = true; finish(true); }
+        else if(ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); ev.stopPropagation(); keepSel = true; finish(true); }
         else if(inContent) ev.stopPropagation(); // 打字時不要觸發翻頁／刪除物件等快捷鍵
       }
       function onPaste(ev){
@@ -11022,7 +11028,7 @@
         document.removeEventListener("keydown", onKey, true);
         content.removeEventListener("paste", onPaste, true);
         var val = readValue();
-        inlineInputClosedAt = Date.now();
+        if(!outsideOnItem) inlineInputClosedAt = Date.now(); // 點到另一個框框結束編輯時，這一下要接著當成選取／編輯那個框
         if(commit){
           if(t0){
             var target = texts.find(function(x){ return x.id === textId; });
@@ -11040,6 +11046,8 @@
         }
         clearObjSelection();
         renderTexts();
+        // Esc／Ctrl+Enter 結束編輯後，這個文字方塊維持「選取」狀態：可以直接按 Delete 刪掉、方向鍵微調、Ctrl+C 複製
+        if(keepSel && t0 && texts.some(function(x){ return x.id === textId; }) && !presentLock()){ selSet = [{ k: "text", id: textId }]; renderSelection(); }
       }
       inPlaceEdit = { finish: finish, refreshStyle: refreshStyle, textId: textId, contentEl: content, contains: function(n){ return content.contains(n); },
         setHtml: function(h){ content.innerHTML = h; try{ content.focus(); }catch(er){} },
@@ -11049,6 +11057,26 @@
         var pre = document.createRange(); pre.selectNodeContents(content); pre.setEnd(r.startContainer, r.startOffset);
         var s0 = Array.from(pre.toString()).length, len = Array.from(r.toString()).length; return len > 0 ? [s0, s0 + len] : null;
       } };
+      // 編輯中「按住不動」約 0.4 秒＝改成搬動這個文字方塊（拖曳時不會變成選取文字）
+      if(t0){
+        div.addEventListener("pointerdown", function(ev){
+          if(ev.button !== 0 || done) return;
+          var sx = ev.clientX, sy = ev.clientY, held = true;
+          function cancel(){ held = false; clearTimeout(tm); window.removeEventListener("pointermove", chk, true); window.removeEventListener("pointerup", cancel, true); window.removeEventListener("pointercancel", cancel, true); }
+          function chk(e2){ if(Math.hypot(e2.clientX - sx, e2.clientY - sy) > 5) cancel(); }
+          var tm = setTimeout(function(){
+            if(!held || done) return;
+            cancel();
+            var p0 = getPos({ clientX: sx, clientY: sy });
+            finish(true);
+            var tt = texts.find(function(x){ return x.id === textId; }); if(!tt) return;
+            selSet = [{ k: "text", id: textId }]; renderSelection();
+            canvas.style.cursor = "grabbing";
+            beginMoveSelection(p0);
+          }, 400);
+          window.addEventListener("pointermove", chk, true); window.addEventListener("pointerup", cancel, true); window.addEventListener("pointercancel", cancel, true);
+        });
+      }
       document.addEventListener("pointerdown", outside, true);
       document.addEventListener("keydown", onKey, true);
       content.addEventListener("paste", onPaste, true);
@@ -13248,7 +13276,11 @@
         }
         if(!inSel(hit)) selSet = hitSet;
         renderSelection();
-        beginMoveSelection(p);
+        // 單擊文字方塊（沒有拖動）＝直接進入編輯、游標停在點到的位置；按住拖動＝搬動方塊；Ctrl／Shift 點＝加選
+        if(hit.k === "text" && selSet.length === 1 && selSet[0].k === "text" && !presentLock()){
+          var cx1 = e.clientX, cy1 = e.clientY;
+          beginMoveSelection(p, function(){ editTextInPlace(hit.id, null, { x: cx1, y: cy1 }); });
+        } else beginMoveSelection(p);
       } else {
         if(!additive) selSet = [];
         renderSelection();
