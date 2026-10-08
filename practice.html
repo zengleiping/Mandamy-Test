@@ -1402,6 +1402,14 @@
   .ribbon .tool-btn-v-wrap .color-popover{ left:0; top:100%; margin:4px 0 0; transform:none; }
   .ribbon .tool-btn-v-wrap:hover .color-popover, .ribbon .tool-btn-v-wrap:focus-within .color-popover{ transform:none; }
   .rb-slot{ display:none; }
+  .tool-btn-v-wrap.open .color-popover{ opacity:1; visibility:visible; pointer-events:auto; transform:translateY(-50%) translateX(0); }
+  .ribbon .tool-btn-v-wrap.open .color-popover{ transform:none; }
+  .tool-btn-v-wrap.force-closed .color-popover{ opacity:0 !important; visibility:hidden !important; pointer-events:none !important; }
+  .text-popover > .popover-field-row:not(:has(input,select,button)), .text-popover > .color-popover-title{ display:none; }
+  .text-popover .rb-stack{ gap:8px; margin-top:8px; }
+  .text-popover .rb-row{ flex-wrap:wrap; }
+  .text-popover .rb-colors{ flex-wrap:wrap; }
+  .text-popover{ width:auto; max-width:340px; }
   .text-layer:not(.objs-interactive) .movable-text rt, .text-layer:not(.objs-interactive) .movable-text .zy-s{ pointer-events:auto; }
   .board-area.ribbon-mode:not(.canvas-fs-active) .layers-panel{ top:150px; }
   .tb-edge{ display:none; position:absolute; width:11px; height:11px; background:#fff; border:2px solid #1E88E5; border-radius:3px; z-index:10; touch-action:none; box-shadow:0 2px 6px rgba(0,0,0,.25); }
@@ -9605,6 +9613,30 @@
       wrap.addEventListener("mouseenter", function(){ positionWrapPopover(wrap); });
       wrap.addEventListener("focusin", function(){ positionWrapPopover(wrap); });
     });
+    // iPad／觸控沒有「滑鼠移入」：點一下按鈕＝展開／收起它的選單（筆／橡皮擦／文字格式…），點選單以外收起。
+    function closeWrapPopovers(except){
+      container.querySelectorAll(".tool-btn-v-wrap.open").forEach(function(w){ if(w !== except) w.classList.remove("open"); });
+    }
+    container.addEventListener("click", function(e){
+      var btn = e.target.closest && e.target.closest(".tool-btn-v");
+      if(!btn || !btn.parentNode || !btn.parentNode.classList || !btn.parentNode.classList.contains("tool-btn-v-wrap")) return;
+      var wrap = btn.parentNode;
+      var pop = wrap.querySelector(".color-popover");
+      if(!pop) return;
+      // 文字工具的格式控制項在功能區裡；只有放映（浮動工具列）時才收在這個選單裡
+      if(pop.classList.contains("text-popover") && !(container.classList.contains("canvas-fs-active") && !container.classList.contains("fs-edit"))) return;
+      var willOpen = !wrap.classList.contains("open");
+      closeWrapPopovers(wrap);
+      wrap.classList.toggle("open", willOpen);
+      wrap.classList.toggle("force-closed", !willOpen);
+      if(willOpen) positionWrapPopover(wrap);
+    });
+    container.addEventListener("mouseleave", function(){ container.querySelectorAll(".force-closed").forEach(function(w){ w.classList.remove("force-closed"); }); }, true);
+    document.addEventListener("pointerdown", function outsidePopoverTap(e){
+      if(!document.body.contains(container)){ document.removeEventListener("pointerdown", outsidePopoverTap, true); return; }
+      if(!container.querySelector(".tool-btn-v-wrap.open")) return;
+      if(!(e.target.closest && e.target.closest(".tool-btn-v-wrap.open"))) closeWrapPopovers(null);
+    }, true);
 
     // extraToolsPool：先把「格線／底圖／移動畫面／錄示範」這些非核心工具的 DOM 建好、
     // 放進一個獨立的隱藏容器（不 append 進 vToolbar），使用者從上面「➕更多」的清單裡點了才搬進
@@ -10139,6 +10171,11 @@
             var it = tbItems[k]; if(!it) return;
             it.nodes.forEach(function(n){ var ph = document.createElement("span"); ph.className = "rb-slot"; n.parentNode.insertBefore(ph, n); fsSlots.push({ ph: ph, n: n }); vToolbar.appendChild(n); });
           });
+          // 放映時功能區收起，文字格式（字型／注音、大小、顏色、粗體、對齊、行距）改收進「文字」按鈕的選單
+          var txtPop = vToolbar.querySelector(".text-popover");
+          if(txtPop){
+            [rbTxt, rbPar].forEach(function(n){ if(!n) return; var ph = document.createElement("span"); ph.className = "rb-slot"; n.parentNode.insertBefore(ph, n); fsSlots.push({ ph: ph, n: n }); txtPop.appendChild(n); });
+          }
         } else if(!inFs && fsSlots.length){
           fsSlots.forEach(function(s2){ if(s2.ph.parentNode) s2.ph.parentNode.replaceChild(s2.n, s2.ph); }); fsSlots = [];
         }
