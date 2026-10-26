@@ -57,12 +57,16 @@
   .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#3b82f6;vertical-align:middle;margin:0 3px;}
 
   .stage{overflow:auto;padding-bottom:40px;}
-  .sheet{background:#fff;color:#1d1815;width:210mm;min-height:297mm;margin:0 auto;padding:18mm 16mm;box-shadow:var(--shadow);border-radius:4px;}
-  .sheet.vertical{writing-mode:vertical-rl;height:297mm;min-height:0;overflow:visible;}
-  .doc-title{font-family:"LXGW WenKai TC","Noto Serif TC",serif;font-weight:700;font-size:calc(var(--fs)*1.15);text-align:center;margin:0 0 .8em;}
-  .sheet.vertical .doc-title{margin:0 0 0 1em;text-align:start;}
-  .body{white-space:pre-wrap;word-break:break-all;line-height:1.35;font-family:"Noto Sans TC","LXGW WenKai TC",sans-serif;font-size:var(--fs);}
-  .body.kai{font-family:"LXGW WenKai TC","Noto Sans TC",sans-serif;}
+  #pages{display:flex;flex-direction:column;align-items:center;gap:18px;transform-origin:top center;}
+  .page{background:#fff;color:#1d1815;width:210mm;height:297mm;flex:none;padding:18mm 16mm;box-shadow:var(--shadow);border-radius:4px;display:flex;flex-direction:column;position:relative;}
+  .page.vertical{flex-direction:row-reverse;}
+  .page .pno{position:absolute;bottom:7mm;left:0;right:0;text-align:center;font-size:11px;color:#9a8f84;font-family:"Public Sans",sans-serif;}
+  .doc-title{font-family:"LXGW WenKai TC","Noto Serif TC",serif;font-weight:700;font-size:calc(var(--fs)*1.15);text-align:center;margin:0 0 .8em;flex:none;}
+  .page.vertical .doc-title{writing-mode:vertical-rl;margin:0 0 0 1em;text-align:start;}
+  .pbody{flex:1;min-width:0;min-height:0;overflow:hidden;white-space:pre-wrap;word-break:break-all;line-height:1.35;font-family:"Noto Sans TC","LXGW WenKai TC",sans-serif;font-size:var(--fs);}
+  .page.vertical .pbody{writing-mode:vertical-rl;}
+  .pbody.kai{font-family:"LXGW WenKai TC","Noto Sans TC",sans-serif;}
+  .pt{display:inline;}
 
   .zc{display:inline-flex;writing-mode:horizontal-tb;align-items:center;vertical-align:top;margin:5px 0;position:relative;}
   .zc .ch{line-height:1.15;}
@@ -78,11 +82,32 @@
   .zc.trace .ch{color:#c9c2b8;}
 
   /* 生字簿格線 */
-  .grid .zc{border:1px solid #b9ada0;margin:-.5px;padding:3px 4px;width:calc(var(--fs)*1.9);height:calc(var(--fs)*1.45);justify-content:center;background:
+  .pbody.grid .zc{border:1px solid #b9ada0;margin:-.5px;padding:3px 4px;width:calc(var(--fs)*1.9);height:calc(var(--fs)*1.45);justify-content:center;background:
     linear-gradient(to right,transparent calc(50% - .5px),rgba(185,173,160,.55) calc(50% - .5px),rgba(185,173,160,.55) calc(50% + .5px),transparent calc(50% + .5px)),
     linear-gradient(to bottom,transparent calc(50% - .5px),rgba(185,173,160,.55) calc(50% - .5px),rgba(185,173,160,.55) calc(50% + .5px),transparent calc(50% + .5px));}
-  .grid .zc .ch{background:transparent;}
 
+  /* 學生作答 */
+  .ans{font-family:"Noto Sans TC","LXGW WenKai TC",sans-serif;border:0;border-bottom:2px dashed var(--seal);background:#fff8f2;text-align:center;outline:none;border-radius:4px 4px 0 0;padding:0;color:#1d1815;}
+  .ans.ch{width:calc(var(--fs)*1.15);height:calc(var(--fs)*1.15);font-size:var(--fs);}
+  .ans.zin{width:calc(var(--fs)*1.0);height:calc(var(--fs)*1.0);font-size:calc(var(--fs)*.42);margin-left:2px;}
+  .ans:focus{background:#fff1e6;border-bottom-color:var(--bamboo);}
+  .ans.ok{background:#e3f0ec;border-bottom:2px solid #4C8577;}
+  .ans.bad{background:#fde8e6;border-bottom:2px solid #d9534f;}
+  body.student .panel,body.student .teacher-only{display:none!important;}
+  body:not(.student) .student-only{display:none!important;}
+  body.student main{grid-template-columns:1fr;}
+  .student-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .student-bar input{width:140px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);}
+  .score{font-weight:700;color:var(--bamboo);}
+  dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);padding:20px;width:min(560px,92vw);box-shadow:0 20px 50px -10px rgba(0,0,0,.35);}
+  dialog::backdrop{background:rgba(34,28,23,.45);}
+  dialog h2{margin:0 0 12px;font-family:"LXGW WenKai TC","Noto Serif TC",serif;font-size:18px;}
+  .lib-row{display:flex;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid var(--border);}
+  .lib-row .t{flex:1;min-width:0;}
+  .lib-row .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lib-row .t small{color:var(--ink-soft);font-size:12px;}
+  .lib-row .btn{padding:5px 10px;font-size:13px;}
+  .lib-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
   .popup{position:fixed;z-index:50;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px -6px rgba(0,0,0,.25);padding:6px;display:flex;flex-direction:column;min-width:110px;}
   .popup button{border:0;background:transparent;padding:8px 12px;border-radius:8px;cursor:pointer;text-align:left;font-size:15px;font-family:"Noto Sans TC",sans-serif;}
   .popup button:hover,.popup button.cur{background:var(--bamboo-soft);color:var(--bamboo);}
@@ -95,7 +120,11 @@
     header.top,.panel,.popup,.toast{display:none!important;}
     main{display:block;padding:0;}
     .stage{overflow:visible;padding:0;}
-    .sheet{box-shadow:none;border-radius:0;margin:0;}
+    #pages{display:block;zoom:1!important;gap:0;}
+    .page{box-shadow:none;border-radius:0;margin:0;break-after:page;page-break-after:always;}
+    .page:last-child{break-after:auto;page-break-after:auto;}
+    .student-bar,dialog{display:none!important;}
+    .ans{border-bottom-color:#999;background:transparent;}
     .zc.poly::after{display:none!important;}
   }
 </style>
@@ -105,7 +134,17 @@
   <div class="brand">曼米中文<small>Zhuyin</small></div>
   <span class="badge">注音教材 · 試做版</span>
   <div class="spacer"></div>
-  <button class="btn" id="btnSample">範例文字</button>
+  <button class="btn teacher-only" id="btnLib">我的教材</button>
+  <button class="btn teacher-only" id="btnSample">範例文字</button>
+  <button class="btn teacher-only" id="btnPreview">預覽學生版</button>
+  <button class="btn teacher-only" id="btnLink">複製學生連結</button>
+  <div class="student-bar student-only">
+    <input id="stuName" placeholder="姓名">
+    <button class="btn primary" id="btnCheck">檢查答案</button>
+    <button class="btn" id="btnReset">重做</button>
+    <button class="btn" id="btnCopyScore">複製成績</button>
+    <span class="score" id="score"></span>
+  </div>
   <button class="btn primary" id="btnPrint">列印 / 存成 PDF</button>
 </header>
 
@@ -142,16 +181,24 @@
     <label class="f">字級
       <div class="row"><input type="range" id="fs" min="20" max="56" value="32"><span id="fsv">32</span></div>
     </label>
-    <p class="hint">破音字下方有 <span class="dot"></span> 藍點，點注音即可換讀音。<br>此為試做版：單頁預覽，尚未分頁。</p>
+    <p class="hint">破音字下方有 <span class="dot"></span> 藍點，點注音即可換讀音。<br>文章太長會自動接到下一頁。要給學生作答：選「隱國字」或「隱注音」，再按上方「複製學生連結」。</p>
   </section>
 
-  <section class="stage">
-    <article class="sheet" id="sheet">
-      <h1 class="doc-title" id="docTitle"></h1>
-      <div class="body" id="out"></div>
-    </article>
-  </section>
+  <section class="stage"><div id="pages"></div></section>
 </main>
+<dialog id="libDlg">
+  <h2>我的教材</h2>
+  <div class="lib-tools">
+    <button class="btn primary" id="libSave">儲存目前這份</button>
+    <button class="btn" id="libSaveAs">另存新檔</button>
+    <button class="btn" id="libNew">新增空白</button>
+    <button class="btn" id="libExport">匯出備份</button>
+    <label class="btn" style="margin:0">匯入備份<input type="file" id="libImport" accept=".json" hidden></label>
+  </div>
+  <div id="libList"></div>
+  <p class="hint" style="margin-top:12px">教材目前存在這台瀏覽器；接上曼米平台後會改存雲端教材庫。</p>
+  <div style="text-align:right;margin-top:8px"><button class="btn" id="libClose">關閉</button></div>
+</dialog>
 <div class="toast" id="toast"></div>
 
 <script src="vendor/pinyin-pro.js"></script>
@@ -194,18 +241,19 @@
   /* ---------- 狀態 ---------- */
   var S = { dir:"h", layout:"flow", mode:"none", font:"sans" };
   var overrides = {};          // 字元位置 → {c, z}
+  var docId = null;            // 目前教材在「我的教材」裡的 id
+  var STUDENT = false;
   var $ = function(id){ return document.getElementById(id); };
   var HAN = /[㐀-鿿豈-﫿]/;
 
   function analyse(text){
     var chars = Array.from(text), n = chars.length, res = new Array(n);
     var hanText = chars.join("");
-    var seq = [], poly = null, pyArr = [];
+    var poly = null, pyArr = [];
     try {
       pyArr = pinyinPro.pinyin(hanText, { toneType:"num", type:"array", v:true });
       poly = (typeof pinyinPro.polyphonic === "function") ? pinyinPro.polyphonic(hanText, { toneType:"num", type:"array", v:true }) : null;
     } catch(e){ pyArr = []; }
-    // pinyin-pro 對非漢字也會各佔一格，長度與 chars 對齊
     for(var i=0;i<n;i++){
       var c = chars[i];
       if(!HAN.test(c)){ res[i] = { c:c }; continue; }
@@ -224,42 +272,83 @@
 
   function esc(s){ return s.replace(/[&<>"]/g, function(m){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]; }); }
 
-  function render(){
-    var text = $("text").value;
-    var data = analyse(text), html = "";
-    data.forEach(function(d, i){
-      if(!d.z && !HAN.test(d.c)){ html += (S.layout === "grid" && !/\s/.test(d.c)) ? '<span class="zc"><span class="ch">'+esc(d.c)+'</span></span>' : esc(d.c); return; }
-      var cls = "zc";
-      if(d.alts) cls += " poly";
-      if(S.mode === "ch") cls += " hide-ch";
-      if(S.mode === "zy") cls += " hide-zy";
-      if(S.mode === "trace") cls += " trace";
-      var zy = "";
-      if(d.z){
-        var sym = Array.from(d.z.s).map(function(x){ return "<span>"+x+"</span>"; }).join("");
-        var tone = d.z.t === "˙" ? '<span class="tn neutral">˙</span>' : (d.z.t ? '<span class="tn">'+d.z.t+"</span>" : "");
-        zy = '<span class="zy" data-i="'+i+'"><span class="zs">'+(d.z.t === "˙" ? '<span class="tn neutral" style="margin:0">˙</span>' : "")+sym+"</span>"+(d.z.t && d.z.t !== "˙" ? tone : "")+"</span>";
+  /* 把一個字做成 HTML；學生版的隱藏欄位換成輸入框 */
+  function cellHtml(d, i){
+    if(!d.z && !HAN.test(d.c)){
+      return (S.layout === "grid") ? '<span class="zc"><span class="ch">'+esc(d.c)+'</span></span>' : '<span class="pt">'+esc(d.c)+'</span>';
+    }
+    var cls = "zc";
+    if(d.alts && !STUDENT) cls += " poly";
+    var hideCh = S.mode === "ch", hideZy = S.mode === "zy";
+    if(!STUDENT){ if(hideCh) cls += " hide-ch"; if(hideZy) cls += " hide-zy"; }
+    if(S.mode === "trace") cls += " trace";
+    var chHtml = '<span class="ch">'+esc(d.c)+"</span>", zy = "";
+    if(STUDENT && hideCh) chHtml = '<input class="ans ch" data-a="'+esc(d.c)+'" autocomplete="off" aria-label="填國字">';
+    if(d.z && STUDENT && hideZy){
+      zy = '<input class="ans zin" data-a="'+esc(d.z.s + d.z.t)+'" autocomplete="off" aria-label="填注音">';
+    } else if(d.z){
+      var sym = Array.from(d.z.s).map(function(x){ return "<span>"+x+"</span>"; }).join("");
+      var neutral = d.z.t === "˙";
+      zy = '<span class="zy" data-i="'+i+'"><span class="zs">'+(neutral ? '<span class="tn neutral" style="margin:0">˙</span>' : "")+sym+"</span>"+(d.z.t && !neutral ? '<span class="tn">'+d.z.t+"</span>" : "")+"</span>";
+    }
+    return '<span class="'+cls+'">'+chHtml+zy+"</span>";
+  }
+
+  /* ---------- 分頁 ---------- */
+  function paginate(items, title){
+    var host = $("pages");
+    host.innerHTML = ""; host.style.zoom = 1;
+    var pageNo = 0, body = null, count = 0;
+    function newPage(){
+      pageNo++;
+      var pg = document.createElement("article");
+      pg.className = "page" + (S.dir === "v" ? " vertical" : "");
+      if(pageNo === 1 && title){ var h = document.createElement("h1"); h.className = "doc-title"; h.textContent = title; pg.appendChild(h); }
+      body = document.createElement("div");
+      body.className = "pbody" + (S.layout === "grid" ? " grid" : "") + (S.font === "kai" ? " kai" : "");
+      pg.appendChild(body);
+      var no = document.createElement("div"); no.className = "pno"; no.textContent = pageNo; pg.appendChild(no);
+      host.appendChild(pg); count = 0;
+    }
+    function overflows(el){
+      var b = body.getBoundingClientRect(), r = el.getBoundingClientRect();
+      return S.dir === "v" ? r.left < b.left - 1 : r.bottom > b.bottom + 1;
+    }
+    newPage();
+    items.forEach(function(it){
+      if(it === "\n"){ if(count) body.appendChild(document.createTextNode("\n")); return; }
+      body.insertAdjacentHTML("beforeend", it);
+      count++;
+      var el = body.lastElementChild;
+      if(count > 1 && overflows(el)){
+        body.removeChild(el);
+        newPage();
+        body.insertAdjacentHTML("beforeend", it); count = 1;
       }
-      html += '<span class="'+cls+'"><span class="ch">'+esc(d.c)+"</span>"+zy+"</span>";
     });
-    $("out").innerHTML = html;
-    $("out")._data = data;
-    var t = $("title").value.trim();
-    $("docTitle").textContent = t;
-    $("docTitle").style.display = t ? "" : "none";
-    persist();
+    // 頁數 > 1 時才顯示頁碼
+    if(pageNo === 1) host.querySelector(".pno").style.display = "none";
+    fitZoom();
+  }
+  function fitZoom(){
+    var host = $("pages"), avail = host.parentNode.clientWidth - 8, need = 794;
+    host.style.zoom = avail < need ? Math.max(.3, avail / need) : 1;
+  }
+  window.addEventListener("resize", fitZoom);
+
+  function render(){
+    var data = analyse($("text").value), items = [];
+    data.forEach(function(d, i){ items.push(d.c === "\n" ? "\n" : (/\s/.test(d.c) && !HAN.test(d.c) ? '<span class="pt">'+esc(d.c)+'</span>' : cellHtml(d, i))); });
+    paginate(items, $("title").value.trim());
+    $("pages")._data = data;
+    if(!STUDENT) persist();
   }
 
   function applyView(){
-    $("sheet").classList.toggle("vertical", S.dir === "v");
-    $("out").classList.toggle("grid", S.layout === "grid");
-    $("out").classList.toggle("kai", S.font === "kai");
-    $("sheet").classList.toggle("grid", S.layout === "grid");
     document.querySelectorAll(".seg").forEach(function(seg){
       var k = seg.dataset.key;
       seg.querySelectorAll("button").forEach(function(b){ b.classList.toggle("on", b.dataset.v === S[k]); });
     });
-    $("sheet").style.setProperty("--fs", $("fs").value + "px");
     document.documentElement.style.setProperty("--fs", $("fs").value + "px");
     $("fsv").textContent = $("fs").value;
   }
@@ -267,9 +356,10 @@
   /* ---------- 破音字選單 ---------- */
   var popup = null;
   function closePopup(){ if(popup){ popup.remove(); popup = null; } }
-  $("out").addEventListener("click", function(e){
+  $("pages").addEventListener("click", function(e){
+    if(STUDENT) return;
     var zy = e.target.closest(".zy"); if(!zy) return;
-    var i = +zy.dataset.i, d = $("out")._data[i];
+    var i = +zy.dataset.i, d = $("pages")._data[i];
     if(!d || !d.alts) return;
     e.stopPropagation(); closePopup();
     popup = document.createElement("div"); popup.className = "popup";
@@ -286,7 +376,10 @@
     popup.style.top = Math.min(r.bottom + 6, innerHeight - popup.offsetHeight - 10) + "px";
   });
   document.addEventListener("click", closePopup);
-  document.addEventListener("keydown", function(e){ if(e.key === "Escape") closePopup(); });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape") closePopup();
+    if((e.ctrlKey || e.metaKey) && e.key === "s" && !STUDENT){ e.preventDefault(); saveDoc(false); }
+  });
 
   /* ---------- 控制項 ---------- */
   document.querySelectorAll(".seg").forEach(function(seg){
@@ -295,29 +388,156 @@
       S[seg.dataset.key] = b.dataset.v; applyView(); render();
     });
   });
-  $("fs").addEventListener("input", function(){ applyView(); persist(); });
-  var timer; function later(){ clearTimeout(timer); timer = setTimeout(render, 120); }
+  var timer; function later(){ clearTimeout(timer); timer = setTimeout(render, 150); }
+  $("fs").addEventListener("input", function(){ applyView(); later(); });
   $("text").addEventListener("input", later);
   $("title").addEventListener("input", later);
   $("btnPrint").onclick = function(){ closePopup(); window.print(); };
   $("btnSample").onclick = function(){
+    docId = null;
     $("title").value = "小熊的禮物";
     $("text").value = "媽媽說今天是小熊的生日，大家都很開心。\n小熊的朋友為他準備了一份驚喜：有蛋糕，也有好多好玩的遊戲。\n長頸鹿說：「祝你生日快樂！」小熊的心裡好溫暖。";
     overrides = {}; render(); toast("已放入範例文字");
   };
-  function toast(msg){ var t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 1600); }
+  function toast(msg){ var t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 1800); }
+
+  /* ---------- 教材資料 ---------- */
+  function snapshot(){ return { title:$("title").value, text:$("text").value, S:Object.assign({}, S), fs:+$("fs").value, overrides:overrides }; }
+  function loadSnapshot(d){
+    $("title").value = d.title || ""; $("text").value = d.text || "";
+    S = Object.assign({ dir:"h", layout:"flow", mode:"none", font:"sans" }, d.S || {});
+    $("fs").value = d.fs || 32; overrides = d.overrides || {};
+    applyView(); render();
+  }
+
+  /* 「我的教材」：現在存在瀏覽器；日後換成曼米平台的雲端教材庫，只要換掉 Store 這四個函式 */
+  var LIB_KEY = "mandamy-zhuyin-library";
+  var Store = {
+    list: function(){ try { return JSON.parse(localStorage.getItem(LIB_KEY) || "[]"); } catch(e){ return []; } },
+    _put: function(a){ localStorage.setItem(LIB_KEY, JSON.stringify(a)); },
+    get: function(id){ return Store.list().filter(function(x){ return x.id === id; })[0]; },
+    save: function(doc){
+      var a = Store.list(), i = a.findIndex(function(x){ return x.id === doc.id; });
+      if(i >= 0) a[i] = doc; else a.unshift(doc);
+      Store._put(a);
+    },
+    remove: function(id){ Store._put(Store.list().filter(function(x){ return x.id !== id; })); }
+  };
+  function saveDoc(asNew){
+    var d = snapshot();
+    if(!d.title.trim() && !d.text.trim()){ toast("內容是空的，沒有儲存"); return; }
+    if(asNew || !docId) docId = "d" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    d.id = docId; d.updated = Date.now();
+    if(!d.title.trim()) d.title = Array.from(d.text.replace(/\s+/g," ")).slice(0,12).join("") + "…";
+    try { Store.save(d); toast("已儲存到「我的教材」"); } catch(e){ toast("儲存失敗（瀏覽器空間不足？）"); }
+    renderLib();
+  }
+  function fmt(t){ var d = new Date(t); return (d.getMonth()+1)+"/"+d.getDate()+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
+  function renderLib(){
+    var box = $("libList"), a = Store.list();
+    box.innerHTML = a.length ? "" : '<p class="hint">還沒有儲存的教材。</p>';
+    a.forEach(function(d){
+      var row = document.createElement("div"); row.className = "lib-row";
+      row.innerHTML = '<div class="t"><b>'+esc(d.title || "未命名")+(d.id === docId ? "　（編輯中）" : "")+'</b><small>'+fmt(d.updated)+' · '+Array.from(d.text||"").length+' 字</small></div>';
+      [["開啟", function(){ docId = d.id; loadSnapshot(d); $("libDlg").close(); }],
+       ["複製", function(){ var c = JSON.parse(JSON.stringify(d)); c.id = "d"+Date.now().toString(36); c.title += "（副本）"; c.updated = Date.now(); Store.save(c); renderLib(); }],
+       ["刪除", function(){ if(confirm("刪除「"+(d.title||"未命名")+"」？")){ Store.remove(d.id); if(docId === d.id) docId = null; renderLib(); } }]
+      ].forEach(function(x){ var b = document.createElement("button"); b.className = "btn"; b.textContent = x[0]; b.onclick = x[1]; row.appendChild(b); });
+      box.appendChild(row);
+    });
+  }
+  $("btnLib").onclick = function(){ renderLib(); $("libDlg").showModal(); };
+  $("libClose").onclick = function(){ $("libDlg").close(); };
+  $("libSave").onclick = function(){ saveDoc(false); };
+  $("libSaveAs").onclick = function(){ saveDoc(true); };
+  $("libNew").onclick = function(){ docId = null; overrides = {}; loadSnapshot({ title:"", text:"", S:S, fs:+$("fs").value }); $("libDlg").close(); };
+  $("libExport").onclick = function(){
+    var blob = new Blob([JSON.stringify({ app:"mandamy-zhuyin", docs:Store.list() }, null, 1)], { type:"application/json" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "曼米注音教材備份.json"; a.click();
+  };
+  $("libImport").onchange = function(e){
+    var f = e.target.files[0]; if(!f) return;
+    f.text().then(function(t){
+      var j = JSON.parse(t), n = 0;
+      (j.docs || []).forEach(function(d){ if(d && d.id && typeof d.text === "string"){ Store.save(d); n++; } });
+      renderLib(); toast("已匯入 " + n + " 份教材");
+    }).catch(function(){ toast("這不是有效的備份檔"); });
+    e.target.value = "";
+  };
+
+  /* ---------- 學生連結 ---------- */
+  function b64u(u8){ var s = ""; for(var i=0;i<u8.length;i+=8192) s += String.fromCharCode.apply(null, u8.subarray(i, i+8192)); return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+  function unb64u(s){ s = s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length % 4) s += "="; var b = atob(s), u = new Uint8Array(b.length); for(var i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u; }
+  function pipe(bytes, Stream, kind){
+    return new Response(new Blob([bytes]).stream().pipeThrough(new Stream(kind))).arrayBuffer().then(function(b){ return new Uint8Array(b); });
+  }
+  function pack(obj){
+    var bytes = new TextEncoder().encode(JSON.stringify(obj));
+    if(window.CompressionStream) return pipe(bytes, CompressionStream, "deflate-raw").then(function(u){ return "z" + b64u(u); });
+    return Promise.resolve("j" + b64u(bytes));
+  }
+  function unpack(str){
+    var bytes = unb64u(str.slice(1));
+    var p = str[0] === "z" ? pipe(bytes, DecompressionStream, "deflate-raw") : Promise.resolve(bytes);
+    return p.then(function(u){ return JSON.parse(new TextDecoder().decode(u)); });
+  }
+  function studentUrl(){
+    var d = snapshot();
+    return pack({ title:d.title, text:d.text, S:d.S, fs:d.fs, overrides:d.overrides }).then(function(code){
+      return location.origin + location.pathname + "#s=" + code;
+    });
+  }
+  function warnMode(){ if(S.mode !== "ch" && S.mode !== "zy"){ toast("提醒：目前是「" + (S.mode === "trace" ? "描寫" : "完整") + "」，學生沒有欄位可填；要作答請選「隱國字」或「隱注音」"); return true; } return false; }
+  $("btnLink").onclick = function(){
+    studentUrl().then(function(u){
+      (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function(){ if(!warnMode()) toast("學生連結已複製（" + u.length + " 字元）"); }, function(){ prompt("複製這個連結給學生：", u); });
+    });
+  };
+  $("btnPreview").onclick = function(){ studentUrl().then(function(u){ window.open(u, "_blank"); }); warnMode(); };
+
+  /* ---------- 學生作答 ---------- */
+  function normZ(z){ z = String(z).replace(/[\sˉ]/g, ""); if(z.indexOf("˙") >= 0) z = "˙" + z.replace(/˙/g, ""); return z; }
+  var lastResult = "";
+  function checkAnswers(){
+    var all = document.querySelectorAll(".ans"), ok = 0, wrong = [];
+    all.forEach(function(el){
+      var good = el.classList.contains("zin") ? normZ(el.value) === normZ(el.dataset.a) : el.value.trim() === el.dataset.a;
+      el.classList.toggle("ok", good); el.classList.toggle("bad", !good && el.value.trim() !== "");
+      if(good) ok++; else wrong.push(el.dataset.a);
+    });
+    var name = $("stuName").value.trim() || "（未填姓名）";
+    $("score").textContent = "答對 " + ok + " / " + all.length;
+    lastResult = name + "　《" + ($("title").value || "注音練習") + "》　" + ok + " / " + all.length + (wrong.length ? "　答錯或未答：" + wrong.join("、") : "　全對！");
+  }
+  $("btnCheck").onclick = checkAnswers;
+  $("btnReset").onclick = function(){ document.querySelectorAll(".ans").forEach(function(el){ el.value = ""; el.classList.remove("ok","bad"); }); $("score").textContent = ""; lastResult = ""; };
+  $("btnCopyScore").onclick = function(){
+    checkAnswers();
+    (navigator.clipboard ? navigator.clipboard.writeText(lastResult) : Promise.reject()).then(function(){ toast("成績已複製，可以貼給老師"); }, function(){ prompt("複製成績：", lastResult); });
+  };
 
   /* ---------- 暫存（存在這台瀏覽器） ---------- */
   var KEY = "mandamy-zhuyin-draft";
-  function persist(){
-    try { localStorage.setItem(KEY, JSON.stringify({ title:$("title").value, text:$("text").value, S:S, fs:$("fs").value, overrides:overrides })); } catch(e){}
+  function persist(){ try { var d = snapshot(); d.docId = docId; localStorage.setItem(KEY, JSON.stringify(d)); } catch(e){} }
+
+  function boot(){
+    var m = /[#&]s=([^&]+)/.exec(location.hash);
+    if(m){
+      STUDENT = true; document.body.classList.add("student");
+      unpack(decodeURIComponent(m[1])).then(function(d){
+        loadSnapshot(d);
+        document.title = (d.title || "注音練習") + " · 曼米中文";
+        $("title").value = d.title || "";
+      }).catch(function(){ $("pages").innerHTML = '<p style="text-align:center;padding:40px">這個連結無法開啟，請向老師再要一次連結。</p>'; });
+      return;
+    }
+    try {
+      var saved = JSON.parse(localStorage.getItem(KEY) || "null");
+      if(saved){ docId = saved.docId || null; loadSnapshot(saved); }
+    } catch(e){}
+    if(!$("text").value) $("btnSample").click(); else { applyView(); render(); }
   }
-  try {
-    var saved = JSON.parse(localStorage.getItem(KEY) || "null");
-    if(saved){ $("title").value = saved.title || ""; $("text").value = saved.text || ""; Object.assign(S, saved.S || {}); $("fs").value = saved.fs || 32; overrides = saved.overrides || {}; }
-  } catch(e){}
-  if(!$("text").value) $("btnSample").click();
-  applyView(); render();
+  boot();
 })();
 </script>
 </body>
